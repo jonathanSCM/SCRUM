@@ -44,7 +44,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            <span className="tag text-card" style={{ backgroundColor: project.status.color }}>
+            <span className="tag text-[#12081f]" style={{ backgroundColor: project.status.color }}>
               {project.status.name}
             </span>
             <span className="text-xs text-ink-faint">Encargado: {project.assigneeName ?? "sin asignar"}</span>
@@ -53,7 +53,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
         <h2 className="mb-3 font-display text-lg font-semibold text-ink">Tareas</h2>
         {project.tasks.length === 0 ? (
-          <p className="border border-dashed border-line-strong p-6 text-center text-sm text-ink-soft">
+          <p className="border border-dashed border-line-strong rounded-xl2 p-6 text-center text-sm text-ink-soft">
             Todavía no hay tareas sincronizadas para este proyecto.
           </p>
         ) : (
@@ -103,7 +103,7 @@ function TaskRow({
   const typeColor = TYPE_COLOR[task.type] ?? "#9a8f7a";
   return (
     <li
-      className={`flex items-start justify-between gap-4 border bg-card p-3.5 shadow-[2px_2px_0_var(--line)] ${
+      className={`flex items-start justify-between gap-4 border bg-card p-3.5 rounded-xl2 backdrop-blur-md shadow-[0_20px_45px_-20px_rgba(0,0,0,0.7)] ${
         done ? "border-line opacity-60" : "border-line border-l-4"
       }`}
       style={done ? undefined : { borderLeftColor: typeColor }}

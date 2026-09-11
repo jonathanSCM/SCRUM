@@ -44,7 +44,7 @@ export default async function SprintDetailPage({ params }: { params: Promise<{ i
         </div>
 
         {sprint.tasks.length === 0 ? (
-          <p className="border border-dashed border-line-strong p-6 text-center text-sm text-ink-soft">
+          <p className="border border-dashed border-line-strong rounded-xl2 p-6 text-center text-sm text-ink-soft">
             Todavía no hay tareas asignadas a este sprint. Andá a un proyecto y asignale una.
           </p>
         ) : (
@@ -55,7 +55,7 @@ export default async function SprintDetailPage({ params }: { params: Promise<{ i
               return (
                 <li
                   key={task.id}
-                  className={`flex items-start justify-between gap-4 border bg-card p-3.5 shadow-[2px_2px_0_var(--line)] ${
+                  className={`flex items-start justify-between gap-4 border bg-card p-3.5 rounded-xl2 backdrop-blur-md shadow-[0_20px_45px_-20px_rgba(0,0,0,0.7)] ${
                     isDone ? "border-line opacity-60" : "border-line border-l-4"
                   }`}
                   style={isDone ? undefined : { borderLeftColor: typeColor }}

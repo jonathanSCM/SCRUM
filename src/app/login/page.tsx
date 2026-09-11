@@ -44,10 +44,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-5 surface-card p-9">
         <div>
-          <span className="mb-3 flex h-9 w-9 -rotate-3 items-center justify-center border border-ink bg-rust font-display text-base font-semibold text-card">
-            J
-          </span>
-          <h1 className="font-display text-2xl font-semibold text-ink">Panel del Jefe</h1>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="SCRUM ProShop" className="mb-3 h-10 w-10 rounded-lg object-cover" />
+          <h1 className="font-display text-2xl font-bold text-ink">SCRUM ProShop</h1>
           <p className="mt-1 text-sm text-ink-soft">Inicia sesión para continuar</p>
         </div>
 
@@ -74,7 +73,7 @@ export default function LoginPage() {
           />
         </div>
 
-        {error && <p className="text-sm font-medium text-rust">{error}</p>}
+        {error && <p className="text-sm font-medium text-danger">{error}</p>}
 
         <button type="submit" disabled={loading} className="btn-primary w-full">
           {loading ? "Ingresando..." : "Ingresar"}

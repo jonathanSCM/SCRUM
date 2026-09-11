@@ -1,4 +1,4 @@
-# Despliegue del Panel del Jefe
+# Despliegue de SCRUM ProShop
 
 Mismo patrón que el panel interno (`D:\Trabajo\Organizacion`): Dockerfile + Coolify, Postgres en producción, SQLite en local.
 

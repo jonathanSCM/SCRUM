@@ -63,7 +63,7 @@ export default function SprintsManager({ initialSprints }: { initialSprints: Spr
   return (
     <div className="space-y-6">
       {showForm ? (
-        <form onSubmit={addSprint} className="flex flex-wrap items-end gap-2 border border-line bg-card p-4">
+        <form onSubmit={addSprint} className="flex flex-wrap items-end gap-2 border border-line bg-card p-4 rounded-xl2 backdrop-blur-md">
           <div className="space-y-1">
             <label className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Nombre</label>
             <input required value={name} onChange={(e) => setName(e.target.value)} className="field" placeholder="Sprint 1" />
@@ -89,23 +89,23 @@ export default function SprintsManager({ initialSprints }: { initialSprints: Spr
         </button>
       )}
 
-      {error && <p className="text-sm font-medium text-rust">{error}</p>}
+      {error && <p className="text-sm font-medium text-danger">{error}</p>}
 
       {sprints.length === 0 ? (
-        <p className="border border-dashed border-line-strong p-6 text-center text-sm text-ink-soft">
+        <p className="border border-dashed border-line-strong rounded-xl2 p-6 text-center text-sm text-ink-soft">
           Todavía no creaste ningún sprint.
         </p>
       ) : (
         <ul className="space-y-2.5">
           {sprints.map((s) => (
-            <li key={s.id} className="flex items-center justify-between border border-line bg-card p-4">
+            <li key={s.id} className="flex items-center justify-between border border-line bg-card p-4 rounded-xl2 backdrop-blur-md">
               <Link href={`/sprints/${s.id}`} className="min-w-0 flex-1">
                 <p className="font-display text-sm font-semibold text-ink">{s.name}</p>
                 <p className="mt-0.5 text-xs text-ink-faint">
                   {fmt(s.startDate)} — {fmt(s.endDate)} · {s.done}/{s.total} completadas
                 </p>
               </Link>
-              <button onClick={() => removeSprint(s.id, s.name)} className="text-xs text-ink-faint hover:text-rust">
+              <button onClick={() => removeSprint(s.id, s.name)} className="text-xs text-ink-faint hover:text-danger">
                 Borrar
               </button>
             </li>

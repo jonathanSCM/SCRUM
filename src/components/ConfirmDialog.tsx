@@ -35,7 +35,7 @@ export default function ConfirmDialogProvider({ children }: { children: React.Re
       {message && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40" onClick={() => respond(false)}>
           <div
-            className="w-full max-w-sm border border-line bg-card p-5 shadow-[4px_4px_0_var(--line-strong)]"
+            className="w-full max-w-sm border border-line bg-card p-5 rounded-xl2 backdrop-blur-md shadow-[0_20px_45px_-20px_rgba(0,0,0,0.7)]"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="font-display text-lg font-semibold text-ink">Confirmar</h2>

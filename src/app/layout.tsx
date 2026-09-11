@@ -1,39 +1,28 @@
 import type { Metadata } from "next";
-import { Fraunces, Public_Sans } from "next/font/google";
+import { Sora, Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 
-const display = Fraunces({
+const display = Sora({
   subsets: ["latin"],
   variable: "--font-display",
-  weight: ["500", "600", "700"],
-  style: ["normal", "italic"],
+  weight: ["600", "700", "800"],
 });
 
-const body = Public_Sans({ subsets: ["latin"], variable: "--font-body" });
+const body = Inter({
+  subsets: ["latin"],
+  variable: "--font-body",
+  weight: ["400", "500", "600", "700", "800"],
+});
 
 export const metadata: Metadata = {
-  title: "Panel del Jefe",
-  description: "Vista de proceso y sprints de todos los proyectos",
+  title: "SCRUM ProShop",
+  description: "Vista de proceso y sprints de todos los proyectos de ProShop",
 };
-
-const themeInitScript = `
-(function () {
-  try {
-    var stored = localStorage.getItem("theme");
-    if (stored === "light" || stored === "dark") {
-      document.documentElement.dataset.theme = stored;
-    }
-  } catch (e) {}
-})();
-`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
+    <html lang="es" className={`${display.variable} ${body.variable}`}>
       <body className="min-h-screen font-sans antialiased">
         <Providers>{children}</Providers>
       </body>

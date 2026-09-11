@@ -8,7 +8,6 @@ function withOpacity(variable: string) {
 }
 
 const config: Config = {
-  darkMode: ["class", '[data-theme="dark"]'],
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {
@@ -22,11 +21,17 @@ const config: Config = {
         "line-strong": "var(--line-strong)",
         rust: { DEFAULT: withOpacity("--rust-rgb"), dark: "var(--rust-dark)" },
         moss: "var(--moss)",
+        accent: withOpacity("--accent-rgb"),
+        danger: { DEFAULT: "var(--danger)", bg: "var(--danger-bg)" },
+        warn: "var(--warn)",
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
       fontFamily: {
         sans: ["var(--font-body)", "system-ui", "sans-serif"],
-        display: ["var(--font-display)", "Georgia", "serif"],
+        display: ["var(--font-display)", "Sora", "sans-serif"],
+      },
+      borderRadius: {
+        xl2: "16px",
       },
     },
   },

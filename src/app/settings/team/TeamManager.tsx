@@ -69,7 +69,7 @@ export default function TeamManager({
   return (
     <div className="space-y-6">
       {createdPassword && (
-        <div className="border border-rust bg-card p-4 text-sm">
+        <div className="border border-rust bg-card p-4 text-sm rounded-xl2 backdrop-blur-md">
           <p className="font-semibold text-ink">Cuenta creada — pasale estos datos, no se van a volver a mostrar:</p>
           <p className="mt-1 text-ink-soft">
             Email: <span className="font-mono">{createdPassword.email}</span>
@@ -84,7 +84,7 @@ export default function TeamManager({
       )}
 
       {showForm ? (
-        <form onSubmit={addUser} className="flex flex-wrap items-end gap-2 border border-line bg-card p-4">
+        <form onSubmit={addUser} className="flex flex-wrap items-end gap-2 border border-line bg-card p-4 rounded-xl2 backdrop-blur-md">
           <div className="space-y-1">
             <label className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Nombre</label>
             <input required value={name} onChange={(e) => setName(e.target.value)} className="field" />
@@ -113,11 +113,11 @@ export default function TeamManager({
         </button>
       )}
 
-      {error && <p className="text-sm font-medium text-rust">{error}</p>}
+      {error && <p className="text-sm font-medium text-danger">{error}</p>}
 
       <ul className="space-y-2">
         {users.map((u) => (
-          <li key={u.id} className="flex items-center justify-between border border-line bg-card px-3.5 py-2.5">
+          <li key={u.id} className="flex items-center justify-between border border-line bg-card px-3.5 py-2.5 rounded-xl2 backdrop-blur-md">
             <div>
               <p className="text-sm text-ink">
                 {u.name} {u.id === currentUserId && <span className="text-xs text-ink-faint">(vos)</span>}
@@ -127,7 +127,7 @@ export default function TeamManager({
               </p>
             </div>
             {u.id !== currentUserId && (
-              <button onClick={() => removeUser(u.id, u.name)} className="text-xs text-ink-faint hover:text-rust">
+              <button onClick={() => removeUser(u.id, u.name)} className="text-xs text-ink-faint hover:text-danger">
                 Borrar
               </button>
             )}

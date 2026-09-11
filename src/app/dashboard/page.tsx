@@ -31,7 +31,7 @@ export default async function DashboardPage() {
         </p>
 
         {statuses.length === 0 ? (
-          <p className="border border-dashed border-line-strong p-6 text-center text-sm text-ink-soft">
+          <p className="border border-dashed border-line-strong rounded-xl2 p-6 text-center text-sm text-ink-soft">
             Todavía no llegó ningún dato sincronizado.
           </p>
         ) : (
@@ -46,7 +46,7 @@ export default async function DashboardPage() {
                   </div>
                   <div className="space-y-2.5">
                     {list.length === 0 ? (
-                      <div className="border border-dashed border-line-strong p-4 text-center text-xs text-ink-faint">
+                      <div className="border border-dashed border-line-strong rounded-xl2 p-4 text-center text-xs text-ink-faint">
                         Sin proyectos
                       </div>
                     ) : (
@@ -54,7 +54,7 @@ export default async function DashboardPage() {
                         <Link
                           key={p.id}
                           href={`/projects/${p.id}`}
-                          className="block border border-line bg-card p-3.5 shadow-[2px_2px_0_var(--line)] transition-transform hover:-translate-y-0.5"
+                          className="block border border-line bg-card p-3.5 rounded-xl2 backdrop-blur-md shadow-[0_20px_45px_-20px_rgba(0,0,0,0.7)] transition-transform hover:-translate-y-0.5"
                         >
                           <p className="font-display text-sm font-semibold text-ink">{p.name}</p>
                           {p.description && (
