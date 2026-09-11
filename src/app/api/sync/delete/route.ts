@@ -14,6 +14,7 @@ export async function POST(req: Request) {
     if (type === "status") await prisma.statusOption.delete({ where: { id } });
     else if (type === "project") await prisma.project.delete({ where: { id } });
     else if (type === "task") await prisma.task.delete({ where: { id } });
+    else if (type === "document") await prisma.document.delete({ where: { id } });
   } catch {
     // Ya no existía de este lado -- no pasa nada, el objetivo (que no esté) ya se cumple.
   }

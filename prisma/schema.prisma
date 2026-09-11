@@ -42,14 +42,43 @@ model Project {
   description String   @default("")
   repoUrl     String?
   deployUrl   String?
+  language    String?
+  stack       String   @default("[]")
   updatedAt   DateTime @default(now())
 
   statusId String
   status   StatusOption @relation(fields: [statusId], references: [id])
 
+  assigneeId   String?
   assigneeName String?
 
-  tasks Task[]
+  tasks     Task[]
+  documents Document[]
+  history   HistoryEntry[]
+}
+
+model Document {
+  id         String   @id
+  filename   String
+  fileType   String
+  docType    String
+  uploadedAt DateTime
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model HistoryEntry {
+  id            String   @id
+  field         String
+  oldValue      String?
+  newValue      String?
+  changedAt     DateTime
+  changedByName String?
+  taskTitle     String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model Task {

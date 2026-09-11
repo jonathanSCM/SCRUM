@@ -20,25 +20,49 @@ export async function POST(req: Request) {
       update: { name: data.name, color: data.color, order: data.order },
     });
   } else if (type === "project") {
+    const shared = {
+      name: data.name,
+      description: data.description ?? "",
+      repoUrl: data.repoUrl ?? null,
+      deployUrl: data.deployUrl ?? null,
+      language: data.language ?? null,
+      stack: data.stack ?? "[]",
+      statusId: data.statusId,
+      assigneeId: data.assigneeId ?? null,
+      assigneeName: data.assigneeName ?? null,
+    };
     await prisma.project.upsert({
       where: { id: data.id },
-      create: {
-        id: data.id,
-        name: data.name,
-        description: data.description ?? "",
-        repoUrl: data.repoUrl ?? null,
-        deployUrl: data.deployUrl ?? null,
-        statusId: data.statusId,
-        assigneeName: data.assigneeName ?? null,
-      },
-      update: {
-        name: data.name,
-        description: data.description ?? "",
-        repoUrl: data.repoUrl ?? null,
-        deployUrl: data.deployUrl ?? null,
-        statusId: data.statusId,
-        assigneeName: data.assigneeName ?? null,
-      },
+      create: { id: data.id, ...shared },
+      update: shared,
+    });
+  } else if (type === "document") {
+    const shared = {
+      projectId: data.projectId,
+      filename: data.filename,
+      fileType: data.fileType,
+      docType: data.docType,
+      uploadedAt: new Date(data.uploadedAt),
+    };
+    await prisma.document.upsert({
+      where: { id: data.id },
+      create: { id: data.id, ...shared },
+      update: shared,
+    });
+  } else if (type === "history") {
+    const shared = {
+      projectId: data.projectId,
+      field: data.field,
+      oldValue: data.oldValue ?? null,
+      newValue: data.newValue ?? null,
+      changedAt: new Date(data.changedAt),
+      changedByName: data.changedByName ?? null,
+      taskTitle: data.taskTitle ?? null,
+    };
+    await prisma.historyEntry.upsert({
+      where: { id: data.id },
+      create: { id: data.id, ...shared },
+      update: shared,
     });
   } else if (type === "task") {
     await prisma.task.upsert({

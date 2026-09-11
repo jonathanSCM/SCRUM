@@ -33,7 +33,10 @@ const syncProjectSchema = z.object({
   description: z.string().optional(),
   repoUrl: z.string().nullable().optional(),
   deployUrl: z.string().nullable().optional(),
+  language: z.string().nullable().optional(),
+  stack: z.string().optional(),
   statusId: z.string().min(1),
+  assigneeId: z.string().nullable().optional(),
   assigneeName: z.string().nullable().optional(),
 });
 
@@ -56,13 +59,45 @@ const syncStatusSchema = z.object({
   order: z.number().int(),
 });
 
+const syncDocumentSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  filename: z.string(),
+  fileType: z.string(),
+  docType: z.string(),
+  uploadedAt: z.string(),
+});
+
+const syncHistorySchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  field: z.string(),
+  oldValue: z.string().nullable().optional(),
+  newValue: z.string().nullable().optional(),
+  changedAt: z.string(),
+  changedByName: z.string().nullable().optional(),
+  taskTitle: z.string().nullable().optional(),
+});
+
 export const syncUpsertSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("project"), data: syncProjectSchema }),
   z.object({ type: z.literal("task"), data: syncTaskSchema }),
   z.object({ type: z.literal("status"), data: syncStatusSchema }),
+  z.object({ type: z.literal("document"), data: syncDocumentSchema }),
+  z.object({ type: z.literal("history"), data: syncHistorySchema }),
 ]);
 
 export const syncDeleteSchema = z.object({
-  type: z.enum(["project", "task", "status"]),
+  type: z.enum(["project", "task", "status", "document"]),
   id: z.string().min(1),
+});
+
+export const updateProjectSchema = z.object({
+  statusId: z.string().min(1).optional(),
+  assigneeId: z.string().nullable().optional(),
+  description: z.string().max(5000).optional(),
+  repoUrl: z.string().trim().max(500).nullable().optional(),
+  deployUrl: z.string().trim().max(500).nullable().optional(),
+  language: z.string().trim().max(100).nullable().optional(),
+  stack: z.array(z.string()).optional(),
 });
