@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  LEAD
+  MEMBER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(MEMBER)
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  createdAt    DateTime @default(now())
+}
+
+// El id de StatusOption/Project/Task NO se autogenera: al sincronizar desde
+// el panel interno se usa el mismo id que allá, así el upsert por id queda
+// directo y no hace falta mantener una tabla de mapeo aparte.
+
+model StatusOption {
+  id    String @id
+  name  String
+  color String
+  order Int    @default(0)
+
+  projects Project[]
+}
+
+model Project {
+  id          String   @id
+  name        String
+  description String   @default("")
+  repoUrl     String?
+  deployUrl   String?
+  updatedAt   DateTime @default(now())
+
+  statusId String
+  status   StatusOption @relation(fields: [statusId], references: [id])
+
+  assigneeName String?
+
+  tasks Task[]
+}
+
+model Task {
+  id          String    @id
+  title       String
+  description String    @default("")
+  type        String
+  priority    String
+  dueDate     DateTime?
+  updatedAt   DateTime  @default(now())
+
+  assigneeName String?
+  moduleName   String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  sprintId String?
+  sprint   Sprint? @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+}
+
+model Sprint {
+  id        String   @id @default(cuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+
+  tasks Task[]
+}

@@ -1,0 +1,198 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper-rgb: 243 237 224;
+  --paper-raised: #fffdf7;
+  --ink-rgb: 33 26 18;
+  --ink-soft: #6b6152;
+  --ink-faint: #a89d89;
+  --line: #ded2b6;
+  --line-strong: #c7b895;
+  --rust-rgb: 184 70 28;
+  --rust-dark: #93370f;
+  --moss: #56684a;
+
+  --paper: rgb(var(--paper-rgb));
+  --ink: rgb(var(--ink-rgb));
+  --rust: rgb(var(--rust-rgb));
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper-rgb: 28 23 18;
+    --paper-raised: #241e17;
+    --ink-rgb: 240 233 220;
+    --ink-soft: #b8ab95;
+    --ink-faint: #7d715f;
+    --line: #3a3128;
+    --line-strong: #4d4234;
+    --rust-rgb: 217 114 58;
+    --rust-dark: #a85228;
+    --moss: #7f9a6d;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper-rgb: 28 23 18;
+  --paper-raised: #241e17;
+  --ink-rgb: 240 233 220;
+  --ink-soft: #b8ab95;
+  --ink-faint: #7d715f;
+  --line: #3a3128;
+  --line-strong: #4d4234;
+  --rust-rgb: 217 114 58;
+  --rust-dark: #a85228;
+  --moss: #7f9a6d;
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--paper);
+  color: var(--ink);
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.13  0 0 0 0 0.1  0 0 0 0 0.07  0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#__next,
+body > div {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: var(--rust);
+  color: var(--paper-raised);
+}
+
+::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--line-strong);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- Animations ---- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.35s ease both;
+}
+
+/* ---- Shared component classes ---- */
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+.surface-card {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  box-shadow: 3px 3px 0 var(--line);
+}
+
+.field {
+  width: 100%;
+  border-radius: 3px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper-raised);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.field::placeholder {
+  color: var(--ink-faint);
+}
+.field:focus {
+  border-color: var(--rust);
+  box-shadow: 0 0 0 3px rgba(184, 70, 28, 0.12);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 3px;
+  background: var(--rust);
+  color: var(--paper-raised);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--rust-dark);
+  box-shadow: 2px 2px 0 var(--rust-dark);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.btn-primary:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--rust-dark);
+}
+.btn-primary:active {
+  transform: translate(0, 0);
+  box-shadow: 1px 1px 0 var(--rust-dark);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  transform: none;
+  box-shadow: 2px 2px 0 var(--rust-dark);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 3px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.btn-ghost:hover {
+  background: rgba(184, 70, 28, 0.06);
+  border-color: var(--rust);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
