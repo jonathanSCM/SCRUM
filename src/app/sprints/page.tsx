@@ -27,8 +27,7 @@ export default async function SprintsPage() {
       <main className="mx-auto max-w-4xl px-6 py-10">
         <h1 className="mb-1 font-display text-3xl font-semibold tracking-tight text-ink">Sprints</h1>
         <p className="mb-7 text-sm text-ink-soft">
-          Organizá las tareas sincronizadas en ciclos con fecha. Esto vive solo acá — el panel interno no usa
-          sprints.
+          Organizá las tareas en ciclos con fecha.
         </p>
         <SprintsManager initialSprints={withProgress} />
       </main>

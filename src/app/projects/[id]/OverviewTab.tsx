@@ -170,7 +170,7 @@ export default function OverviewTab({
       </div>
 
       {error && <p className="text-sm font-medium text-danger">{error}</p>}
-      {saved && !error && <p className="text-sm font-medium text-moss">Guardado — se actualizó también en el panel interno.</p>}
+      {saved && !error && <p className="text-sm font-medium text-moss">Guardado.</p>}
 
       <div className="border-t border-line pt-5">
         <button onClick={save} disabled={saving} className="btn-primary">

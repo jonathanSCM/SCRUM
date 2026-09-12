@@ -20,12 +20,12 @@ export default async function DashboardPage() {
       <main className="mx-auto max-w-7xl px-6 py-10">
         <h1 className="mb-1 font-display text-3xl font-semibold tracking-tight text-ink">Proyectos</h1>
         <p className="mb-7 text-sm text-ink-soft">
-          Arrastrá un proyecto entre columnas para actualizar su estado — se refleja también en el panel interno.
+          Arrastrá un proyecto entre columnas para actualizar su estado.
         </p>
 
         {statuses.length === 0 ? (
           <p className="border border-dashed border-line-strong rounded-xl2 p-6 text-center text-sm text-ink-soft">
-            Todavía no llegó ningún dato sincronizado.
+            Todavía no hay proyectos.
           </p>
         ) : (
           <ProjectsBoard statuses={statuses} projects={projects} />

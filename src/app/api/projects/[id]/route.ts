@@ -27,10 +27,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   if (!isMainPanelConfigured()) {
-    return NextResponse.json(
-      { error: "Falta configurar MAIN_PANEL_URL / MAIN_PANEL_API_TOKEN para poder editar desde acá." },
-      { status: 400 }
-    );
+    console.error("[projects] MAIN_PANEL_URL / MAIN_PANEL_API_TOKEN no configurados -- no se puede editar.");
+    return NextResponse.json({ error: "No se pudo guardar el cambio. Probá de nuevo más tarde." }, { status: 400 });
   }
 
   const { id } = await params;
@@ -45,12 +43,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       body: JSON.stringify(parsed.data),
     });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "No se pudo contactar el panel interno" }, { status: 502 });
+    console.error("[projects] error contactando al panel interno:", e);
+    return NextResponse.json({ error: "No se pudo guardar el cambio. Probá de nuevo más tarde." }, { status: 502 });
   }
 
   if (!mainRes.ok) {
     const body = await mainRes.json().catch(() => ({}));
-    return NextResponse.json({ error: body.error || "El panel interno rechazó el cambio" }, { status: mainRes.status });
+    console.error("[projects] el panel interno rechazó el cambio:", body.error);
+    return NextResponse.json({ error: "No se pudo guardar el cambio. Revisá los datos e intentá de nuevo." }, { status: mainRes.status });
   }
 
   const updated: MainPanelProject = await mainRes.json();
