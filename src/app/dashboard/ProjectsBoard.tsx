@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DndContext, DragEndEvent, PointerSensor, useSensor, useSensors, useDroppable, useDraggable } from "@dnd-kit/core";
@@ -15,7 +15,10 @@ type Project = {
   _count: { tasks: number };
 };
 
-function ProjectCard({ project }: { project: Project }) {
+// El link del título viaja con el cursor durante el arrastre (dnd-kit lo mueve
+// con transform), así que al soltar el mouse queda literalmente encima del
+// link y el navegador dispara su click -- esta ref evita que eso navegue.
+function ProjectCard({ project, justDraggedRef }: { project: Project; justDraggedRef: React.MutableRefObject<boolean> }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: project.id });
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 10 } : undefined;
 
@@ -45,7 +48,15 @@ function ProjectCard({ project }: { project: Project }) {
   );
 }
 
-function Column({ status, projects }: { status: Status; projects: Project[] }) {
+function Column({
+  status,
+  projects,
+  justDraggedRef,
+}: {
+  status: Status;
+  projects: Project[];
+  justDraggedRef: React.MutableRefObject<boolean>;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: status.id });
 
   return (
@@ -60,7 +71,7 @@ function Column({ status, projects }: { status: Status; projects: Project[] }) {
             Sin proyectos
           </div>
         ) : (
-          projects.map((p) => <ProjectCard key={p.id} project={p} />)
+          projects.map((p) => <ProjectCard key={p.id} project={p} justDraggedRef={justDraggedRef} />)
         )}
       </div>
     </div>
@@ -72,6 +83,21 @@ export default function ProjectsBoard({ statuses, projects }: { statuses: Status
   const [items, setItems] = useState(projects);
   const [error, setError] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const justDraggedRef = useRef(false);
+
+  // Fase de captura: corta el click ANTES de que llegue al link del título
+  // (que viajó con el cursor durante el arrastre y quedó debajo del mouse
+  // al soltar), así el navegador nunca alcanza a navegar.
+  useEffect(() => {
+    function blockClickAfterDrag(e: MouseEvent) {
+      if (!justDraggedRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      justDraggedRef.current = false;
+    }
+    document.addEventListener("click", blockClickAfterDrag, true);
+    return () => document.removeEventListener("click", blockClickAfterDrag, true);
+  }, []);
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -100,10 +126,26 @@ export default function ProjectsBoard({ statuses, projects }: { statuses: Status
   return (
     <div>
       {error && <p className="mb-3 text-sm font-medium text-danger">{error}</p>}
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        onDragStart={() => {
+          justDraggedRef.current = true;
+        }}
+        onDragEnd={(event) => {
+          handleDragEnd(event);
+          setTimeout(() => {
+            justDraggedRef.current = false;
+          }, 300);
+        }}
+      >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {statuses.map((status) => (
-            <Column key={status.id} status={status} projects={items.filter((p) => p.statusId === status.id)} />
+            <Column
+              key={status.id}
+              status={status}
+              projects={items.filter((p) => p.statusId === status.id)}
+              justDraggedRef={justDraggedRef}
+            />
           ))}
         </div>
       </DndContext>

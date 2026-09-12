@@ -11,7 +11,6 @@ export default function OverviewTab({
   statusId: initialStatusId,
   assigneeId: initialAssigneeId,
   description: initialDescription,
-  repoUrl: initialRepoUrl,
   deployUrl: initialDeployUrl,
   stack: initialStack,
   statuses,
@@ -20,7 +19,6 @@ export default function OverviewTab({
   statusId: string;
   assigneeId: string | null;
   description: string;
-  repoUrl: string | null;
   deployUrl: string | null;
   stack: string;
   statuses: Status[];
@@ -29,7 +27,6 @@ export default function OverviewTab({
   const [statusId, setStatusId] = useState(initialStatusId);
   const [assigneeId, setAssigneeId] = useState(initialAssigneeId ?? "");
   const [description, setDescription] = useState(initialDescription);
-  const [repoUrl, setRepoUrl] = useState(initialRepoUrl ?? "");
   const [deployUrl, setDeployUrl] = useState(initialDeployUrl ?? "");
   const [members, setMembers] = useState<Member[]>([]);
   const [stack, setStack] = useState<string[]>(() => {
@@ -69,7 +66,6 @@ export default function OverviewTab({
         statusId,
         assigneeId: assigneeId || null,
         description,
-        repoUrl: repoUrl || null,
         deployUrl: deployUrl || null,
         stack,
       }),
@@ -124,16 +120,6 @@ export default function OverviewTab({
           value={deployUrl}
           onChange={(e) => setDeployUrl(e.target.value)}
           placeholder="https://app.miempresa.com"
-          className="field"
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Repositorio de GitHub</label>
-        <input
-          value={repoUrl}
-          onChange={(e) => setRepoUrl(e.target.value)}
-          placeholder="https://github.com/usuario/repo"
           className="field"
         />
       </div>

@@ -38,11 +38,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                   ↗ Ver despliegue
                 </a>
               )}
-              {project.repoUrl && (
-                <a href={project.repoUrl} target="_blank" rel="noreferrer" className="text-ink-soft hover:text-ink">
-                  {project.repoUrl}
-                </a>
-              )}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">
@@ -61,7 +56,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           statusId={project.statusId}
           assigneeId={project.assigneeId}
           description={project.description}
-          repoUrl={project.repoUrl}
           deployUrl={project.deployUrl}
           stack={project.stack}
           documents={project.documents}

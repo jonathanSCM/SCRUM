@@ -28,7 +28,6 @@ export default function ProjectTabs({
   statusId,
   assigneeId,
   description,
-  repoUrl,
   deployUrl,
   stack,
   documents,
@@ -41,7 +40,6 @@ export default function ProjectTabs({
   statusId: string;
   assigneeId: string | null;
   description: string;
-  repoUrl: string | null;
   deployUrl: string | null;
   stack: string;
   documents: { id: string; filename: string; docType: string; uploadedAt: Date | string }[];
@@ -80,13 +78,12 @@ export default function ProjectTabs({
           statusId={statusId}
           assigneeId={assigneeId}
           description={description}
-          repoUrl={repoUrl}
           deployUrl={deployUrl}
           stack={stack}
           statuses={statuses}
         />
       )}
-      {tab === "Documentos" && <DocumentsTab documents={documents} />}
+      {tab === "Documentos" && <DocumentsTab projectId={projectId} documents={documents} />}
       {tab === "Historial" && <HistoryTab entries={history} />}
     </div>
   );
