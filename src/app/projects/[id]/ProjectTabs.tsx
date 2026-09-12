@@ -15,6 +15,7 @@ type Task = {
   type: string;
   priority: string;
   dueDate: Date | string | null;
+  assigneeId: string | null;
   assigneeName: string | null;
   moduleName: string | null;
   sprintId: string | null;
@@ -71,7 +72,7 @@ export default function ProjectTabs({
         ))}
       </div>
 
-      {tab === "Tareas" && <TasksTab tasks={tasks} sprints={sprints} />}
+      {tab === "Tareas" && <TasksTab projectId={projectId} tasks={tasks} sprints={sprints} />}
       {tab === "Info del proyecto" && (
         <OverviewTab
           projectId={projectId}

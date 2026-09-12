@@ -90,6 +90,7 @@ model Task {
   dueDate     DateTime?
   updatedAt   DateTime  @default(now())
 
+  assigneeId   String?
   assigneeName String?
   moduleName   String?
 

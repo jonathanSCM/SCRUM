@@ -2,6 +2,7 @@ import { requireSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import Navbar from "@/components/Navbar";
 import ProjectsBoard from "./ProjectsBoard";
+import NewProjectForm from "./NewProjectForm";
 
 export default async function DashboardPage() {
   const session = await requireSession();
@@ -22,6 +23,8 @@ export default async function DashboardPage() {
         <p className="mb-7 text-sm text-ink-soft">
           Arrastrá un proyecto entre columnas para actualizar su estado.
         </p>
+
+        <NewProjectForm />
 
         {statuses.length === 0 ? (
           <p className="border border-dashed border-line-strong rounded-xl2 p-6 text-center text-sm text-ink-soft">

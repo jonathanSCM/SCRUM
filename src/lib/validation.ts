@@ -48,6 +48,7 @@ const syncTaskSchema = z.object({
   type: z.string(),
   priority: z.string(),
   dueDate: z.string().nullable().optional(),
+  assigneeId: z.string().nullable().optional(),
   assigneeName: z.string().nullable().optional(),
   moduleName: z.string().nullable().optional(),
 });
@@ -100,4 +101,25 @@ export const updateProjectSchema = z.object({
   deployUrl: z.string().trim().max(500).nullable().optional(),
   language: z.string().trim().max(100).nullable().optional(),
   stack: z.array(z.string()).optional(),
+});
+
+export const createProjectSchema = z.object({
+  name: z.string().trim().min(1, "Nombre requerido").max(200),
+  description: z.string().trim().max(5000).optional(),
+});
+
+export const createTaskSchema = z.object({
+  title: z.string().trim().min(1, "Título requerido").max(300),
+  description: z.string().trim().max(5000).optional(),
+  type: z.string().optional(),
+  priority: z.string().optional(),
+  assigneeId: z.string().trim().min(1).optional(),
+  dueDate: z.string().trim().optional(),
+});
+
+export const updateTaskSchema = z.object({
+  type: z.string().optional(),
+  priority: z.string().optional(),
+  assigneeId: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
 });

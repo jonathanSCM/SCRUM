@@ -4,9 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseBody, assignSprintSchema } from "@/lib/validation";
 
-// Único campo editable desde esta app: a qué sprint pertenece la tarea.
-// Todo lo demás (título, tipo, prioridad, encargado, etc.) llega sincronizado
-// desde el panel interno y no se puede tocar acá.
+// Asigna la tarea a un sprint -- concepto que vive solo acá, el panel
+// interno no lo conoce. El resto de los campos (tipo, prioridad, encargado)
+// se editan por PATCH /api/projects/[id]/tasks/[taskId], que reenvía el
+// cambio al panel interno.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
