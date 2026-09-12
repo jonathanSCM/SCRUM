@@ -29,9 +29,21 @@ En el panel interno (Coolify → esa otra app → variables de entorno), agregá
 - `BOSS_PANEL_URL` = la URL pública de esta app (sin barra al final, ej. `https://jefe.tudominio.com`)
 - `BOSS_PANEL_SYNC_TOKEN` = el mismo valor que pusiste acá en `SYNC_TOKEN`
 
-Sin estas dos variables configuradas del lado del panel interno, la sincronización simplemente no hace nada (no rompe el panel interno, solo no manda datos acá).
+Sin estas dos variables configuradas del lado del panel interno, la sincronización simplemente no hace nada (no rompe el panel interno, solo no manda datos acá). Esto cubre la sincronización de una sola vía (proyectos, tareas, estados, documentos, historial).
 
-## 6. Primer usuario y primera carga de datos
+## 6. Habilitar la edición de dos vías (mover proyectos, editar info desde acá)
+
+Para que el jefe pueda mover proyectos de estado o editar la info del proyecto desde esta app, y que eso quede real también en el panel interno, hace falta un token personal del panel interno:
+
+1. En el panel interno, con sesión de un Líder: `Configuración → Token IA` → generar un token personal (ya existe esa pantalla, se usó originalmente para la IA).
+2. En esta app (Coolify → variables de entorno), agregá:
+   - `MAIN_PANEL_URL` = la URL pública del panel interno (ej. `https://panel.tudominio.com`)
+   - `MAIN_PANEL_API_TOKEN` = el token generado en el paso 1
+3. Redeploy de esta app para que tome las variables nuevas.
+
+Sin estas dos variables, mover un proyecto o editar su info desde acá muestra un error claro ("Falta configurar...") y no aplica el cambio ni acá ni en el panel interno — no hay riesgo de que quede una edición fantasma.
+
+## 7. Primer usuario y primera carga de datos
 
 1. Deploy de ambas apps.
 2. Entrá al dominio público de esta app → caés en `/register` → creás el primer admin (rol Líder).
