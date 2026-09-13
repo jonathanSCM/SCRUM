@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import TaskRow from "@/components/TaskRow";
+import BulkActionsBar from "@/components/BulkActionsBar";
 import { PRIORITY_LABEL, DONE_TYPE } from "@/lib/taskLabels";
+import { useTaskSelection } from "@/lib/useTaskSelection";
 
 type Task = {
   id: string;
@@ -36,11 +39,49 @@ function daysFromNow(value: Date | string | null): number | null {
 }
 
 export default function MyWeekView({ tasks, sprints }: { tasks: Task[]; sprints: Sprint[] }) {
+  const router = useRouter();
   const [members, setMembers] = useState<Member[]>([]);
   const [assigneeId, setAssigneeId] = useState("");
   const [priority, setPriority] = useState("");
   const [sprintId, setSprintId] = useState("");
   const [showDone, setShowDone] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const { selected, toggle, clear } = useTaskSelection();
+  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+
+  async function applySprintToSelected(newSprintId: string | null) {
+    setBulkBusy(true);
+    await Promise.all(
+      [...selected].map((id) =>
+        fetch(`/api/tasks/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sprintId: newSprintId }),
+        })
+      )
+    );
+    setBulkBusy(false);
+    clear();
+    router.refresh();
+  }
+
+  async function applyPriorityToSelected(newPriority: string) {
+    setBulkBusy(true);
+    await Promise.all(
+      [...selected].map((id) => {
+        const t = taskById.get(id);
+        if (!t) return Promise.resolve();
+        return fetch(`/api/projects/${t.projectId}/tasks/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ priority: newPriority }),
+        });
+      })
+    );
+    setBulkBusy(false);
+    clear();
+    router.refresh();
+  }
 
   useEffect(() => {
     fetch("/api/team-members")
@@ -137,6 +178,17 @@ export default function MyWeekView({ tasks, sprints }: { tasks: Task[]; sprints:
         </label>
       </div>
 
+      {selected.size > 0 && (
+        <BulkActionsBar
+          count={selected.size}
+          sprints={sprints}
+          busy={bulkBusy}
+          onApplySprint={applySprintToSelected}
+          onApplyPriority={applyPriorityToSelected}
+          onClear={clear}
+        />
+      )}
+
       {filtered.length === 0 ? (
         <p className="border border-dashed border-line-strong p-6 text-center text-sm text-ink-soft">
           No hay tareas que coincidan con estos filtros.
@@ -156,6 +208,8 @@ export default function MyWeekView({ tasks, sprints }: { tasks: Task[]; sprints:
                     projectName={task.project.name}
                     members={members}
                     sprints={sprints}
+                    selected={selected.has(task.id)}
+                    onToggleSelect={toggle}
                   />
                 ))}
               </ul>

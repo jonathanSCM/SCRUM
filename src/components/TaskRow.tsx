@@ -44,12 +44,16 @@ export default function TaskRow({
   projectName,
   members,
   sprints,
+  selected,
+  onToggleSelect,
 }: {
   task: Task;
   projectId: string;
   projectName?: string;
   members: { id: string; name: string }[];
   sprints: { id: string; name: string }[];
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -76,6 +80,15 @@ export default function TaskRow({
       }`}
       style={isDone || overdue ? undefined : { borderLeftColor: typeColor }}
     >
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={() => onToggleSelect(task.id)}
+          className="mt-1 h-4 w-4 shrink-0 accent-moss"
+          aria-label={`Seleccionar "${task.title}"`}
+        />
+      )}
       <div className="min-w-0 flex-1">
         <p className={`flex items-start gap-2 text-sm font-medium ${isDone ? "text-ink-faint line-through" : "text-ink"}`}>
           {isDone ? (

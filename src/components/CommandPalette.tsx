@@ -40,11 +40,19 @@ export default function CommandPalette() {
   useEffect(() => {
     if (status !== "authenticated") return;
 
+    function isTypingTarget(el: EventTarget | null): boolean {
+      if (!(el instanceof HTMLElement)) return false;
+      return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
+    }
+
     function onKeyDown(e: KeyboardEvent) {
       const isK = e.key.toLowerCase() === "k";
       if ((e.metaKey || e.ctrlKey) && isK) {
         e.preventDefault();
         setOpen((v) => !v);
+      } else if (e.key === "/" && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        setOpen(true);
       } else if (e.key === "Escape") {
         setOpen(false);
       }

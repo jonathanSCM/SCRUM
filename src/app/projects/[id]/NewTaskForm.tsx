@@ -10,12 +10,18 @@ const PRIORITY_OPTIONS = Object.entries(PRIORITY_LABEL);
 export default function NewTaskForm({
   projectId,
   members,
+  open: openProp,
+  onOpenChange,
 }: {
   projectId: string;
   members: { id: string; name: string }[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = onOpenChange ?? setOpenState;
   const [title, setTitle] = useState("");
   const [type, setType] = useState("CAMBIO_PENDIENTE");
   const [priority, setPriority] = useState("MEDIA");

@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import TaskRow from "@/components/TaskRow";
+import BulkActionsBar from "@/components/BulkActionsBar";
 import NewTaskForm from "./NewTaskForm";
 import { DONE_TYPE } from "@/lib/taskLabels";
+import { useTaskSelection } from "@/lib/useTaskSelection";
 
 type Task = {
   id: string;
@@ -33,18 +36,30 @@ function TaskGroupList({
   projectId,
   members,
   sprints,
+  selected,
+  onToggleSelect,
 }: {
   tasks: Task[];
   projectId: string;
   members: Member[];
   sprints: Sprint[];
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   const { pending, done } = splitDone(tasks);
   return (
     <>
       <ul className="space-y-2.5">
         {pending.map((task) => (
-          <TaskRow key={task.id} task={task} projectId={projectId} members={members} sprints={sprints} />
+          <TaskRow
+            key={task.id}
+            task={task}
+            projectId={projectId}
+            members={members}
+            sprints={sprints}
+            selected={selected.has(task.id)}
+            onToggleSelect={onToggleSelect}
+          />
         ))}
       </ul>
       {done.length > 0 && (
@@ -54,13 +69,26 @@ function TaskGroupList({
           </h4>
           <ul className="space-y-2.5">
             {done.map((task) => (
-              <TaskRow key={task.id} task={task} projectId={projectId} members={members} sprints={sprints} />
+              <TaskRow
+                key={task.id}
+                task={task}
+                projectId={projectId}
+                members={members}
+                sprints={sprints}
+                selected={selected.has(task.id)}
+                onToggleSelect={onToggleSelect}
+              />
             ))}
           </ul>
         </div>
       )}
     </>
   );
+}
+
+function isTypingTarget(el: EventTarget | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
 }
 
 export default function TasksTab({
@@ -72,7 +100,11 @@ export default function TasksTab({
   tasks: Task[];
   sprints: Sprint[];
 }) {
+  const router = useRouter();
   const [members, setMembers] = useState<Member[]>([]);
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const { selected, toggle, clear } = useTaskSelection();
 
   useEffect(() => {
     fetch("/api/team-members")
@@ -80,6 +112,49 @@ export default function TasksTab({
       .then(setMembers)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key.toLowerCase() === "n" && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        setNewTaskOpen(true);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  async function applySprintToSelected(sprintId: string | null) {
+    setBulkBusy(true);
+    await Promise.all(
+      [...selected].map((id) =>
+        fetch(`/api/tasks/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sprintId }),
+        })
+      )
+    );
+    setBulkBusy(false);
+    clear();
+    router.refresh();
+  }
+
+  async function applyPriorityToSelected(priority: string) {
+    setBulkBusy(true);
+    await Promise.all(
+      [...selected].map((id) =>
+        fetch(`/api/projects/${projectId}/tasks/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ priority }),
+        })
+      )
+    );
+    setBulkBusy(false);
+    clear();
+    router.refresh();
+  }
 
   const bySprint = new Map<string, Task[]>();
   const withoutSprint: Task[] = [];
@@ -99,7 +174,18 @@ export default function TasksTab({
 
   return (
     <div className="space-y-6">
-      <NewTaskForm projectId={projectId} members={members} />
+      <NewTaskForm projectId={projectId} members={members} open={newTaskOpen} onOpenChange={setNewTaskOpen} />
+
+      {selected.size > 0 && (
+        <BulkActionsBar
+          count={selected.size}
+          sprints={sprints}
+          busy={bulkBusy}
+          onApplySprint={applySprintToSelected}
+          onApplyPriority={applyPriorityToSelected}
+          onClear={clear}
+        />
+      )}
 
       {tasks.length === 0 ? (
         <p className="border border-dashed border-line-strong rounded-xl2 p-6 text-center text-sm text-ink-soft">
@@ -110,14 +196,28 @@ export default function TasksTab({
           {groups.map(({ sprint, tasks: sprintTasks }) => (
             <div key={sprint.id}>
               <h3 className="mb-2 font-display text-sm font-semibold text-ink">{sprint.name}</h3>
-              <TaskGroupList tasks={sprintTasks} projectId={projectId} members={members} sprints={sprints} />
+              <TaskGroupList
+                tasks={sprintTasks}
+                projectId={projectId}
+                members={members}
+                sprints={sprints}
+                selected={selected}
+                onToggleSelect={toggle}
+              />
             </div>
           ))}
 
           {withoutSprint.length > 0 && (
             <div>
               {groups.length > 0 && <h3 className="mb-2 font-display text-sm font-semibold text-ink-soft">Sin sprint</h3>}
-              <TaskGroupList tasks={withoutSprint} projectId={projectId} members={members} sprints={sprints} />
+              <TaskGroupList
+                tasks={withoutSprint}
+                projectId={projectId}
+                members={members}
+                sprints={sprints}
+                selected={selected}
+                onToggleSelect={toggle}
+              />
             </div>
           )}
         </>
