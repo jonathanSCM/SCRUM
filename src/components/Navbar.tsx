@@ -7,6 +7,7 @@ import CommandPalette from "./CommandPalette";
 
 const LINKS = [
   { href: "/dashboard", label: "Proyectos" },
+  { href: "/my-week", label: "Mi semana" },
   { href: "/sprints", label: "Sprints" },
 ];
 

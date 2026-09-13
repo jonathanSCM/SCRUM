@@ -2,8 +2,12 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import Navbar from "@/components/Navbar";
-import TaskSprintSelect from "@/components/TaskSprintSelect";
-import { TYPE_LABEL, TYPE_COLOR, PRIORITY_LABEL, DONE_TYPE } from "@/lib/taskLabels";
+import SprintTasksList from "./SprintTasksList";
+import { DONE_TYPE } from "@/lib/taskLabels";
+
+function pct(done: number, total: number) {
+  return total > 0 ? Math.round((done / total) * 100) : 0;
+}
 
 export default async function SprintDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
@@ -19,9 +23,33 @@ export default async function SprintDetailPage({ params }: { params: Promise<{ i
 
   if (!sprint) notFound();
 
+  const previousSprint = await prisma.sprint.findFirst({
+    where: { startDate: { lt: sprint.startDate } },
+    orderBy: { startDate: "desc" },
+    include: { tasks: { select: { type: true } } },
+  });
+
   const done = sprint.tasks.filter((t) => t.type === DONE_TYPE).length;
   const total = sprint.tasks.length;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const currentPct = pct(done, total);
+
+  const previousPct = previousSprint
+    ? pct(previousSprint.tasks.filter((t) => t.type === DONE_TYPE).length, previousSprint.tasks.length)
+    : null;
+
+  const overdueCount = sprint.tasks.filter((t) => {
+    if (t.type === DONE_TYPE || !t.dueDate) return false;
+    return new Date(t.dueDate).getTime() < new Date().setHours(0, 0, 0, 0);
+  }).length;
+
+  const byAssignee = new Map<string, { done: number; total: number }>();
+  for (const t of sprint.tasks) {
+    const key = t.assigneeName ?? "Sin encargar";
+    const entry = byAssignee.get(key) ?? { done: 0, total: 0 };
+    entry.total += 1;
+    if (t.type === DONE_TYPE) entry.done += 1;
+    byAssignee.set(key, entry);
+  }
 
   return (
     <div>
@@ -35,45 +63,51 @@ export default async function SprintDetailPage({ params }: { params: Promise<{ i
           </p>
           <div className="mt-3 flex items-center gap-3">
             <div className="h-3.5 w-64 overflow-hidden bg-paper border-2 border-line">
-              <div className="h-full bg-moss" style={{ width: `${pct}%` }} />
+              <div className="h-full bg-moss" style={{ width: `${currentPct}%` }} />
             </div>
             <span className="text-xs text-ink-faint">
-              {done}/{total} completadas ({pct}%)
+              {done}/{total} completadas ({currentPct}%)
             </span>
+            {previousPct !== null && (
+              <span className={`text-xs font-semibold ${currentPct >= previousPct ? "text-moss" : "text-danger"}`}>
+                {currentPct >= previousPct ? "▲" : "▼"} {Math.abs(currentPct - previousPct)} pts vs {previousSprint!.name}
+              </span>
+            )}
           </div>
+          {overdueCount > 0 && (
+            <p className="mt-2 text-xs font-semibold text-danger">
+              {overdueCount} {overdueCount === 1 ? "tarea vencida" : "tareas vencidas"}
+            </p>
+          )}
         </div>
 
+        {sprint.tasks.length > 0 && (
+          <div className="mb-7 border-2 border-line bg-card p-4 shadow-[6px_6px_0_var(--moss)]">
+            <h2 className="mb-3 font-display text-sm font-semibold text-ink">Por encargado</h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {[...byAssignee.entries()].map(([name, s]) => (
+                <div key={name}>
+                  <p className="text-xs font-semibold text-ink">{name}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="h-2 w-full overflow-hidden bg-paper border border-line">
+                      <div className="h-full bg-moss" style={{ width: `${pct(s.done, s.total)}%` }} />
+                    </div>
+                    <span className="shrink-0 text-[11px] text-ink-faint">
+                      {s.done}/{s.total}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {sprint.tasks.length === 0 ? (
-          <p className="border border-dashed border-line-strong rounded-xl2 p-6 text-center text-sm text-ink-soft">
+          <p className="border border-dashed border-line-strong p-6 text-center text-sm text-ink-soft">
             Todavía no hay tareas asignadas a este sprint. Andá a un proyecto y asignale una.
           </p>
         ) : (
-          <ul className="space-y-2.5">
-            {sprint.tasks.map((task) => {
-              const isDone = task.type === DONE_TYPE;
-              const typeColor = TYPE_COLOR[task.type] ?? "#9a8f7a";
-              return (
-                <li
-                  key={task.id}
-                  className={`flex items-start justify-between gap-4 border bg-card p-3.5 rounded-xl2 shadow-[6px_6px_0_var(--moss)] ${
-                    isDone ? "border-line opacity-60" : "border-line border-l-4"
-                  }`}
-                  style={isDone ? undefined : { borderLeftColor: typeColor }}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-medium text-ink ${isDone ? "line-through" : ""}`}>{task.title}</p>
-                    <div className="mt-1.5 flex flex-wrap gap-2 text-[11px] text-ink-faint">
-                      <span>{task.project.name}</span>
-                      <span>· {TYPE_LABEL[task.type] ?? task.type}</span>
-                      <span>· {PRIORITY_LABEL[task.priority] ?? task.priority}</span>
-                      {task.assigneeName && <span>· {task.assigneeName}</span>}
-                    </div>
-                  </div>
-                  <TaskSprintSelect taskId={task.id} currentSprintId={task.sprintId} sprints={sprints} />
-                </li>
-              );
-            })}
-          </ul>
+          <SprintTasksList tasks={sprint.tasks} sprints={sprints} />
         )}
       </main>
     </div>
