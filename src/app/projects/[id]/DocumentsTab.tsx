@@ -42,7 +42,7 @@ export default function DocumentsTab({ projectId, documents }: { projectId: stri
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleUpload} className="border border-line bg-card p-4 rounded-xl2 backdrop-blur-md shadow-[0_20px_45px_-20px_rgba(0,0,0,0.7)] space-y-3">
+      <form onSubmit={handleUpload} className="border border-line bg-card p-4 rounded-xl2 shadow-[6px_6px_0_var(--moss)] space-y-3">
         <div className="flex gap-5 text-sm">
           <label className="flex items-center gap-2 text-ink-soft">
             <input
@@ -68,7 +68,7 @@ export default function DocumentsTab({ projectId, documents }: { projectId: stri
           type="file"
           accept=".pdf,.md,.txt"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-lg file:border file:border-line-strong file:bg-paper file:px-3 file:py-1.5 file:text-ink"
+          className="block w-full text-sm text-ink-soft file:mr-3 file:border-2 file:border-line file:bg-paper file:px-3 file:py-1.5 file:text-ink file:font-semibold"
         />
 
         <button type="submit" disabled={!file || uploading} className="btn-primary">
@@ -87,7 +87,7 @@ export default function DocumentsTab({ projectId, documents }: { projectId: stri
           {documents.map((doc) => (
             <li
               key={doc.id}
-              className="border border-line bg-card p-3.5 rounded-xl2 backdrop-blur-md shadow-[0_20px_45px_-20px_rgba(0,0,0,0.7)]"
+              className="border border-line bg-card p-3.5 rounded-xl2 shadow-[6px_6px_0_var(--moss)]"
             >
               <p className="text-sm font-semibold text-ink">{doc.filename}</p>
               <p className="text-xs text-ink-faint">

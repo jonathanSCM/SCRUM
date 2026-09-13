@@ -54,7 +54,7 @@ export default function TaskRow({
 
   return (
     <li
-      className={`flex flex-wrap items-start justify-between gap-4 border bg-card p-3.5 rounded-xl2 backdrop-blur-md shadow-[0_20px_45px_-20px_rgba(0,0,0,0.7)] ${
+      className={`flex flex-wrap items-start justify-between gap-4 border bg-card p-3.5 rounded-xl2 shadow-[6px_6px_0_var(--moss)] ${
         isDone ? "border-line opacity-60" : "border-line border-l-4"
       }`}
       style={isDone ? undefined : { borderLeftColor: typeColor }}

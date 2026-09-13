@@ -14,6 +14,7 @@ const config: Config = {
       colors: {
         paper: withOpacity("--paper-rgb"),
         card: "var(--paper-raised)",
+        "card-2": "var(--paper-raised-2)",
         ink: withOpacity("--ink-rgb"),
         "ink-soft": "var(--ink-soft)",
         "ink-faint": "var(--ink-faint)",
@@ -28,10 +29,10 @@ const config: Config = {
       } as any,
       fontFamily: {
         sans: ["var(--font-body)", "system-ui", "sans-serif"],
-        display: ["var(--font-display)", "Sora", "sans-serif"],
+        display: ["var(--font-display)", "Archivo", "sans-serif"],
       },
       borderRadius: {
-        xl2: "16px",
+        xl2: "0px",
       },
     },
   },

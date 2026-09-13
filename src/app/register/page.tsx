@@ -68,7 +68,7 @@ export default function RegisterPage() {
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-5 surface-card p-9">
         <div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="SCRUM ProShop" className="mb-3 h-10 w-10 rounded-lg object-cover" />
+          <img src="/logo.png" alt="SCRUM ProShop" className="mb-3 h-10 w-10 border-2 border-line object-cover" />
           <h1 className="font-display text-2xl font-bold text-ink">Crear cuenta de administrador</h1>
           <p className="mt-1 text-sm text-ink-soft">
             Este panel es nuevo, sin usuarios todavía. La primera cuenta que crees queda como líder.

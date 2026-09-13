@@ -69,7 +69,7 @@ export default function TeamManager({
   return (
     <div className="space-y-6">
       {createdPassword && (
-        <div className="border border-rust bg-card p-4 text-sm rounded-xl2 backdrop-blur-md">
+        <div className="border-2 border-rust bg-card p-4 text-sm rounded-xl2 shadow-[6px_6px_0_var(--moss)]">
           <p className="font-semibold text-ink">Cuenta creada — pasale estos datos, no se van a volver a mostrar:</p>
           <p className="mt-1 text-ink-soft">
             Email: <span className="font-mono">{createdPassword.email}</span>
@@ -84,7 +84,7 @@ export default function TeamManager({
       )}
 
       {showForm ? (
-        <form onSubmit={addUser} className="flex flex-wrap items-end gap-2 border border-line bg-card p-4 rounded-xl2 backdrop-blur-md">
+        <form onSubmit={addUser} className="flex flex-wrap items-end gap-2 border border-line bg-card p-4 rounded-xl2 shadow-[6px_6px_0_var(--moss)]">
           <div className="space-y-1">
             <label className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Nombre</label>
             <input required value={name} onChange={(e) => setName(e.target.value)} className="field" />
@@ -117,7 +117,7 @@ export default function TeamManager({
 
       <ul className="space-y-2">
         {users.map((u) => (
-          <li key={u.id} className="flex items-center justify-between border border-line bg-card px-3.5 py-2.5 rounded-xl2 backdrop-blur-md">
+          <li key={u.id} className="flex items-center justify-between border border-line bg-card px-3.5 py-2.5 rounded-xl2 shadow-[6px_6px_0_var(--moss)]">
             <div>
               <p className="text-sm text-ink">
                 {u.name} {u.id === currentUserId && <span className="text-xs text-ink-faint">(vos)</span>}

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Sora, Inter } from "next/font/google";
+import { Archivo, Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 
-const display = Sora({
+const display = Archivo({
   subsets: ["latin"],
   variable: "--font-display",
   weight: ["600", "700", "800"],

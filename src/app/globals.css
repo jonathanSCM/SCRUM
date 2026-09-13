@@ -2,21 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Paleta ProShop — morado oscuro + acento verde menta (panel admin/cliente).
-   Tema único, fijo, no configurable — sin light/dark. */
+/* Paleta ProShop — morado oscuro + acento verde menta, resuelta en plano
+   (neobrutalismo): bloques sólidos, borde marcado, sombra dura desplazada
+   en vez de vidrio esmerilado. Tema único, fijo, no configurable — sin
+   light/dark. */
 :root {
-  --paper-rgb: 25 15 40; /* #190f28 -- fallback sólido detrás del degradado */
-  --paper-raised: rgba(255, 255, 255, 0.09); /* --surface */
-  --paper-raised-2: rgba(255, 255, 255, 0.14); /* --surface-2 */
+  --paper-rgb: 21 11 34; /* #150b22 -- fondo sólido, sin degradado */
+  --paper-raised: #20132f; /* --surface, tarjetas sólidas */
+  --paper-raised-2: #2a1b3d; /* --surface-2, hover/énfasis */
   --ink-rgb: 246 242 255; /* #f6f2ff */
   --ink-soft: #dccff5;
   --ink-faint: #a996c9;
-  --line: rgba(255, 255, 255, 0.18);
-  --line-strong: rgba(255, 255, 255, 0.28);
+  --line: rgba(246, 242, 255, 0.85); /* borde marcado, casi sólido */
+  --line-strong: rgba(246, 242, 255, 0.5); /* borde punteado (estados vacíos) */
   --rust-rgb: 139 92 246; /* #8b5cf6 -- primary morado */
   --rust-dark: #5b21b6;
   --accent-rgb: 192 132 252; /* #c084fc */
-  --moss: #2fe3a6; /* primary-2 verde menta */
+  --moss: #2fe3a6; /* primary-2 verde menta -- también el color de sombra por defecto */
   --ring: rgba(47, 227, 166, 0.45);
   --danger: #fb7185;
   --danger-bg: rgba(251, 113, 133, 0.14);
@@ -31,8 +33,7 @@
 }
 
 body {
-  background: linear-gradient(160deg, #241634 0%, #190f28 55%, #110a1d 100%);
-  background-color: var(--paper);
+  background: var(--paper);
   color: var(--ink);
   min-height: 100vh;
 }
@@ -48,10 +49,10 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background-color: var(--line-strong);
-  border-radius: 9999px;
+  border-radius: 0;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--paper);
 }
 
 /* ---- Animations ---- */
@@ -71,26 +72,31 @@ body {
   animation: rise 0.35s ease both;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise {
+    animation: none;
+  }
+}
+
 /* ---- Shared component classes ---- */
 
 .font-display {
-  font-family: var(--font-display), "Sora", sans-serif;
+  font-family: var(--font-display), "Archivo", sans-serif;
 }
 
-.surface-card {
+.surface-card,
+.glass-card {
   background: var(--paper-raised);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 20px 45px -20px rgba(0, 0, 0, 0.7);
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 6px 6px 0 var(--moss);
 }
 
 .field {
   width: 100%;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: rgba(0, 0, 0, 0.14);
+  border-radius: 0;
+  border: 2px solid var(--line);
+  background: var(--paper);
   padding: 0.55rem 0.75rem;
   font-size: 0.875rem;
   color: var(--ink);
@@ -110,26 +116,28 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--rust) 0%, var(--accent) 100%);
-  color: #12081f;
+  border-radius: 0;
+  background: var(--rust);
+  color: #150b22;
   font-weight: 700;
   font-size: 0.875rem;
   padding: 0.6rem 1.15rem;
-  border: 1px solid transparent;
-  box-shadow: 0 10px 25px -10px rgba(139, 92, 246, 0.6);
-  transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.1s ease;
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--moss);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.1s ease;
 }
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 30px -10px rgba(139, 92, 246, 0.75);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--moss);
 }
 .btn-primary:active {
-  transform: translateY(0);
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--moss);
 }
 .btn-primary:disabled {
   opacity: 0.5;
   transform: none;
+  box-shadow: 4px 4px 0 var(--moss);
 }
 
 .btn-ghost {
@@ -137,18 +145,19 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  border-radius: 12px;
-  border: 1px solid var(--line);
+  border-radius: 0;
+  border: 2px solid var(--ink);
   background: transparent;
   color: var(--ink);
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   padding: 0.55rem 1rem;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, transform 0.08s ease, box-shadow 0.08s ease;
 }
 .btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--moss);
+  background: var(--paper-raised-2);
+  box-shadow: 4px 4px 0 var(--moss);
+  transform: translate(-2px, -2px);
 }
 
 .btn-danger {
@@ -156,36 +165,30 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  border-radius: 12px;
-  border: 1px solid rgba(251, 113, 133, 0.4);
-  background: var(--danger-bg);
-  color: var(--danger);
+  border-radius: 0;
+  border: 2px solid var(--ink);
+  background: var(--danger);
+  color: #150b22;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 700;
   padding: 0.5rem 1rem;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  box-shadow: 4px 4px 0 var(--ink);
+  transition: filter 0.15s ease, transform 0.08s ease;
 }
 .btn-danger:hover {
-  background: var(--danger);
-  color: #12081f;
+  filter: brightness(1.08);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--ink);
 }
 
 .tag {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
+  border-radius: 0;
+  border: 2px solid var(--ink);
   padding: 0.15rem 0.6rem;
   font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-/* Tarjetas de contenido "de vidrio" -- glassmorphism estándar de la app */
-.glass-card {
-  background: var(--paper-raised);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 20px 45px -20px rgba(0, 0, 0, 0.7);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }

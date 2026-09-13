@@ -47,7 +47,7 @@ export default function NewProjectForm() {
   return (
     <form
       onSubmit={create}
-      className="mb-6 flex flex-wrap items-start gap-2 border border-line bg-card p-3.5 rounded-xl2 backdrop-blur-md shadow-[0_20px_45px_-20px_rgba(0,0,0,0.7)]"
+      className="mb-6 flex flex-wrap items-start gap-2 border border-line bg-card p-3.5 rounded-xl2 shadow-[6px_6px_0_var(--moss)]"
     >
       <input
         value={name}
