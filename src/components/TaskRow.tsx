@@ -75,21 +75,22 @@ export default function TaskRow({
 
   return (
     <li
-      className={`flex flex-wrap items-start justify-between gap-4 border bg-card p-3.5 rounded-xl2 shadow-[6px_6px_0_var(--moss)] ${
+      className={`flex flex-col gap-3 border bg-card p-3.5 rounded-xl2 shadow-[6px_6px_0_var(--moss)] sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4 ${
         overdue ? "border-danger border-2" : isDone ? "border-line opacity-60" : "border-line border-l-4"
       }`}
       style={isDone || overdue ? undefined : { borderLeftColor: typeColor }}
     >
-      {onToggleSelect && (
-        <input
-          type="checkbox"
-          checked={!!selected}
-          onChange={() => onToggleSelect(task.id)}
-          className="mt-1 h-4 w-4 shrink-0 accent-moss"
-          aria-label={`Seleccionar "${task.title}"`}
-        />
-      )}
-      <div className="min-w-0 flex-1">
+      <div className="flex items-start gap-3 sm:min-w-0 sm:flex-1">
+        {onToggleSelect && (
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={() => onToggleSelect(task.id)}
+            className="mt-1 h-4 w-4 shrink-0 accent-moss"
+            aria-label={`Seleccionar "${task.title}"`}
+          />
+        )}
+        <div className="min-w-0 flex-1">
         <p className={`flex items-start gap-2 text-sm font-medium ${isDone ? "text-ink-faint line-through" : "text-ink"}`}>
           {isDone ? (
             <span className="mt-0.5 shrink-0 text-moss" title="Completada">
@@ -110,9 +111,10 @@ export default function TaskRow({
           {projectName && <span className="font-semibold text-ink-soft">{projectName}</span>}
           {task.moduleName && <span>{task.moduleName}</span>}
         </div>
+        </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
         <input
           type="date"
           value={toDateInputValue(task.dueDate)}
