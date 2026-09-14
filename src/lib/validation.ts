@@ -123,3 +123,12 @@ export const updateTaskSchema = z.object({
   assigneeId: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
 });
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().email("Email inválido"),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().trim().min(1),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").max(200),
+});

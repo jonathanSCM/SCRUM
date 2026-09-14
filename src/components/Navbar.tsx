@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import CommandPalette from "./CommandPalette";
 
 const LINKS = [
+  { href: "/home", label: "Inicio" },
   { href: "/dashboard", label: "Proyectos" },
   { href: "/my-week", label: "Mi semana" },
   { href: "/sprints", label: "Sprints" },
@@ -19,7 +20,7 @@ export default function Navbar({ userName, isLead }: { userName: string; isLead:
     <nav className="sticky top-0 z-20 border-b-2 border-line bg-paper">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-9">
-          <Link href="/dashboard" className="flex items-center gap-2.5">
+          <Link href="/home" className="flex items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="SCRUM ProShop" className="h-8 w-8 border-2 border-line object-cover" />
             <span className="font-display text-lg font-bold tracking-tight text-ink">SCRUM ProShop</span>

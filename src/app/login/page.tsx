@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function LoginPage() {
       setError("Email o contraseña incorrectos");
       return;
     }
-    router.push("/dashboard");
+    router.push("/home");
     router.refresh();
   }
 
@@ -78,6 +79,10 @@ export default function LoginPage() {
         <button type="submit" disabled={loading} className="btn-primary w-full">
           {loading ? "Ingresando..." : "Ingresar"}
         </button>
+
+        <Link href="/forgot-password" className="block text-center text-xs text-ink-faint hover:text-ink">
+          ¿Olvidaste tu contraseña?
+        </Link>
       </form>
     </div>
   );

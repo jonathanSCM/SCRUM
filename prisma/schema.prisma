@@ -21,6 +21,19 @@ model User {
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
   createdAt    DateTime @default(now())
+
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // El id de StatusOption/Project/Task NO se autogenera: al sincronizar desde
