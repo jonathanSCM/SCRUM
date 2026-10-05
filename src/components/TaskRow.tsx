@@ -75,12 +75,12 @@ export default function TaskRow({
 
   return (
     <li
-      className={`flex flex-col gap-3 border bg-card p-3.5 rounded-xl2 shadow-[6px_6px_0_var(--moss)] sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4 ${
+      className={`flex flex-col gap-3 border bg-card p-3.5 rounded-xl2 shadow-[6px_6px_0_var(--moss)] ${
         overdue ? "border-danger border-2" : isDone ? "border-line opacity-60" : "border-line border-l-4"
       }`}
       style={isDone || overdue ? undefined : { borderLeftColor: typeColor }}
     >
-      <div className="flex items-start gap-3 sm:min-w-0 sm:flex-1">
+      <div className="flex min-w-0 items-start gap-3">
         {onToggleSelect && (
           <input
             type="checkbox"
@@ -114,7 +114,7 @@ export default function TaskRow({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           type="date"
           value={toDateInputValue(task.dueDate)}
