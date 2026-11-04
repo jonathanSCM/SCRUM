@@ -8,6 +8,7 @@ import { DISCORD_COLOR } from "@/lib/discord";
 import { notifyProject } from "@/lib/notify";
 import { parseStringList, ticketsNotReady } from "@/lib/scrum/ready";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
+import { sprintPdfEnabled } from "@/lib/features";
 import { sendSprintBriefing } from "@/lib/sprintBriefing";
 import { snapshotOnStart, validateStart } from "@/lib/scrum/sprintLifecycle";
 
@@ -75,10 +76,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
 
     // Informe PDF (con sugerencias de Gemini) al Slack del proyecto, sin hacer
-    // esperar a quien inició el sprint.
-    after(async () => {
-      await sendSprintBriefing(id, auth.user);
-    });
+    // esperar a quien inició el sprint. Solo si SPRINT_PDF_ENABLED=true.
+    if (sprintPdfEnabled()) {
+      after(async () => {
+        await sendSprintBriefing(id, auth.user);
+      });
+    }
 
     return NextResponse.json(started);
   } catch (e) {

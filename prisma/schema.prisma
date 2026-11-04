@@ -40,6 +40,8 @@ model User {
   attachments         Attachment[]
   notes               Note[]
   messages            ProjectMessage[]
+  standups            StandupEntry[]
+  retroItems          RetroItem[]
 }
 
 model PasswordResetToken {
@@ -107,6 +109,9 @@ model Project {
   history     HistoryEntry[]
   notes       Note[]
   messages    ProjectMessage[]
+  standups    StandupEntry[]
+  retroItems  RetroItem[]
+  contacts    ProjectContact[]
 }
 
 // Sin uso desde la v2 (solo guardaba metadatos). Se reemplaza por Attachment.
@@ -210,7 +215,8 @@ model Sprint {
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  tasks Task[]
+  tasks      Task[]
+  retroItems RetroItem[]
 
   @@index([projectId, state])
 }
@@ -281,4 +287,58 @@ model ProjectMessage {
   author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([projectId, createdAt])
+}
+
+// Daily asíncrono: una entrada por persona y día (fecha "YYYY-MM-DD").
+model StandupEntry {
+  id        String   @id @default(cuid())
+  date      String
+  yesterday String   @default("")
+  today     String   @default("")
+  blockers  String   @default("")
+  help      String   @default("") // "¿en qué te puedo ayudar?"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId, date])
+  @@index([projectId, date])
+}
+
+// Retro de un sprint: qué funcionó, qué mejorar y acuerdos (que pueden pasar a ticket).
+model RetroItem {
+  id        String   @id @default(cuid())
+  column    String // WENT_WELL | IMPROVE | ACTION
+  body      String
+  ticketKey String? // si el acuerdo ya se convirtió en ticket
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  sprintId String
+  sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, sprintId])
+}
+
+// Ayuda y contactos: quién sabe de qué / a quién llamar en cada proyecto.
+model ProjectContact {
+  id        String   @id @default(cuid())
+  name      String
+  role      String   @default("")
+  contact   String   @default("")
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }

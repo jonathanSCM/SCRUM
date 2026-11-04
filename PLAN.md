@@ -86,7 +86,8 @@ Pestaña **Ceremonias** por proyecto, ligada al sprint:
 - [x] Notificaciones por Telegram y Slack (además de Discord): cada proyecto configura los canales que quiera en Ajustes; cada persona carga su usuario para la mención en Mi perfil
 - [x] Fase 3: Notas públicas por proyecto (brief, reunión, general; fijar; convertir puntos en tickets del backlog) y Chat del equipo por proyecto
 - [x] Chat con refresco cada 2 s; PDF del sprint (Gemini + pdfkit) enviado a Slack al iniciar un sprint
-- [ ] Fases 4–5 (ceremonias, jerarquía épica > historia > tarea, checklist, diseño)
+- [x] Fase 4: Ceremonias (pestaña Ceremonias: Daily asíncrono, actas de Planning y Review, Retro por sprint con acuerdos que pasan a ticket, Ayuda y contactos). El PDF del sprint queda apagado salvo SPRINT_PDF_ENABLED=true
+- [ ] Fase 5 (jerarquía épica > historia > tarea, checklist en la tarjeta, pasada de diseño)
 
 ## 7. Preguntas abiertas (resueltas arriba salvo)
 

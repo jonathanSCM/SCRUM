@@ -11,6 +11,7 @@ import { extractActionItems } from "./notes";
 import { parseInsights, buildPrompt } from "../gemini";
 import { renderSprintPdf } from "../sprintPdf";
 import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTicket, type SprintReportData } from "./sprintReport";
+import { isValidDateString, shiftDate, missingStandups, summarizeReview, localDateString } from "./ceremonies";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
 describe("issueKey", () => {
@@ -345,5 +346,29 @@ describe("informe del sprint", () => {
     expect(withAi.subarray(0, 5).toString()).toBe("%PDF-");
     expect(without.subarray(0, 5).toString()).toBe("%PDF-");
     expect(withAi.length).toBeGreaterThan(2000);
+  });
+});
+
+describe("ceremonias", () => {
+  it("valida y desplaza fechas", () => {
+    expect(isValidDateString("2026-11-04")).toBe(true);
+    expect(isValidDateString("2026-02-31")).toBe(false);
+    expect(isValidDateString("04/11/2026")).toBe(false);
+    expect(shiftDate("2026-11-30", 1)).toBe("2026-12-01");
+    expect(shiftDate("2026-01-01", -1)).toBe("2025-12-31");
+    expect(localDateString(new Date(2026, 10, 4))).toBe("2026-11-04");
+  });
+  it("detecta quién falta en el daily", () => {
+    const members = [{ id: "a", name: "Ana" }, { id: "b", name: "Beto" }];
+    expect(missingStandups(members, ["a"])).toEqual(["Beto"]);
+  });
+  it("resume la review", () => {
+    const r = summarizeReview([
+      { key: "P-1", title: "a", status: "DONE", points: 3 },
+      { key: "P-2", title: "b", status: "IN_PROGRESS", points: 5 },
+      { key: "P-3", title: "c", status: "DONE", points: null },
+    ]);
+    expect(r).toMatchObject({ committed: 3, completed: 2, committedPoints: 8, completedPoints: 3 });
+    expect(r.notDone).toEqual([{ key: "P-2", title: "b", status: "IN_PROGRESS" }]);
   });
 });

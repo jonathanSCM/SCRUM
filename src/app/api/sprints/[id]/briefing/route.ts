@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
+import { sprintPdfEnabled } from "@/lib/features";
 import { errorResponse, notFound } from "@/lib/api";
 import { sendSprintBriefing } from "@/lib/sprintBriefing";
 
@@ -10,6 +11,7 @@ export const maxDuration = 90;
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await apiUser();
   if ("error" in auth) return auth.error;
+  if (!sprintPdfEnabled()) return notFound("El informe PDF del sprint está desactivado (SPRINT_PDF_ENABLED)");
   const { id } = await params;
 
   try {

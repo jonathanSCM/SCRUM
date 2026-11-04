@@ -208,7 +208,7 @@ export const completeSprintSchema = z.object({
 
 // ---- Notas y chat ----
 
-export const NOTE_KINDS = ["BRIEF", "REUNION", "GENERAL"] as const;
+export const NOTE_KINDS = ["BRIEF", "REUNION", "PLANNING", "REVIEW", "GENERAL"] as const;
 
 export const createNoteSchema = z.object({
   title: z.string().trim().min(1, "Título requerido").max(200),
@@ -226,3 +226,32 @@ export const noteToTicketsSchema = z.object({
 export const messageSchema = z.object({
   body: z.string().trim().min(1, "El mensaje no puede estar vacío").max(3000),
 });
+
+// ---- Ceremonias ----
+
+const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida");
+const standupText = z.string().trim().max(2000).optional();
+
+export const standupSchema = z.object({
+  date: dateString,
+  yesterday: standupText,
+  today: standupText,
+  blockers: standupText,
+  help: standupText,
+});
+
+export const RETRO_COLUMNS = ["WENT_WELL", "IMPROVE", "ACTION"] as const;
+
+export const retroItemSchema = z.object({
+  sprintId: z.string().min(1),
+  column: z.enum(RETRO_COLUMNS),
+  body: z.string().trim().min(1, "Escribí algo").max(500),
+});
+
+export const contactSchema = z.object({
+  name: z.string().trim().min(1, "Nombre requerido").max(100),
+  role: z.string().trim().max(100).optional(),
+  contact: z.string().trim().max(200).optional(),
+  notes: z.string().trim().max(1000).optional(),
+});
+export const updateContactSchema = contactSchema.partial();

@@ -57,6 +57,7 @@ export default function BacklogView({
   currentUserId,
   isLead,
   completedSprints,
+  pdfEnabled,
 }: {
   projectId: string;
   sprints: SprintData[];
@@ -65,6 +66,7 @@ export default function BacklogView({
   currentUserId: string;
   isLead: boolean;
   completedSprints: number;
+  pdfEnabled: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -373,8 +375,8 @@ export default function BacklogView({
                     ) : (
                       <button className="btn-mint btn-sm" onClick={() => setCompleteFor(s)}>Completar sprint</button>
                     )}
-                    <a className="btn-ghost btn-sm" href={`/api/sprints/${s.id}/report`} target="_blank" rel="noreferrer" title="PDF del sprint con sugerencias (tarda unos segundos)">PDF</a>
-                    {s.state === "ACTIVE" && (
+                    {pdfEnabled && <a className="btn-ghost btn-sm" href={`/api/sprints/${s.id}/report`} target="_blank" rel="noreferrer" title="PDF del sprint con sugerencias (tarda unos segundos)">PDF</a>}
+                    {pdfEnabled && s.state === "ACTIVE" && (
                       <button className="btn-ghost btn-sm" disabled={sendingReport === s.id} onClick={() => sendReport(s)} title="Genera el PDF y lo manda al Slack del proyecto">
                         {sendingReport === s.id ? "Enviando…" : "Enviar a Slack"}
                       </button>

@@ -3,6 +3,8 @@
 export const NOTE_KIND_META = {
   BRIEF: { label: "Brief" },
   REUNION: { label: "Reunión" },
+  PLANNING: { label: "Planning" },
+  REVIEW: { label: "Review" },
   GENERAL: { label: "General" },
 } as const;
 

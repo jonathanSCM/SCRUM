@@ -24,6 +24,7 @@ type Props = {
     webhookHint: string | null;
     slackChannelId: string;
     slackBot: boolean;
+    pdfEnabled: boolean;
     slackConfigured: boolean;
     slackHint: string | null;
     telegramConfigured: boolean;
@@ -351,6 +352,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
               <input className="field min-w-0 flex-1" type="password" autoComplete="off" placeholder="https://hooks.slack.com/services/…" value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} />
               <button className="btn-primary" disabled={savingSlack || !slackUrl.trim()} onClick={() => saveSlack(slackUrl.trim())}>Guardar</button>
             </div>
+            {project.pdfEnabled && (
             <div className="space-y-2 border-t-2 border-line-strong pt-3">
               <p className="text-sm font-semibold text-ink">PDF al iniciar cada sprint</p>
               <p className="text-xs text-ink-soft">
@@ -364,6 +366,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
                 <button className="btn-primary" disabled={savingChannel} onClick={saveChannel}>Guardar canal</button>
               </div>
             </div>
+            )}
             {slackConfigured && (
               <div className="flex gap-2">
                 <button className="btn-ghost btn-sm" disabled={testingSlack} onClick={testSlack}>{testingSlack ? "Enviando…" : "Enviar mensaje de prueba"}</button>
