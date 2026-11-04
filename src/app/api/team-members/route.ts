@@ -1,24 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { mainPanelFetch, isMainPanelConfigured } from "@/lib/mainPanel";
+import { prisma } from "@/lib/prisma";
+import { apiUser } from "@/lib/session";
 
-// Proxy en vivo de GET /api/users del panel interno -- no se guarda copia
-// local, es solo para poblar el <select> de Encargado con datos frescos.
+// Las personas del equipo son los usuarios de esta app.
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const auth = await apiUser();
+  if ("error" in auth) return auth.error;
 
-  if (!isMainPanelConfigured()) {
-    return NextResponse.json([], { status: 200 });
-  }
-
-  try {
-    const res = await mainPanelFetch("/api/users");
-    if (!res.ok) return NextResponse.json([], { status: 200 });
-    const users = await res.json();
-    return NextResponse.json(users);
-  } catch {
-    return NextResponse.json([], { status: 200 });
-  }
+  const users = await prisma.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } });
+  return NextResponse.json(users);
 }

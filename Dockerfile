@@ -32,6 +32,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
+# prisma/seed.ts (migración de datos viejos) reutiliza estas funciones puras.
+COPY --from=builder /app/src/lib/scrum ./src/lib/scrum
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/package.json ./package.json
 COPY docker-entrypoint.sh ./docker-entrypoint.sh

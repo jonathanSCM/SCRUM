@@ -4,21 +4,22 @@
 
 /* Paleta ProShop — morado oscuro + acento verde menta, resuelta en plano
    (neobrutalismo): bloques sólidos, borde marcado, sombra dura desplazada
-   en vez de vidrio esmerilado. Tema único, fijo, no configurable — sin
-   light/dark. */
+   en vez de vidrio esmerilado. Tema único, fijo, sin light/dark. */
 :root {
-  --paper-rgb: 21 11 34; /* #150b22 -- fondo sólido, sin degradado */
-  --paper-raised: #20132f; /* --surface, tarjetas sólidas */
-  --paper-raised-2: #2a1b3d; /* --surface-2, hover/énfasis */
+  --paper-rgb: 21 11 34; /* #150b22 */
+  --paper-deep: #0f0819; /* fondos hundidos (columnas, inputs) */
+  --paper-raised: #20132f; /* tarjetas sólidas */
+  --paper-raised-2: #2a1b3d; /* hover / énfasis */
   --ink-rgb: 246 242 255; /* #f6f2ff */
   --ink-soft: #dccff5;
   --ink-faint: #a996c9;
   --line: rgba(246, 242, 255, 0.85); /* borde marcado, casi sólido */
-  --line-strong: rgba(246, 242, 255, 0.5); /* borde punteado (estados vacíos) */
-  --rust-rgb: 139 92 246; /* #8b5cf6 -- primary morado */
+  --line-strong: rgba(246, 242, 255, 0.5); /* borde punteado / secundario */
+  --rust-rgb: 139 92 246; /* #8b5cf6 primario */
   --rust-dark: #5b21b6;
   --accent-rgb: 192 132 252; /* #c084fc */
-  --moss: #2fe3a6; /* primary-2 verde menta -- también el color de sombra por defecto */
+  --moss: #2fe3a6; /* menta: acento y color de sombra */
+  --blue: #60a5fa;
   --ring: rgba(47, 227, 166, 0.45);
   --danger: #fb7185;
   --danger-bg: rgba(251, 113, 133, 0.14);
@@ -32,15 +33,27 @@
   color-scheme: dark;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--paper);
   color: var(--ink);
   min-height: 100vh;
+  /* retícula sutil: da textura de "papel milimetrado" al fondo */
+  background-image: radial-gradient(rgba(246, 242, 255, 0.045) 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
 ::selection {
   background: var(--moss);
   color: #0b0a12;
+}
+
+:focus-visible {
+  outline: 2px solid var(--moss);
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
@@ -49,7 +62,7 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background-color: var(--line-strong);
-  border-radius: 0;
+  border: 2px solid var(--paper);
 }
 ::-webkit-scrollbar-track {
   background: var(--paper);
@@ -73,8 +86,13 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-rise {
-    animation: none;
+  .animate-rise,
+  .animate-pop,
+  .animate-shimmer {
+    animation: none !important;
+  }
+  html {
+    scroll-behavior: auto;
   }
 }
 
@@ -92,11 +110,20 @@ body {
   box-shadow: 6px 6px 0 var(--moss);
 }
 
+/* tarjeta que "se levanta" al pasar el mouse (tickets, proyectos) */
+.lift {
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.lift:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 var(--moss);
+}
+
 .field {
   width: 100%;
   border-radius: 0;
   border: 2px solid var(--line);
-  background: var(--paper);
+  background: var(--paper-deep);
   padding: 0.55rem 0.75rem;
   font-size: 0.875rem;
   color: var(--ink);
@@ -109,6 +136,15 @@ body {
 .field:focus {
   border-color: var(--moss);
   box-shadow: 0 0 0 3px var(--ring);
+}
+.field:disabled {
+  opacity: 0.55;
+}
+
+/* select compacto para barras de filtros y campos del ticket */
+.field-sm {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
 }
 
 .btn-primary {
@@ -138,6 +174,36 @@ body {
   opacity: 0.5;
   transform: none;
   box-shadow: 4px 4px 0 var(--moss);
+  cursor: not-allowed;
+}
+
+.btn-mint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 0;
+  background: var(--moss);
+  color: #150b22;
+  font-weight: 700;
+  font-size: 0.875rem;
+  padding: 0.6rem 1.15rem;
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--rust);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.btn-mint:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--rust);
+}
+.btn-mint:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--rust);
+}
+.btn-mint:disabled {
+  opacity: 0.5;
+  transform: none;
+  cursor: not-allowed;
 }
 
 .btn-ghost {
@@ -158,6 +224,12 @@ body {
   background: var(--paper-raised-2);
   box-shadow: 4px 4px 0 var(--moss);
   transform: translate(-2px, -2px);
+}
+.btn-ghost:disabled {
+  opacity: 0.5;
+  transform: none;
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 .btn-danger {
@@ -180,6 +252,17 @@ body {
   transform: translate(-2px, -2px);
   box-shadow: 6px 6px 0 var(--ink);
 }
+.btn-danger:disabled {
+  opacity: 0.5;
+  transform: none;
+  cursor: not-allowed;
+}
+
+/* botón chico para barras y acciones secundarias */
+.btn-sm {
+  padding: 0.3rem 0.7rem !important;
+  font-size: 0.75rem !important;
+}
 
 .tag {
   display: inline-flex;
@@ -191,4 +274,48 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+/* etiqueta de estado/tipo: más fina que .tag, para tarjetas y filas */
+.lozenge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 2px solid currentColor;
+  padding: 0 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.kbd {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.65rem;
+  border: 2px solid var(--line-strong);
+  padding: 0 0.3rem;
+  color: var(--ink-soft);
+}
+
+/* esqueleto de carga con brillo que cruza */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--paper-raised);
+  border: 2px solid var(--line-strong);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(246, 242, 255, 0.08), transparent);
+  animation: shimmer 1.4s infinite;
+}
+
+/* patrón de rayas para barras de progreso y fondos "en proceso" */
+.stripes {
+  background-image: repeating-linear-gradient(135deg, rgba(21, 11, 34, 0.18) 0 6px, transparent 6px 12px);
 }
