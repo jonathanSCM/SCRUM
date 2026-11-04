@@ -156,6 +156,7 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
       created.assignee ? ` — asignado a ${created.assignee.name}` : ""
     }`,
     color: DISCORD_COLOR.created,
+    excludeUserId: actor.id,
     mentionUserIds: [created.assigneeUserId],
     url: issueUrl(projectId, key),
   });
@@ -346,6 +347,7 @@ export async function updateIssue(
         title: `${key} completado en ${project.name}`,
         description: `**${actor.name}** completó «${updated.title}»`,
         color: DISCORD_COLOR.done,
+        excludeUserId: actor.id,
         mentionUserIds: [updated.assigneeUserId, project.leadUserId],
         url: issueUrl(project.id, key),
       });
@@ -355,6 +357,7 @@ export async function updateIssue(
         title: `${key} asignado en ${project.name}`,
         description: `**${actor.name}** asignó «${updated.title}» a ${newAssignee.name}`,
         color: DISCORD_COLOR.assigned,
+        excludeUserId: actor.id,
         mentionUserIds: [newAssignee.id],
         url: issueUrl(project.id, key),
       });

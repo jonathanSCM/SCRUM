@@ -42,6 +42,7 @@ model User {
   messages            ProjectMessage[]
   standups            StandupEntry[]
   retroItems          RetroItem[]
+  pushSubscriptions   PushSubscription[]
 }
 
 model PasswordResetToken {
@@ -347,4 +348,19 @@ model ProjectContact {
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// Suscripción de un navegador/dispositivo a las notificaciones push (PWA).
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

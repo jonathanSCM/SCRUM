@@ -1,11 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { resolveDiscordMention, sendToDiscordWebhook, type DiscordMessage } from "@/lib/discord";
+import { buildPushPayload, pushConfigured, sendPush } from "@/lib/push";
 import { resolveSlackMention, sendToSlackWebhook } from "@/lib/slack";
 import { resolveTelegramMention, sendToTelegram } from "@/lib/telegram";
 
 export type ProjectNotification = Omit<DiscordMessage, "mentionUserId"> & {
   // Usuarios de la app a mencionar (se usa el primero que tenga cuenta en cada canal).
   mentionUserIds?: Array<string | null | undefined>;
+  // Push del navegador: a los mencionados (por defecto) o a todo el equipo.
+  pushAll?: boolean;
+  // Quien hizo la acción no recibe su propio aviso.
+  excludeUserId?: string;
 };
 
 // Avisa por los canales que tenga configurados el proyecto (Discord, Telegram
@@ -31,6 +36,15 @@ export async function notifyProject(projectId: string, message: ProjectNotificat
     if (project.slackWebhookUrl) {
       const url = project.slackWebhookUrl;
       jobs.push(resolveSlackMention(...ids).then((mentionSlackId) => sendToSlackWebhook(url, { ...message, mentionSlackId })));
+    }
+    if (pushConfigured()) {
+      const targets = message.pushAll ? null : ids.filter((id): id is string => !!id && id !== message.excludeUserId);
+      const payload = buildPushPayload(message, `/projects/${projectId}/board`);
+      jobs.push(
+        message.pushAll
+          ? prisma.user.findMany({ where: message.excludeUserId ? { id: { not: message.excludeUserId } } : {}, select: { id: true } }).then((users) => sendPush(users.map((u) => u.id), payload))
+          : sendPush(targets, payload)
+      );
     }
     await Promise.allSettled(jobs);
   } catch (err) {

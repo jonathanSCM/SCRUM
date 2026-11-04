@@ -47,3 +47,7 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
   - `SLACK_BOT_TOKEN`: token del bot de Slack (permisos `files:write`, `chat:write`), agregado al canal, para **adjuntar** el PDF. En Proyecto → Ajustes → Slack se guarda el **ID del canal** (`C…`). Sin bot, se manda por el webhook un mensaje con el enlace de descarga (`/api/sprints/<id>/report`, requiere sesión). Un Incoming Webhook no puede subir archivos.
   - Desde el Backlog, cada sprint tiene los botones **PDF** (descarga) y **Enviar a Slack** (sprint activo).
 - **Ceremonias**: pestaña Ceremonias en cada proyecto (Daily asíncrono, actas de Planning/Review, Retro, Ayuda y contactos). Solo agrega tablas nuevas; no necesita variables de entorno.
+- **App instalable (PWA) y notificaciones del navegador**: `/manifest.webmanifest` + `public/sw.js` hacen la app instalable (Chrome/Edge/Android: icono de instalar; iPhone: Compartir → Añadir a pantalla de inicio, y ahí recién se pueden activar las notificaciones). Los avisos push llegan aunque la app esté cerrada: al que se le asigna un ticket, al que le comentan, y a todo el equipo cuando un sprint empieza o termina. Cada persona los activa en **Inicio** (aviso) o en **Mi perfil → App y notificaciones**. Requiere HTTPS y estas variables (sin ellas queda desactivado y no se muestra nada):
+  - `VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY`: se generan una sola vez con `npx web-push generate-vapid-keys`.
+  - `VAPID_SUBJECT` (opcional): `mailto:tu@correo` de contacto.
+  - Agrega la tabla `PushSubscription` (aditiva).

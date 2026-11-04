@@ -13,6 +13,7 @@ import { renderSprintPdf } from "../sprintPdf";
 import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTicket, type SprintReportData } from "./sprintReport";
 import { isValidDateString, shiftDate, missingStandups, summarizeReview, localDateString } from "./ceremonies";
 import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from "./checklist";
+import { buildPushPayload } from "../push";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
 describe("issueKey", () => {
@@ -390,5 +391,15 @@ describe("checklist y jerarquía", () => {
   it("progreso de una historia", () => {
     expect(storyProgress([{ status: "DONE" }, { status: "TODO" }, { status: "DONE" }, { status: "DONE" }])).toEqual({ done: 3, total: 4, pct: 75 });
     expect(storyProgress([])).toEqual({ done: 0, total: 0, pct: 0 });
+  });
+});
+
+describe("push", () => {
+  it("arma el payload sin marcado y con límite", () => {
+    const p = buildPushPayload({ title: "SAI-2 asignado", description: "**Ana** te asignó «x»" + " y".repeat(200) }, "/projects/p/board");
+    expect(p.body.startsWith("Ana te asignó «x»")).toBe(true);
+    expect(p.body.length).toBeLessThanOrEqual(160);
+    expect(p.url).toBe("/projects/p/board");
+    expect(buildPushPayload({ title: "t", description: "d", url: "https://x/y" }, "/z").url).toBe("https://x/y");
   });
 });
