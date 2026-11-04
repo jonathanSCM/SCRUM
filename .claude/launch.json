@@ -4,8 +4,8 @@
     {
       "name": "panel-jefe",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000,
+      "runtimeArgs": ["run", "dev", "--", "-p", "3020"],
+      "port": 3020,
       "autoPort": true
     }
   ]

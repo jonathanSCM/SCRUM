@@ -1,56 +1,43 @@
 # Despliegue de SCRUM ProShop
 
-Mismo patrón que el panel interno (`D:\Trabajo\Organizacion`): Dockerfile + Coolify, Postgres en producción, SQLite en local.
+SCRUM ProShop es una app independiente: no depende de ningún otro panel. Dockerfile + Coolify, Postgres en producción, SQLite en local. Repositorio: `github.com/jonathanSCM/SCRUM` (Coolify despliega desde `main`).
 
-## 1. Subir el repo
-
-Esta app todavía no tiene su propio repositorio de GitHub. Creá uno nuevo (ej. `jonathanSCM/OrganizacionJefe`) y subí esta carpeta ahí — igual que se hizo con el panel interno.
-
-## 2. Crear el recurso Postgres en Coolify
-
-Un recurso nuevo, separado del que usa el panel interno (puede vivir en el mismo servidor sin problema). Copiá su `DATABASE_URL` interna.
-
-## 3. Crear la aplicación en Coolify
-
-Apuntá al repo de GitHub nuevo, build pack "Dockerfile", puerto 3000.
-
-## 4. Variables de entorno
+## Variables de entorno (Coolify)
 
 | Variable | Qué es |
 |---|---|
-| `DATABASE_URL` | La del recurso Postgres del paso 2 |
-| `NEXTAUTH_SECRET` | Random, ej. `openssl rand -base64 32` (distinto al del panel interno) |
-| `NEXTAUTH_URL` | El dominio público de esta app (ej. `https://jefe.tudominio.com`) |
-| `SYNC_TOKEN` | Un secreto random elegido por vos (ej. `openssl rand -base64 32`) — el panel interno tiene que mandar este mismo valor en `BOSS_PANEL_SYNC_TOKEN` para poder sincronizar |
+| `DATABASE_URL` | La del recurso Postgres de esta app |
+| `NEXTAUTH_SECRET` | Random, ej. `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | El dominio público (ej. `https://scrum.proshop.lat`) |
+| `RESEND_API_KEY` | Para el correo de recuperar contraseña |
+| `MAIL_FROM` | Remitente, con comillas por el espacio: `"SCRUM ProShop <noreply@proshop.lat>"` |
 
-## 5. Conectar el panel interno
+Ya **no** se usan `SYNC_TOKEN`, `MAIN_PANEL_URL` ni `MAIN_PANEL_API_TOKEN`: se pueden borrar de Coolify.
 
-En el panel interno (Coolify → esa otra app → variables de entorno), agregá:
-- `BOSS_PANEL_URL` = la URL pública de esta app (sin barra al final, ej. `https://jefe.tudominio.com`)
-- `BOSS_PANEL_SYNC_TOKEN` = el mismo valor que pusiste acá en `SYNC_TOKEN`
+## Actualizar desde la versión anterior (espejo del panel interno)
 
-Sin estas dos variables configuradas del lado del panel interno, la sincronización simplemente no hace nada (no rompe el panel interno, solo no manda datos acá). Esto cubre la sincronización de una sola vía (proyectos, tareas, estados, documentos, historial).
+La versión nueva cambia el modelo de datos (tickets con clave `PRO-12`, sprints por proyecto, comentarios, adjuntos). Los cambios de esquema son **solo aditivos** y los datos viejos se convierten solos al arrancar.
 
-## 6. Habilitar la edición de dos vías (mover proyectos, editar info desde acá)
+1. **Hacer un backup de Postgres antes de desplegar** (Coolify → el recurso Postgres → Backups → “Backup now”, o `pg_dump`). El arranque corre `prisma db push --accept-data-loss` porque no es interactivo; el backup es la red de seguridad.
+2. Actualizar las variables de entorno de la tabla de arriba (agregar `MAIL_FROM` si falta).
+3. Redeploy desde `main`. Al arrancar, `docker-entrypoint.sh` aplica el esquema y corre `prisma/seed.ts`, que ejecuta la migración de datos de forma idempotente:
+   - Cada proyecto recibe una clave de 2 a 5 letras (se puede ver en la cabecera del proyecto).
+   - Las tareas se numeran por proyecto y su estado viejo (`CAMBIO_REALIZADO` → Hecho, el resto → Por hacer) pasa al flujo nuevo.
+   - El encargado se vincula a la cuenta local cuyo nombre coincide; si no coincide, queda sin asignar.
+   - Los sprints viejos (globales) se copian a cada proyecto involucrado.
+   - Se crean los estados de proyecto por defecto si no existían.
+4. Entrar y revisar: Proyectos → un proyecto → Backlog / Tablero.
+5. Reconfigurar el webhook de Discord de cada proyecto (Proyecto → Ajustes → Integraciones): las URLs vivían en la base del panel interno y no se migran. Cada persona puede cargar su ID de Discord en **Mi perfil** para recibir menciones.
 
-Para que el jefe pueda mover proyectos de estado o editar la info del proyecto desde esta app, y que eso quede real también en el panel interno, hace falta un token personal del panel interno:
+El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no se borró nada de su repo ni de su base).
 
-1. En el panel interno, con sesión de un Líder: `Configuración → Token IA` → generar un token personal (ya existe esa pantalla, se usó originalmente para la IA).
-2. En esta app (Coolify → variables de entorno), agregá:
-   - `MAIN_PANEL_URL` = la URL pública del panel interno (ej. `https://panel.tudominio.com`)
-   - `MAIN_PANEL_API_TOKEN` = el token generado en el paso 1
-3. Redeploy de esta app para que tome las variables nuevas.
+## Primera instalación (base vacía)
 
-Sin estas dos variables, mover un proyecto o editar su info desde acá muestra un error claro ("Falta configurar...") y no aplica el cambio ni acá ni en el panel interno — no hay riesgo de que quede una edición fantasma.
-
-## 7. Primer usuario y primera carga de datos
-
-1. Deploy de ambas apps.
-2. Entrá al dominio público de esta app → caés en `/register` → creás el primer admin (rol Líder).
-3. Desde el panel interno, con sesión de un Líder, llamá una vez a `POST /api/admin/backfill-boss-sync` (por ejemplo desde la consola del navegador logueado, o con `curl` pasando la cookie de sesión) para que los proyectos y tareas que ya existían aparezcan acá. De ahí en más, todo lo nuevo llega solo.
+1. Crear un recurso Postgres en Coolify y una aplicación apuntando al repo (build pack “Dockerfile”, puerto 3000) con las variables de arriba.
+2. Entrar al dominio → `/register` → crear el primer usuario (queda como Líder). Después se agregan cuentas desde **Equipo**.
 
 ## Notas
 
-- Esta app no tiene IA, notificaciones, Discord, comentarios ni checklist — es a propósito, ver el plan original.
-- Los sprints y la asignación de tareas a sprints viven **solo acá** — el panel interno nunca se entera de que existen.
-- Igual que el panel interno, el `prisma db push` del arranque corre con `--accept-data-loss` porque el arranque es no interactivo (ver la nota equivalente en el `DEPLOY.md` del panel interno para el detalle de qué implica).
+- Los adjuntos de los tickets se guardan en la base de datos (máx. 5 MB cada uno). Si algún día pesan demasiado conviene pasarlos a un bucket de objetos.
+- La URL del webhook de Discord nunca se devuelve completa por la API: solo se muestra si hay una configurada y cómo termina.
+- Solo un Líder puede configurar webhooks, estados de proyecto, borrar proyectos/sprints y administrar usuarios.

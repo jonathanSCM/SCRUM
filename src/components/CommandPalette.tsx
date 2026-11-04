@@ -1,27 +1,44 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { AnimatePresence, motion } from "motion/react";
+import { SearchIcon, TypeIcon } from "@/components/ui/Icons";
+import { StatusLozenge } from "@/components/ui/Lozenge";
+import type { IssueStatus, IssueType } from "@/lib/scrum/constants";
 
-type Project = { id: string; name: string };
-type Task = { id: string; title: string; projectId: string };
+type SearchProject = { id: string; key: string | null; name: string };
+type SearchIssue = {
+  id: string;
+  key: string;
+  title: string;
+  snippet: string;
+  issueType: IssueType;
+  status: IssueStatus;
+  projectId: string;
+  projectName: string;
+};
 
 type Result =
-  | { kind: "project"; id: string; label: string }
-  | { kind: "task"; id: string; label: string; projectId: string; projectName: string };
+  | { kind: "project"; id: string; label: string; sub: string }
+  | { kind: "issue"; id: string; label: string; sub: string; issue: SearchIssue };
 
-// Cmd+K / Ctrl+K en cualquier página: busca por nombre de proyecto o título
-// de tarea sobre un índice que se pide una sola vez al abrir (ver
-// /api/search) y navega al elegido con las flechas + Enter o con un click.
+function isTypingTarget(el: EventTarget | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
+}
+
+// Buscador global (Cmd/Ctrl+K o "/"): proyectos y tickets por clave, título o
+// descripción. El índice se pide una sola vez al abrir.
 export default function CommandPalette() {
   const { status } = useSession();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<SearchProject[]>([]);
+  const [issues, setIssues] = useState<SearchIssue[]>([]);
   const [loaded, setLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -31,7 +48,7 @@ export default function CommandPalette() {
       .then((res) => res.json())
       .then((body) => {
         setProjects(body.projects ?? []);
-        setTasks(body.tasks ?? []);
+        setIssues(body.issues ?? []);
         setLoaded(true);
       })
       .catch(() => {});
@@ -39,18 +56,11 @@ export default function CommandPalette() {
 
   useEffect(() => {
     if (status !== "authenticated") return;
-
-    function isTypingTarget(el: EventTarget | null): boolean {
-      if (!(el instanceof HTMLElement)) return false;
-      return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
-    }
-
     function onKeyDown(e: KeyboardEvent) {
-      const isK = e.key.toLowerCase() === "k";
-      if ((e.metaKey || e.ctrlKey) && isK) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOpen((v) => !v);
-      } else if (e.key === "/" && !isTypingTarget(e.target)) {
+      } else if (e.key === "/" && !isTypingTarget(e.target) && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         setOpen(true);
       } else if (e.key === "Escape") {
@@ -63,40 +73,44 @@ export default function CommandPalette() {
 
   useEffect(() => {
     if (open) {
-      loadIndex();
+      setLoaded(false);
       setQuery("");
       setActive(0);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [open, loadIndex]);
+  }, [open]);
+
+  useEffect(() => {
+    if (open && !loaded) loadIndex();
+  }, [open, loaded, loadIndex]);
+
+  const results = useMemo<Result[]>(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const scored: Array<{ score: number; result: Result }> = [];
+    for (const p of projects) {
+      const hay = `${p.key ?? ""} ${p.name}`.toLowerCase();
+      if (hay.includes(q)) scored.push({ score: p.name.toLowerCase().startsWith(q) || p.key?.toLowerCase() === q ? 90 : 50, result: { kind: "project", id: p.id, label: p.name, sub: p.key ?? "Proyecto" } });
+    }
+    for (const i of issues) {
+      const key = i.key.toLowerCase();
+      const title = i.title.toLowerCase();
+      let score = 0;
+      if (key === q) score = 100;
+      else if (key.startsWith(q)) score = 80;
+      else if (title.startsWith(q)) score = 70;
+      else if (title.includes(q)) score = 60;
+      else if (i.snippet.toLowerCase().includes(q)) score = 30;
+      if (score) scored.push({ score, result: { kind: "issue", id: i.id, label: i.title, sub: `${i.key} · ${i.projectName}`, issue: i } });
+    }
+    return scored.sort((a, b) => b.score - a.score).slice(0, 9).map((s) => s.result);
+  }, [query, projects, issues]);
 
   if (status !== "authenticated") return null;
 
-  const projectById = new Map(projects.map((p) => [p.id, p]));
-  const q = query.trim().toLowerCase();
-
-  const results: Result[] = q
-    ? [
-        ...projects
-          .filter((p) => p.name.toLowerCase().includes(q))
-          .map((p): Result => ({ kind: "project", id: p.id, label: p.name })),
-        ...tasks
-          .filter((t) => t.title.toLowerCase().includes(q))
-          .map(
-            (t): Result => ({
-              kind: "task",
-              id: t.id,
-              label: t.title,
-              projectId: t.projectId,
-              projectName: projectById.get(t.projectId)?.name ?? "Proyecto",
-            })
-          ),
-      ].slice(0, 8)
-    : [];
-
   function go(r: Result) {
     setOpen(false);
-    router.push(r.kind === "project" ? `/projects/${r.id}` : `/projects/${r.projectId}`);
+    router.push(r.kind === "project" ? `/projects/${r.id}/board` : `/projects/${r.issue.projectId}/board?issue=${r.issue.key}`);
   }
 
   function onKeyDownInput(e: React.KeyboardEvent) {
@@ -116,66 +130,78 @@ export default function CommandPalette() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="hidden items-center gap-2 border-2 border-line bg-card px-3 py-1.5 text-xs font-semibold text-ink-soft sm:flex"
+        aria-label="Buscar"
+        className="flex items-center gap-2 border-2 border-line-strong bg-card px-2.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-moss hover:text-ink"
       >
-        Buscar
-        <span className="border-2 border-line px-1.5 py-0 font-mono text-[10px]">⌘K</span>
+        <SearchIcon size={14} />
+        <span className="hidden sm:inline">Buscar</span>
+        <span className="kbd hidden sm:inline">Ctrl K</span>
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 pt-[12vh]"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="w-full max-w-lg border-2 border-line bg-card shadow-[6px_6px_0_var(--moss)]"
-            onClick={(e) => e.stopPropagation()}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="fixed inset-0 z-[80] flex items-start justify-center bg-[#0b0614]/70 px-4 pt-[12vh]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.1 } }}
+            onClick={() => setOpen(false)}
           >
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setActive(0);
-              }}
-              onKeyDown={onKeyDownInput}
-              placeholder="Buscar un proyecto o una tarea..."
-              className="w-full border-b-2 border-line bg-transparent px-4 py-3.5 text-sm text-ink outline-none placeholder:text-ink-faint"
-            />
+            <motion.div
+              className="w-full max-w-xl border-2 border-ink bg-card"
+              initial={{ y: -16, scale: 0.97, boxShadow: "0 0 0 var(--moss)" }}
+              animate={{ y: 0, scale: 1, boxShadow: "8px 8px 0 var(--moss)" }}
+              exit={{ y: -8, opacity: 0, transition: { duration: 0.1 } }}
+              transition={{ type: "spring", stiffness: 460, damping: 32 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 border-b-2 border-line px-4">
+                <SearchIcon size={18} className="text-ink-faint" />
+                <input
+                  ref={inputRef}
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setActive(0);
+                  }}
+                  onKeyDown={onKeyDownInput}
+                  placeholder="Buscar por clave (PRO-12), título o descripción…"
+                  className="w-full bg-transparent py-3.5 text-sm text-ink outline-none placeholder:text-ink-faint"
+                />
+              </div>
 
-            {q && results.length === 0 && (
-              <p className="px-4 py-6 text-center text-sm text-ink-faint">Sin resultados para &quot;{query}&quot;.</p>
-            )}
+              {query.trim() && results.length === 0 && <p className="px-4 py-6 text-center text-sm text-ink-faint">Sin resultados para “{query}”.</p>}
 
-            {results.length > 0 && (
-              <ul className="max-h-80 overflow-y-auto py-1.5">
-                {results.map((r, i) => (
-                  <li key={`${r.kind}-${r.id}`}>
-                    <button
-                      onClick={() => go(r)}
-                      onMouseEnter={() => setActive(i)}
-                      className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm ${
-                        i === active ? "bg-card-2 text-ink" : "text-ink-soft"
-                      }`}
-                    >
-                      <span className="min-w-0 flex-1 truncate">{r.label}</span>
-                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-ink-faint">
-                        {r.kind === "project" ? "Proyecto" : r.projectName}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+              {results.length > 0 && (
+                <ul className="max-h-96 overflow-y-auto py-1.5">
+                  {results.map((r, i) => (
+                    <li key={`${r.kind}-${r.id}`}>
+                      <button
+                        onClick={() => go(r)}
+                        onMouseEnter={() => setActive(i)}
+                        className={`flex w-full items-center gap-3 px-4 py-2 text-left text-sm ${i === active ? "bg-card-2 text-ink" : "text-ink-soft"}`}
+                      >
+                        {r.kind === "issue" ? <TypeIcon type={r.issue.issueType} size={18} /> : <span className="lozenge text-ink-faint">Proyecto</span>}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{r.label}</span>
+                          <span className="block truncate font-mono text-[11px] text-ink-faint">{r.sub}</span>
+                        </span>
+                        {r.kind === "issue" && <StatusLozenge status={r.issue.status} />}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-            {!q && (
-              <p className="px-4 py-6 text-center text-xs text-ink-faint">
-                Escribí para buscar proyectos y tareas · <kbd className="font-mono">Esc</kbd> para cerrar
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+              {!query.trim() && (
+                <p className="px-4 py-6 text-center text-xs text-ink-faint">
+                  Escribí para buscar · <span className="kbd">↑↓</span> moverte · <span className="kbd">Enter</span> abrir · <span className="kbd">Esc</span> cerrar
+                </p>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

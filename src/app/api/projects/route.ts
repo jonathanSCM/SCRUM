@@ -1,76 +1,39 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { parseBody, createProjectSchema } from "@/lib/validation";
-import { mainPanelFetch, isMainPanelConfigured } from "@/lib/mainPanel";
+import { apiUser } from "@/lib/session";
+import { errorResponse } from "@/lib/api";
+import { createProjectSchema, parseBody, readJson } from "@/lib/validation";
+import { suggestProjectKey } from "@/lib/scrum/issueKey";
+import { logHistory } from "@/lib/history";
 
-type MainPanelProject = {
-  id: string;
-  name: string;
-  description: string;
-  repoUrl: string | null;
-  deployUrl: string | null;
-  language: string | null;
-  stack: string;
-  statusId: string;
-};
-
-// Igual patrón que PATCH /api/projects/[id]: se crea primero en el panel
-// interno y solo se guarda acá si lo aceptó.
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const auth = await apiUser();
+  if ("error" in auth) return auth.error;
+  const { user } = auth;
 
-  if (!isMainPanelConfigured()) {
-    console.error("[projects] MAIN_PANEL_URL / MAIN_PANEL_API_TOKEN no configurados -- no se puede crear.");
-    return NextResponse.json({ error: "No se pudo crear el proyecto. Probá de nuevo más tarde." }, { status: 400 });
-  }
-
-  const parsed = parseBody(createProjectSchema, await req.json());
+  const parsed = parseBody(createProjectSchema, await readJson(req));
   if ("error" in parsed) return parsed.error;
+  const { name, description } = parsed.data;
 
-  let mainRes: Response;
   try {
-    mainRes = await mainPanelFetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(parsed.data),
+    const existingKeys = (await prisma.project.findMany({ select: { key: true } })).map((p) => p.key).filter((k): k is string => !!k);
+    let key = parsed.data.key;
+    if (key) {
+      if (existingKeys.includes(key)) return NextResponse.json({ error: `La clave ${key} ya la usa otro proyecto` }, { status: 400 });
+    } else {
+      key = suggestProjectKey(name, existingKeys);
+    }
+
+    const firstStatus = await prisma.statusOption.findFirst({ orderBy: { order: "asc" } });
+    if (!firstStatus) return NextResponse.json({ error: "No hay estados de proyecto configurados" }, { status: 400 });
+
+    const project = await prisma.project.create({
+      data: { name, key, description: description ?? "", statusId: firstStatus.id, leadUserId: user.id },
+      include: { status: true },
     });
+    await logHistory({ projectId: project.id, field: "proyecto_creado", newValue: project.name, actor: user });
+    return NextResponse.json(project, { status: 201 });
   } catch (e) {
-    console.error("[projects] error contactando al panel interno:", e);
-    return NextResponse.json({ error: "No se pudo crear el proyecto. Probá de nuevo más tarde." }, { status: 502 });
+    return errorResponse(e);
   }
-
-  if (!mainRes.ok) {
-    const body = await mainRes.json().catch(() => ({}));
-    console.error("[projects] el panel interno rechazó la creación:", body.error);
-    return NextResponse.json(
-      { error: "No se pudo crear el proyecto. Revisá los datos e intentá de nuevo." },
-      { status: mainRes.status }
-    );
-  }
-
-  const created: MainPanelProject = await mainRes.json();
-
-  // El panel interno ya sincronizó este proyecto (vía syncToBoss) antes de
-  // devolvernos la respuesta, así que puede que ya exista acá -- upsert en
-  // vez de create para no chocar con esa carrera.
-  const shared = {
-    name: created.name,
-    description: created.description,
-    repoUrl: created.repoUrl,
-    deployUrl: created.deployUrl,
-    language: created.language,
-    stack: created.stack,
-    statusId: created.statusId,
-  };
-  const saved = await prisma.project.upsert({
-    where: { id: created.id },
-    create: { id: created.id, ...shared },
-    update: shared,
-    include: { status: true },
-  });
-
-  return NextResponse.json(saved, { status: 201 });
 }

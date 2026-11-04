@@ -12,17 +12,30 @@ enum Role {
   MEMBER
 }
 
+// IMPORTANTE (producción): el contenedor corre `prisma db push --accept-data-loss`
+// en cada arranque, así que cualquier columna/tabla que se borre acá se pierde
+// sin aviso. Todo cambio de esquema tiene que ser ADITIVO (columnas nuevas con
+// default o nullable); los datos viejos se convierten por código idempotente en
+// prisma/seed.ts (ver prisma/legacy-migrate.ts). Las columnas marcadas "legacy"
+// ya no las usa la app pero se conservan hasta una release de limpieza.
+
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(MEMBER)
+  id                  String    @id @default(cuid())
+  name                String
+  email               String    @unique
+  passwordHash        String
+  role                Role      @default(MEMBER)
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
-  createdAt    DateTime @default(now())
+  createdAt           DateTime  @default(now())
+  discordUserId       String?
 
   passwordResetTokens PasswordResetToken[]
+  assignedIssues      Task[]               @relation("TaskAssignee")
+  reportedIssues      Task[]               @relation("TaskReporter")
+  ledProjects         Project[]            @relation("ProjectLead")
+  comments            Comment[]
+  attachments         Attachment[]
 }
 
 model PasswordResetToken {
@@ -36,12 +49,10 @@ model PasswordResetToken {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// El id de StatusOption/Project/Task NO se autogenera: al sincronizar desde
-// el panel interno se usa el mismo id que allá, así el upsert por id queda
-// directo y no hace falta mantener una tabla de mapeo aparte.
-
+// Estado del PROYECTO (columnas del tablero de portafolio). No confundir con
+// el estado de un ticket (Task.status: TODO / IN_PROGRESS / IN_REVIEW / DONE).
 model StatusOption {
-  id    String @id
+  id    String @id @default(cuid())
   name  String
   color String
   order Int    @default(0)
@@ -50,76 +61,171 @@ model StatusOption {
 }
 
 model Project {
-  id          String   @id
+  id          String   @id @default(cuid())
+  key         String?  @unique
   name        String
   description String   @default("")
   repoUrl     String?
   deployUrl   String?
   language    String?
   stack       String   @default("[]")
-  updatedAt   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  taskSeq     Int      @default(0)
+
+  discordWebhookUrl String?
 
   statusId String
   status   StatusOption @relation(fields: [statusId], references: [id])
 
+  // legacy: ids/nombres del panel viejo. Reemplazado por leadUserId.
   assigneeId   String?
   assigneeName String?
 
-  tasks     Task[]
-  documents Document[]
-  history   HistoryEntry[]
+  leadUserId String?
+  lead       User?   @relation("ProjectLead", fields: [leadUserId], references: [id], onDelete: SetNull)
+
+  tasks       Task[]
+  sprints     Sprint[]
+  documents   Document[]
+  attachments Attachment[]
+  history     HistoryEntry[]
 }
 
+// Sin uso desde la v2 (solo guardaba metadatos). Se reemplaza por Attachment.
 model Document {
-  id         String   @id
+  id         String   @id @default(cuid())
   filename   String
   fileType   String
   docType    String
-  uploadedAt DateTime
+  uploadedAt DateTime @default(now())
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model HistoryEntry {
-  id            String   @id
+  id            String   @id @default(cuid())
   field         String
   oldValue      String?
   newValue      String?
-  changedAt     DateTime
+  changedAt     DateTime @default(now())
   changedByName String?
+  changedById   String?
   taskTitle     String?
+  taskId        String?
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, changedAt])
 }
 
+// Un "ticket" de Jira: Épica, Historia, Tarea o Bug.
 model Task {
-  id          String    @id
+  id          String @id @default(cuid())
+  number      Int?
   title       String
-  description String    @default("")
-  type        String
-  priority    String
-  dueDate     DateTime?
-  updatedAt   DateTime  @default(now())
+  description String @default("")
 
+  // legacy: antes era el falso estado (CAMBIO_*). Reemplazado por status/issueType.
+  type String @default("")
+
+  issueType   String  @default("TASK") // EPIC | STORY | TASK | BUG
+  status      String  @default("TODO") // TODO | IN_PROGRESS | IN_REVIEW | DONE
+  priority    String  @default("MEDIA") // URGENTE | ALTA | MEDIA | BAJA
+  storyPoints Int?
+  labels      String  @default("[]")
+  rank        Float   @default(0)
+  epicColor   String?
+
+  dueDate       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+  completedAt   DateTime?
+  sprintAddedAt DateTime?
+
+  // legacy: ids/nombres del panel viejo. Reemplazado por assigneeUserId.
   assigneeId   String?
   assigneeName String?
   moduleName   String?
+
+  assigneeUserId String?
+  assignee       User?   @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  reporterId     String?
+  reporter       User?   @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  epicId   String?
+  epic     Task?   @relation("EpicChildren", fields: [epicId], references: [id], onDelete: SetNull)
+  children Task[]  @relation("EpicChildren")
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   sprintId String?
   sprint   Sprint? @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+
+  comments    Comment[]
+  attachments Attachment[]
+
+  @@unique([projectId, number])
+  @@index([projectId, sprintId])
 }
 
 model Sprint {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
-  startDate DateTime
-  endDate   DateTime
-  createdAt DateTime @default(now())
+  goal      String    @default("")
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+
+  state       String    @default("PLANNED") // PLANNED | ACTIVE | COMPLETED
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  committedPoints Int @default(0)
+  committedCount  Int @default(0)
+  completedPoints Int @default(0)
+  completedCount  Int @default(0)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   tasks Task[]
+
+  @@index([projectId, state])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  filename  String
+  mimeType  String
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 }

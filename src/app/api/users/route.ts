@@ -16,10 +16,8 @@ export async function GET() {
   return NextResponse.json(users);
 }
 
-// Solo un LEAD puede crear cuentas, y las crea directo (sin invitación por
-// email -- esta app no tiene Resend configurado, es a propósito más simple
-// que el panel interno). La contraseña temporal se devuelve una sola vez
-// para que el LEAD se la pase a la persona.
+// Solo un LEAD puede crear cuentas, y las crea directo: la contraseña temporal
+// se devuelve una sola vez para que el LEAD se la pase a la persona.
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
