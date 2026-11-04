@@ -60,13 +60,13 @@ export default function EpicsView({ projectId, epics, options, currentUserId }: 
             const percent = totalPts > 0 ? pct(donePts, totalPts) : pct(done, total);
             const open = expanded.has(epic.id);
             return (
-              <motion.li key={epic.id} variants={staggerChild} className="border-2 border-ink bg-card" style={{ borderLeftWidth: 8, borderLeftColor: epic.color ?? "#c084fc" }}>
+              <motion.li key={epic.id} variants={staggerChild} className="border border-line bg-card rounded-lg" style={{ borderLeftWidth: 4, borderLeftColor: epic.color ?? "#8b5cf6" }}>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
                   <button onClick={() => toggle(epic.id)} aria-expanded={open} aria-label={open ? "Contraer" : "Expandir"} className="text-ink-soft hover:text-ink">
                     <ChevronIcon open={open} size={16} />
                   </button>
                   <TypeIcon type="EPIC" size={20} />
-                  <button onClick={() => openIssue(epic.key)} className="font-mono text-xs text-ink-faint hover:text-moss">{epic.key}</button>
+                  <button onClick={() => openIssue(epic.key)} className="font-mono text-xs text-ink-faint hover:text-moss-ink">{epic.key}</button>
                   <button onClick={() => openIssue(epic.key)} className="font-display text-base font-extrabold text-ink hover:underline">{epic.title}</button>
                   <span className="ml-auto font-mono text-xs text-ink-faint">
                     {done}/{total} tickets{totalPts > 0 ? ` · ${donePts}/${totalPts} pts` : ""} · <b className="text-ink">{percent}%</b>
@@ -76,7 +76,7 @@ export default function EpicsView({ projectId, epics, options, currentUserId }: 
                   <ProgressBar value={percent} color={epic.color ?? undefined} height={10} />
                 </div>
                 {open && (
-                  <div className="border-t-2 border-line-strong">
+                  <div className="border-t border-line-strong">
                     {total === 0 ? (
                       <p className="px-4 py-4 text-center text-xs text-ink-faint">Esta épica no tiene tickets. Asignala desde el panel de cada ticket.</p>
                     ) : (

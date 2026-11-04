@@ -13,11 +13,11 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
   if (entries.length === 0) return <EmptyState title="Sin actividad todavía" hint="Acá vas a ver cada cambio del proyecto: tickets, sprints y ajustes." />;
 
   return (
-    <ol className="border-2 border-ink bg-card">
+    <ol className="border border-line bg-card rounded-lg overflow-hidden">
       {entries.map((e) => {
         const { label, detail } = describeHistory(e);
         return (
-          <li key={e.id} className="flex items-start gap-3 border-b-2 border-line-strong px-4 py-3 last:border-b-0">
+          <li key={e.id} className="flex items-start gap-3 border-b border-line-strong px-4 py-3 last:border-b-0">
             <Avatar name={e.changedByName} size={26} />
             <div className="min-w-0 flex-1 text-sm">
               <p className="text-ink">

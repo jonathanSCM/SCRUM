@@ -348,8 +348,8 @@ export default function BacklogView({
             const isCollapsed = collapsed.has(s.id);
             const left = s.state === "ACTIVE" ? daysRemaining(s.endDate ? new Date(s.endDate) : null) : null;
             return (
-              <section key={s.id} className="border-2 border-ink bg-card">
-                <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-ink bg-card-2 px-3 py-2.5">
+              <section key={s.id} className="border border-line bg-card rounded-lg">
+                <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-card-2 px-3 py-2.5">
                   <button onClick={() => toggleCollapsed(s.id)} className="text-ink-soft hover:text-ink" aria-label={isCollapsed ? "Expandir" : "Contraer"} aria-expanded={!isCollapsed}>
                     <ChevronIcon open={!isCollapsed} size={16} />
                   </button>
@@ -387,7 +387,7 @@ export default function BacklogView({
                     )}
                   </span>
                 </header>
-                {s.goal && !isCollapsed && <p className="border-b-2 border-line-strong px-3 py-2 text-xs text-ink-soft"><b className="text-ink">Objetivo:</b> {s.goal}</p>}
+                {s.goal && !isCollapsed && <p className="border-b border-line-strong px-3 py-2 text-xs text-ink-soft"><b className="text-ink">Objetivo:</b> {s.goal}</p>}
                 <AnimatePresence initial={false}>
                   {!isCollapsed && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
@@ -412,8 +412,8 @@ export default function BacklogView({
           })}
 
           {/* Backlog */}
-          <section className="border-2 border-ink bg-card">
-            <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-ink bg-card-2 px-3 py-2.5">
+          <section className="border border-line bg-card rounded-lg overflow-hidden">
+            <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-card-2 px-3 py-2.5">
               <button onClick={() => toggleCollapsed(BACKLOG)} className="text-ink-soft hover:text-ink" aria-label={collapsed.has(BACKLOG) ? "Expandir" : "Contraer"} aria-expanded={!collapsed.has(BACKLOG)}>
                 <ChevronIcon open={!collapsed.has(BACKLOG)} size={16} />
               </button>
@@ -464,7 +464,7 @@ export default function BacklogView({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", stiffness: 380, damping: 30 }}
-            className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-fit max-w-[95vw] flex-wrap items-center gap-2 border-2 border-ink bg-card px-4 py-3 shadow-hard-purple"
+            className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-fit max-w-[95vw] flex-wrap items-center gap-2 border border-line bg-card px-4 py-3 shadow-hard-purple rounded-lg"
           >
             <span className="mr-1 text-sm font-bold text-ink">{selected.size} seleccionados</span>
             <select className="field-sm" value="" onChange={(e) => e.target.value && bulk({ sprintId: e.target.value === BACKLOG ? null : e.target.value })} aria-label="Mover a">
@@ -549,11 +549,11 @@ function SummaryChips({ info }: { info?: { count: number; points: number; byStat
   return (
     <span className="flex items-center gap-1" aria-label="Resumen del sprint">
       {STATUSES.map((s) => (
-        <span key={s} title={STATUS_META[s].label} className="inline-flex h-[20px] min-w-[20px] items-center justify-center border-2 px-1 font-mono text-[10px] font-bold" style={{ borderColor: STATUS_META[s].color, color: STATUS_META[s].color }}>
+        <span key={s} title={STATUS_META[s].label} className="inline-flex h-[20px] min-w-[20px] items-center justify-center border px-1 font-mono text-[10px] font-bold rounded-md" style={{ borderColor: STATUS_META[s].color, color: STATUS_META[s].color }}>
           {info.byStatus[s]}
         </span>
       ))}
-      <span title="Story points totales" className="ml-1 inline-flex h-[20px] min-w-[20px] items-center justify-center border-2 border-ink bg-ink px-1 font-mono text-[10px] font-bold text-[#150b22]">
+      <span title="Story points totales" className="ml-1 inline-flex h-[20px] min-w-[20px] items-center justify-center border border-line bg-ink px-1 font-mono text-[10px] font-bold text-white rounded-md">
         {info.points}
       </span>
     </span>
@@ -600,7 +600,7 @@ function IssueList({
           />
         ))}
       </SortableContext>
-      {ids.length === 0 && <p className="border-b-2 border-dashed border-line-strong px-3 py-3 text-center text-xs text-ink-faint">{emptyText}</p>}
+      {ids.length === 0 && <p className="border-b border-dashed border-line-strong px-3 py-3 text-center text-xs text-ink-faint">{emptyText}</p>}
     </div>
   );
 }

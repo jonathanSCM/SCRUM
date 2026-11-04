@@ -78,7 +78,7 @@ export default function ChatView({ projectId, initial, currentUserId, isLead }: 
   }
 
   return (
-    <div className="flex flex-col border-2 border-ink bg-card" style={{ height: "min(70vh, 640px)" }}>
+    <div className="flex flex-col border border-line bg-card rounded-lg" style={{ height: "min(70vh, 640px)" }}>
       <ul className="flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">
         {messages.length === 0 && <li className="py-10 text-center text-sm text-ink-faint">Todavía no hay mensajes. Escribí el primero.</li>}
         {messages.map((m) => {
@@ -101,7 +101,7 @@ export default function ChatView({ projectId, initial, currentUserId, isLead }: 
         })}
         <div ref={endRef} />
       </ul>
-      <div className="flex gap-2 border-t-2 border-ink p-3">
+      <div className="flex gap-2 border-t border-line p-3">
         <textarea
           rows={2}
           className="field min-w-0 flex-1"

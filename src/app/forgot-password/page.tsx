@@ -41,7 +41,7 @@ export default function ForgotPasswordPage() {
           />
         </div>
 
-        {message && <p className="text-sm font-medium text-moss">{message}</p>}
+        {message && <p className="text-sm font-medium text-moss-ink">{message}</p>}
 
         <button type="submit" disabled={loading} className="btn-primary w-full">
           {loading ? "Enviando..." : "Enviar link"}

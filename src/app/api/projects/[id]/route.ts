@@ -51,7 +51,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (newStatus) {
       await logHistory({ projectId: id, field: "estado_proyecto", oldValue: current.status.name, newValue: newStatus.name, actor: user });
       await notifyProject(id, {
-        title: `📌 ${updated.name}`,
+        title: `Proyecto ${updated.name}`,
         description: `El proyecto pasó de «${current.status.name}» a «${newStatus.name}»`,
         color: DISCORD_COLOR.status,
         mentionUserIds: [updated.leadUserId],

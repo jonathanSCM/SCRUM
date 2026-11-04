@@ -51,27 +51,27 @@ export default function ReportsView({
         <Stat label="Velocidad promedio" value={velocity.average} unit={velocity.unit === "points" ? "pts" : "tickets"} />
       </div>
 
-      <section className="border-2 border-ink bg-card p-4">
+      <section className="border border-line bg-card p-4 rounded-lg overflow-hidden">
         <h2 className="mb-1 font-display text-lg font-extrabold text-ink">Burndown</h2>
         <p className="mb-3 text-xs text-ink-faint">Trabajo restante ({unit}) por día contra la línea ideal. Solo cuenta los tickets que hoy pertenecen al sprint.</p>
         <BurndownChart data={burndown} />
       </section>
 
-      <section className="border-2 border-ink bg-card p-4">
+      <section className="border border-line bg-card p-4 rounded-lg overflow-hidden">
         <h2 className="mb-1 font-display text-lg font-extrabold text-ink">Velocidad</h2>
         <p className="mb-3 text-xs text-ink-faint">Comprometido vs. completado en los últimos sprints cerrados.</p>
         <VelocityChart data={velocity} />
       </section>
 
-      <section className="border-2 border-ink bg-card">
-        <h2 className="border-b-2 border-ink px-4 py-3 font-display text-lg font-extrabold text-ink">Reporte del sprint</h2>
+      <section className="border border-line bg-card rounded-lg overflow-hidden">
+        <h2 className="border-b border-line px-4 py-3 font-display text-lg font-extrabold text-ink">Reporte del sprint</h2>
         <div className="grid gap-0 lg:grid-cols-2">
-          <div className="lg:border-r-2 lg:border-line-strong">
-            <h3 className="border-b-2 border-line-strong bg-card-2 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-moss">Completado · {done.length}</h3>
+          <div className="lg:border-r lg:border-line-strong">
+            <h3 className="border-b border-line-strong bg-card-2 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-moss-ink">Completado · {done.length}</h3>
             {done.length === 0 ? <p className="px-4 py-4 text-xs text-ink-faint">Nada completado todavía.</p> : done.map((i) => <IssueRowView key={i.id} issue={i} onOpen={() => openIssue(i.key)} />)}
           </div>
           <div>
-            <h3 className="border-b-2 border-line-strong bg-card-2 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-warn">
+            <h3 className="border-b border-line-strong bg-card-2 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-warn">
               {selected.state === "COMPLETED" ? "No completado" : "Pendiente"} · {notDone.length}
             </h3>
             {notDone.length === 0 ? (
@@ -88,9 +88,9 @@ export default function ReportsView({
 
 function Stat({ label, value, unit, accent }: { label: string; value: number; unit: string; accent?: boolean }) {
   return (
-    <div className={`border-2 p-3 ${accent ? "border-moss" : "border-line-strong"} bg-card`}>
+    <div className={`border p-3 ${accent ? "border-moss" : "border-line-strong"} bg-card`}>
       <p className="text-xs font-semibold text-ink-faint">{label}</p>
-      <p className={`font-display text-3xl font-extrabold ${accent ? "text-moss" : "text-ink"}`}>
+      <p className={`font-display text-3xl font-extrabold ${accent ? "text-moss-ink" : "text-ink"}`}>
         <AnimatedNumber value={value} />
         <span className="ml-1 text-xs font-medium text-ink-faint">{unit}</span>
       </p>

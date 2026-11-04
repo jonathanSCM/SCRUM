@@ -65,7 +65,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await logHistory({ projectId: sprint.projectId, field: "sprint_iniciado", newValue: name, actor: auth.user });
     if (notReady.length > 0) await logHistory({ projectId: sprint.projectId, field: "sprint_iniciado_sin_ready", newValue: `${name}: ${notReady.length} tickets sin DoR`, actor: auth.user });
     await notifyProject(sprint.projectId, {
-      title: `🚀 Sprint iniciado: ${name}`,
+      title: `Sprint iniciado: ${name}`,
       description: `**${auth.user.name}** inició el sprint en ${sprint.project.name}.${started.goal ? `\n**Objetivo:** ${started.goal}` : ""}`,
       color: DISCORD_COLOR.sprintStarted,
       fields: [

@@ -53,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       actor: auth.user,
     });
     await notifyProject(sprint.projectId, {
-      title: `🏁 Sprint completado: ${sprint.name}`,
+      title: `Sprint completado: ${sprint.name}`,
       description: `**${auth.user.name}** cerró el sprint en ${sprint.project.name}.`,
       color: DISCORD_COLOR.sprintCompleted,
       fields: [

@@ -56,7 +56,7 @@ export default function CeremoniesView(props: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={cn("btn-ghost btn-sm", tab === t.id && "border-moss text-ink")}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={cn("btn-ghost btn-sm", tab === t.id && "border-rust bg-card-2 text-rust")}>
             {t.label}
           </button>
         ))}
@@ -134,7 +134,7 @@ function DailyPanel({ projectId, currentUserId }: { projectId: string; currentUs
 
   return (
     <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
-      <form onSubmit={save} className="space-y-3 self-start border-2 border-ink bg-card p-4">
+      <form onSubmit={save} className="space-y-3 self-start border border-line bg-card p-4 rounded-lg">
         <div className="flex items-center gap-2">
           <button type="button" className="btn-ghost btn-sm" onClick={() => setDate(shiftDate(date, -1))} aria-label="Día anterior">←</button>
           <input type="date" className="field-sm min-w-0 flex-1" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
@@ -157,8 +157,8 @@ function DailyPanel({ projectId, currentUserId }: { projectId: string; currentUs
           <EmptyState title="Nadie dejó su daily este día" hint="El daily es asíncrono: cada persona lo completa cuando puede. Todo el equipo ve las respuestas acá." />
         ) : (
           entries.map((en) => (
-            <article key={en.id} className="border-2 border-ink bg-card">
-              <header className="flex items-center gap-2 border-b-2 border-line-strong bg-card-2 px-3 py-2">
+            <article key={en.id} className="border border-line bg-card rounded-lg">
+              <header className="flex items-center gap-2 border-b border-line-strong bg-card-2 px-3 py-2">
                 <Avatar name={en.user.name} size={22} />
                 <b className="text-sm text-ink">{en.user.name}</b>
               </header>
@@ -207,17 +207,17 @@ function ActasPanel({ projectId, kind, actas, template, hint }: { projectId: str
         <button className="btn-primary btn-sm" disabled={busy} onClick={create}>Crear acta de {label.toLowerCase()}</button>
       </div>
       {list.length === 0 ? (
-        <p className="border-2 border-dashed border-line-strong px-4 py-6 text-center text-xs text-ink-faint">Todavía no hay actas de {label.toLowerCase()}.</p>
+        <p className="border border-dashed border-line-strong px-4 py-6 text-center text-xs text-ink-faint rounded-md">Todavía no hay actas de {label.toLowerCase()}.</p>
       ) : (
         <ul className="space-y-2">
           {list.map((a) => (
-            <li key={a.id} className="border-2 border-ink bg-card">
+            <li key={a.id} className="border border-line bg-card rounded-lg">
               <details>
                 <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm">
                   <b className="text-ink">{a.title}</b>
                   <span className="ml-auto text-xs text-ink-faint">{a.author ?? "—"} · {timeAgo(a.createdAt)}</span>
                 </summary>
-                <p className="whitespace-pre-wrap break-words border-t-2 border-line-strong px-3 py-3 text-sm text-ink-soft">{a.body || "Sin contenido."}</p>
+                <p className="whitespace-pre-wrap break-words border-t border-line-strong px-3 py-3 text-sm text-ink-soft">{a.body || "Sin contenido."}</p>
               </details>
             </li>
           ))}
@@ -230,21 +230,21 @@ function ActasPanel({ projectId, kind, actas, template, hint }: { projectId: str
 function ReviewSummaryPanel({ review, hasSprint }: { review: ReviewSummary; hasSprint: boolean }) {
   if (!hasSprint) return <EmptyState title="Todavía no hay sprints" hint="Cuando haya un sprint, acá vas a ver lo que se entregó." />;
   return (
-    <section className="border-2 border-ink bg-card">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b-2 border-line-strong bg-card-2 px-4 py-2.5">
+    <section className="border border-line bg-card rounded-lg overflow-hidden">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line-strong bg-card-2 px-4 py-2.5">
         <h2 className="font-display text-base font-extrabold text-ink">Qué se entregó</h2>
         <span className="text-xs text-ink-soft">{review.completed}/{review.committed} tickets · {review.completedPoints}/{review.committedPoints} pts</span>
       </header>
       <div className="grid gap-4 px-4 py-3 sm:grid-cols-2">
         <div>
-          <h3 className="mb-1 text-xs font-bold text-moss">Hecho ({review.done.length})</h3>
+          <h3 className="mb-1 text-xs font-bold text-moss-ink">Hecho ({review.done.length})</h3>
           {review.done.length === 0 ? <p className="text-xs text-ink-faint">Nada todavía.</p> : (
             <ul className="space-y-1 text-sm text-ink-soft">{review.done.map((t) => <li key={t.key}><span className="font-mono text-xs text-ink-faint">{t.key}</span> {t.title}</li>)}</ul>
           )}
         </div>
         <div>
           <h3 className="mb-1 text-xs font-bold text-warn">Sin terminar ({review.notDone.length})</h3>
-          {review.notDone.length === 0 ? <p className="text-xs text-ink-faint">Todo terminado 🎉</p> : (
+          {review.notDone.length === 0 ? <p className="text-xs text-ink-faint">Todo terminado</p> : (
             <ul className="space-y-1 text-sm text-ink-soft">{review.notDone.map((t) => <li key={t.key}><span className="font-mono text-xs text-ink-faint">{t.key}</span> {t.title}</li>)}</ul>
           )}
         </div>
@@ -292,18 +292,18 @@ function RetroPanel({ projectId, selectedSprintId, retro, currentUserId, isLead,
       {(Object.keys(RETRO_COLUMN_META) as RetroColumn[]).map((col) => {
         const items = retro.filter((r) => r.column === col);
         return (
-          <section key={col} className="flex flex-col border-2 border-ink bg-card">
-            <header className="border-b-2 border-line-strong bg-card-2 px-3 py-2">
+          <section key={col} className="flex flex-col border border-line bg-card rounded-lg">
+            <header className="border-b border-line-strong bg-card-2 px-3 py-2">
               <h2 className="font-display text-sm font-extrabold text-ink">{RETRO_COLUMN_META[col].label} <span className="font-mono text-ink-faint">({items.length})</span></h2>
               <p className="text-[11px] text-ink-faint">{RETRO_COLUMN_META[col].hint} · {sprintName}</p>
             </header>
             <ul className="flex-1 space-y-2 p-3">
               {items.map((it) => (
-                <li key={it.id} className="border-2 border-line-strong p-2 text-sm">
+                <li key={it.id} className="border border-line-strong p-2 text-sm rounded-md">
                   <p className="whitespace-pre-wrap break-words text-ink">{it.body}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-ink-faint">
                     {it.author?.name ?? "—"}
-                    {it.ticketKey && <span className="font-mono text-moss">→ {it.ticketKey}</span>}
+                    {it.ticketKey && <span className="font-mono text-moss-ink">→ {it.ticketKey}</span>}
                     {col === "ACTION" && !it.ticketKey && <button className="text-ink-soft hover:text-ink" onClick={() => toTicket(it)}>Convertir en ticket</button>}
                     {(it.author?.id === currentUserId || isLead) && <button className="ml-auto hover:text-danger" onClick={() => remove(it)}>borrar</button>}
                   </p>
@@ -311,7 +311,7 @@ function RetroPanel({ projectId, selectedSprintId, retro, currentUserId, isLead,
               ))}
               {items.length === 0 && <li className="text-center text-xs text-ink-faint">Sin puntos todavía.</li>}
             </ul>
-            <div className="flex gap-2 border-t-2 border-line-strong p-2">
+            <div className="flex gap-2 border-t border-line-strong p-2">
               <input
                 className="field-sm min-w-0 flex-1"
                 placeholder="Agregar…"
@@ -362,7 +362,7 @@ function ContactsPanel({ projectId, contacts }: { projectId: string; contacts: C
           <EmptyState title="Sin contactos todavía" hint="Anotá a quién acudir en este proyecto: el contacto del cliente, quién sabe de la base de datos, quién da los accesos." />
         ) : (
           contacts.map((c) => (
-            <article key={c.id} className="flex items-start gap-3 border-2 border-ink bg-card px-3 py-2.5">
+            <article key={c.id} className="flex items-start gap-3 border border-line bg-card px-3 py-2.5 rounded-lg">
               <Avatar name={c.name} size={28} />
               <div className="min-w-0 flex-1 text-sm">
                 <p className="text-ink"><b>{c.name}</b>{c.role && <span className="text-ink-soft"> · {c.role}</span>}</p>
@@ -374,7 +374,7 @@ function ContactsPanel({ projectId, contacts }: { projectId: string; contacts: C
           ))
         )}
       </div>
-      <form onSubmit={add} className="space-y-3 self-start border-2 border-ink bg-card p-4">
+      <form onSubmit={add} className="space-y-3 self-start border border-line bg-card p-4 rounded-lg">
         <h2 className="font-display text-base font-extrabold text-ink">Agregar contacto</h2>
         <input className="field" placeholder="Nombre" maxLength={100} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <input className="field" placeholder="Rol (ej. Cliente, DBA, Diseño)" maxLength={100} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} />

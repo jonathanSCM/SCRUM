@@ -46,7 +46,7 @@ export default function ConfirmDialogProvider({ children }: { children: React.Re
       <AnimatePresence>
         {state && (
           <motion.div
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-[#0b0614]/70 px-4"
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-[#1b1730]/40 px-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: 0.1 } }}
@@ -55,7 +55,7 @@ export default function ConfirmDialogProvider({ children }: { children: React.Re
             <motion.div
               role="alertdialog"
               aria-modal="true"
-              className="w-full max-w-sm border-2 border-ink bg-card p-5"
+              className="w-full max-w-sm border border-line bg-card p-5 rounded-lg"
               initial={{ scale: 0.94, y: 12, boxShadow: "0 0 0 var(--danger)" }}
               animate={{ scale: 1, y: 0, boxShadow: `7px 7px 0 ${state.options.danger === false ? "var(--moss)" : "var(--danger)"}` }}
               exit={{ scale: 0.97, opacity: 0, transition: { duration: 0.1 } }}

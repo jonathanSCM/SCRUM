@@ -54,7 +54,7 @@ export default function NotesView({ projectId, notes, currentUserId, isLead }: {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         {(["ALL", ...KINDS] as const).map((k) => (
-          <button key={k} onClick={() => setFilter(k)} className={cn("btn-ghost btn-sm", filter === k && "border-moss text-ink")}>
+          <button key={k} onClick={() => setFilter(k)} className={cn("btn-ghost btn-sm", filter === k && "border-rust bg-card-2 text-rust")}>
             {k === "ALL" ? "Todas" : NOTE_KIND_META[k].label}
           </button>
         ))}
@@ -75,9 +75,9 @@ export default function NotesView({ projectId, notes, currentUserId, isLead }: {
             const canDelete = n.author?.id === currentUserId || isLead;
             const actionable = extractActionItems(n.body).length;
             return (
-              <li key={n.id} className="border-2 border-ink bg-card">
-                <header className="flex flex-wrap items-center gap-2 border-b-2 border-line-strong bg-card-2 px-4 py-2.5">
-                  {n.pinned && <span title="Fijada" aria-label="Fijada">📌</span>}
+              <li key={n.id} className="border border-line bg-card rounded-lg">
+                <header className="flex flex-wrap items-center gap-2 border-b border-line-strong bg-card-2 px-4 py-2.5">
+                  {n.pinned && <span className="lozenge text-ink-faint" title="Fijada">Fijada</span>}
                   <h2 className="font-display text-base font-extrabold text-ink">{n.title}</h2>
                   <span className="lozenge text-ink-soft">{isNoteKind(n.kind) ? NOTE_KIND_META[n.kind].label : n.kind}</span>
                   <span className="ml-auto flex items-center gap-2 text-xs text-ink-faint">
@@ -88,7 +88,7 @@ export default function NotesView({ projectId, notes, currentUserId, isLead }: {
                 <div className="px-4 py-3">
                   {n.body ? <p className="whitespace-pre-wrap break-words text-sm text-ink-soft">{n.body}</p> : <p className="text-sm text-ink-faint">Sin contenido.</p>}
                 </div>
-                <footer className="flex flex-wrap gap-2 border-t-2 border-line-strong px-4 py-2">
+                <footer className="flex flex-wrap gap-2 border-t border-line-strong px-4 py-2">
                   <button className="btn-ghost btn-sm" onClick={() => setEditing(n)}>Editar</button>
                   <button className="btn-ghost btn-sm" onClick={() => togglePin(n)}>{n.pinned ? "Desfijar" : "Fijar"}</button>
                   {actionable > 0 && (
@@ -208,7 +208,7 @@ function ConvertModal({ note, onClose }: { note: NoteRow; onClose: () => void })
       <ul className="space-y-1.5">
         {items.map((item) => (
           <li key={item}>
-            <label className="flex cursor-pointer items-start gap-2 border-2 border-line-strong px-2.5 py-1.5 text-sm text-ink hover:border-moss">
+            <label className="flex cursor-pointer items-start gap-2 border border-line-strong px-2.5 py-1.5 text-sm text-ink hover:border-moss rounded-md">
               <input type="checkbox" className="mt-0.5 h-4 w-4 accent-moss" checked={picked.has(item)} onChange={() => toggle(item)} />
               <span className="min-w-0 flex-1 break-words">{item}</span>
             </label>

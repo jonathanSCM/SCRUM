@@ -104,7 +104,7 @@ export default function IssueDrawer({ currentUserId, currentUserRole }: { curren
         <>
           <motion.div
             key="backdrop"
-            className="fixed inset-0 z-[55] bg-[#0b0614]/60"
+            className="fixed inset-0 z-[55] bg-[#1b1730]/30"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -112,7 +112,7 @@ export default function IssueDrawer({ currentUserId, currentUserRole }: { curren
           />
           <motion.aside
             key="panel"
-            className="fixed inset-y-0 right-0 z-[56] flex w-full max-w-[860px] flex-col overflow-hidden border-l-2 border-ink bg-paper"
+            className="fixed inset-y-0 right-0 z-[56] flex w-full max-w-[860px] flex-col overflow-hidden border-l border-line bg-paper"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%", transition: { duration: 0.18, ease: "easeIn" } }}
@@ -195,7 +195,7 @@ function DrawerBody({
       <div className="flex h-full flex-col">
         <DrawerHeader issueKey={issueKey} onClose={onClose} />
         <div className="p-6">
-          <p className="border-2 border-danger bg-danger-bg p-4 text-sm text-danger">{error}</p>
+          <p className="border border-danger bg-danger-bg p-4 text-sm text-danger rounded-lg">{error}</p>
         </div>
       </div>
     );
@@ -247,7 +247,7 @@ function DrawerBody({
                     <li key={c.id}>
                       <button
                         onClick={() => openIssue(`${data.project?.key ?? ""}-${c.number}`)}
-                        className="flex w-full items-center gap-2 border-2 border-line-strong px-2.5 py-1.5 text-left text-sm text-ink hover:border-moss"
+                        className="flex w-full items-center gap-2 border border-line-strong px-2.5 py-1.5 text-left text-sm text-ink hover:border-moss rounded-md"
                       >
                         <TypeIcon type={c.issueType} size={16} />
                         <span className="font-mono text-xs text-ink-faint">{data.project?.key}-{c.number}</span>
@@ -268,7 +268,7 @@ function DrawerBody({
           <Attachments issueId={issue.id} items={data.attachments} onChange={load} />
 
           <section>
-            <div className="mb-3 flex gap-5 border-b-2 border-line-strong">
+            <div className="mb-3 flex gap-5 border-b border-line-strong">
               {(
                 [
                   ["comments", `Comentarios (${data.comments.length})`],
@@ -279,8 +279,8 @@ function DrawerBody({
                   key={id}
                   onClick={() => setTab(id)}
                   className={cn(
-                    "-mb-0.5 border-b-2 pb-2 text-sm font-semibold transition-colors",
-                    tab === id ? "border-moss text-ink" : "border-transparent text-ink-faint hover:text-ink-soft"
+                    "-mb-px border-b-2 pb-2 text-sm font-semibold transition-colors",
+                    tab === id ? "border-rust text-ink" : "border-transparent text-ink-faint hover:text-ink-soft"
                   )}
                 >
                   {label}
@@ -296,7 +296,7 @@ function DrawerBody({
         </div>
 
         {/* ---- columna de campos ---- */}
-        <aside className="space-y-4 border-t-2 border-line-strong bg-paper-deep p-5 md:border-l-2 md:border-t-0">
+        <aside className="space-y-4 border-t border-line-strong bg-paper-deep p-5 md:border-l md:border-t-0">
           <Field label="Estado">
             <select
               className="field field-sm"
@@ -334,7 +334,7 @@ function DrawerBody({
               </select>
             </div>
             {issue.assigneeUserId !== currentUserId && (
-              <button className="mt-1 text-[11px] text-moss hover:underline" onClick={() => patch({ assigneeUserId: currentUserId })}>
+              <button className="mt-1 text-[11px] text-moss-ink hover:underline" onClick={() => patch({ assigneeUserId: currentUserId })}>
                 Asignármelo
               </button>
             )}
@@ -397,7 +397,7 @@ function DrawerBody({
 
           {isEpic && (
             <Field label="Color de la épica">
-              <input type="color" className="h-9 w-full cursor-pointer border-2 border-line bg-paper-deep" value={issue.epicColor ?? "#c084fc"} onChange={(e) => patch({ epicColor: e.target.value })} />
+              <input type="color" className="h-9 w-full cursor-pointer border border-line bg-paper-deep rounded-lg" value={issue.epicColor ?? "#8b5cf6"} onChange={(e) => patch({ epicColor: e.target.value })} />
             </Field>
           )}
 
@@ -412,7 +412,7 @@ function DrawerBody({
 
           <Labels labels={issue.labels} onChange={(labels) => patch({ labels })} />
 
-          <div className="space-y-0.5 border-t-2 border-line-strong pt-3 text-[11px] text-ink-faint">
+          <div className="space-y-0.5 border-t border-line-strong pt-3 text-[11px] text-ink-faint">
             <p>Creado {formatDateTime(issue.createdAt)}</p>
             <p>Actualizado {timeAgo(issue.updatedAt)}</p>
           </div>
@@ -437,10 +437,10 @@ function DrawerHeader({
 }) {
   const toast = useToast();
   return (
-    <div className="flex items-center gap-3 border-b-2 border-line px-5 py-3">
+    <div className="flex items-center gap-3 border-b border-line px-5 py-3">
       {issueType && <TypeIcon type={issueType} size={20} />}
       <button
-        className="font-mono text-sm font-bold text-ink hover:text-moss"
+        className="font-mono text-sm font-bold text-ink hover:text-moss-ink"
         title="Copiar link del ticket"
         onClick={() => {
           navigator.clipboard?.writeText(`${window.location.origin}${window.location.pathname}?issue=${issueKey}`).then(
@@ -507,7 +507,7 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
   }
   return (
     <h2
-      className="-mx-2 cursor-text border-2 border-transparent px-2 py-1 font-display text-xl font-bold leading-snug text-ink hover:border-line-strong md:text-2xl"
+      className="-mx-2 cursor-text border border-transparent px-2 py-1 font-display text-xl font-bold leading-snug text-ink hover:border-line-strong md:text-2xl rounded-md"
       onClick={() => setEditing(true)}
       title="Click para editar"
     >
@@ -550,7 +550,7 @@ function DescriptionEditor({ value, onSave }: { value: string; onSave: (v: strin
         </div>
       ) : (
         <div
-          className="min-h-[3.5rem] cursor-text whitespace-pre-wrap border-2 border-transparent px-2 py-1.5 -mx-2 text-sm leading-relaxed text-ink-soft hover:border-line-strong"
+          className="min-h-[3.5rem] cursor-text whitespace-pre-wrap border border-transparent px-2 py-1.5 -mx-2 text-sm leading-relaxed text-ink-soft hover:border-line-strong rounded-md"
           onClick={() => setEditing(true)}
         >
           {value || <span className="text-ink-faint">Agregá una descripción…</span>}
@@ -572,12 +572,12 @@ function ReadyChecklist({ items, done, onChange }: { items: string[]; done: stri
     <section>
       <h3 className="mb-2 flex items-center gap-2 font-display text-sm font-bold text-ink">
         Definition of Ready <span className="font-mono text-ink-faint">({covered}/{items.length})</span>
-        <span className={`lozenge ${ready ? "text-moss" : "text-warn"}`}>{ready ? "Listo para empezar" : "Falta información"}</span>
+        <span className={`lozenge ${ready ? "text-moss-ink" : "text-warn"}`}>{ready ? "Listo para empezar" : "Falta información"}</span>
       </h3>
       <ul className="space-y-1.5">
         {items.map((item) => (
           <li key={item}>
-            <label className="flex cursor-pointer items-center gap-2 border-2 border-line-strong px-2.5 py-1.5 text-sm text-ink hover:border-moss">
+            <label className="flex cursor-pointer items-center gap-2 border border-line-strong px-2.5 py-1.5 text-sm text-ink hover:border-moss rounded-md">
               <input type="checkbox" className="h-4 w-4 accent-moss" checked={done.includes(item)} onChange={() => toggle(item)} />
               <span className="min-w-0 flex-1 break-words">{item}</span>
             </label>
@@ -600,7 +600,7 @@ function Labels({ labels, onChange }: { labels: string[]; onChange: (l: string[]
     <Field label="Etiquetas">
       <div className="flex flex-wrap gap-1.5">
         {labels.map((l) => (
-          <span key={l} className="inline-flex items-center gap-1 border-2 border-line-strong px-1.5 py-0.5 text-[11px] font-semibold text-ink-soft">
+          <span key={l} className="inline-flex items-center gap-1 border border-line-strong px-1.5 py-0.5 text-[11px] font-semibold text-ink-soft rounded-md">
             {l}
             <button className="text-ink-faint hover:text-danger" onClick={() => onChange(labels.filter((x) => x !== l))} aria-label={`Quitar ${l}`}>
               <XIcon size={10} />
@@ -679,7 +679,7 @@ function Attachments({ issueId, items, onChange }: { issueId: string; items: Att
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files?.[0]; if (f) upload(f); }}
-        className={cn("border-2 border-dashed p-2 transition-colors", dragging ? "border-moss bg-card" : "border-line-strong")}
+        className={cn("border border-dashed p-2 transition-colors rounded-md", dragging ? "border-rust bg-card" : "border-line-strong")}
       >
         {items.length === 0 ? (
           <p className="px-1 py-2 text-center text-xs text-ink-faint">Arrastrá un archivo acá o usá “Adjuntar” (máx. 5 MB).</p>
@@ -688,7 +688,7 @@ function Attachments({ issueId, items, onChange }: { issueId: string; items: Att
             {items.map((a) => (
               <li key={a.id} className="flex items-center gap-2 bg-card px-2 py-1.5 text-sm">
                 <PaperclipIcon size={14} className="shrink-0 text-ink-faint" />
-                <a href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate font-medium text-ink hover:text-moss">
+                <a href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate font-medium text-ink hover:text-moss-ink">
                   {a.filename}
                 </a>
                 <span className="shrink-0 font-mono text-[11px] text-ink-faint">{formatBytes(a.size)}</span>
@@ -812,10 +812,10 @@ function Activity({ items }: { items: HistoryRow[] }) {
   const rows = useMemo(() => items.map((h) => ({ ...h, text: describeHistory(h) })), [items]);
   if (rows.length === 0) return <p className="text-sm text-ink-faint">Sin actividad registrada.</p>;
   return (
-    <ul className="relative space-y-3 border-l-2 border-line-strong pl-4">
+    <ul className="relative space-y-3 border-l border-line-strong pl-4">
       {rows.map((h) => (
         <li key={h.id} className="relative text-sm">
-          <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 border-2 border-ink bg-rust" />
+          <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 border border-line bg-rust rounded-md" />
           <p className="text-ink">
             <span className="font-bold">{h.changedByName ?? "Alguien"}</span> · {h.text.label.toLowerCase()}
             {h.text.detail ? <span className="text-ink-soft"> {h.text.detail.replace(/^«.*?» — /, "")}</span> : null}

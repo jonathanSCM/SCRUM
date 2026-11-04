@@ -22,7 +22,7 @@ export function PointsBadge({ points }: { points: number | null }) {
   return (
     <span
       title="Story points"
-      className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center border-2 border-line-strong px-1 font-mono text-[10px] font-bold text-ink-soft"
+      className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center border border-line-strong px-1 font-mono text-[10px] font-bold text-ink-soft rounded-md"
     >
       {points ?? "–"}
     </span>

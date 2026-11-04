@@ -41,7 +41,7 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
 
   return (
     <div className="space-y-8">
-      <form onSubmit={save} className="space-y-4 border-2 border-ink bg-card p-5">
+      <form onSubmit={save} className="space-y-4 border border-line bg-card p-5 rounded-lg">
         <h2 className="font-display text-lg font-extrabold text-ink">Datos</h2>
         <div>
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Nombre</label>
@@ -69,7 +69,7 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
         </div>
       </form>
 
-      <form onSubmit={changePassword} className="space-y-4 border-2 border-ink bg-card p-5">
+      <form onSubmit={changePassword} className="space-y-4 border border-line bg-card p-5 rounded-lg">
         <h2 className="font-display text-lg font-extrabold text-ink">Cambiar contraseña</h2>
         <div>
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Contraseña actual</label>

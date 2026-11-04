@@ -50,10 +50,10 @@ export default function StatusesManager({ initial }: { initial: Item[] }) {
 
   return (
     <div className="space-y-4">
-      <ul className="border-2 border-ink bg-card">
+      <ul className="border border-line bg-card rounded-lg">
         {items.map((item) => (
-          <li key={item.id} className="flex items-center gap-3 border-b-2 border-line-strong px-3 py-2.5 last:border-b-0">
-            <input type="color" aria-label="Color" className="h-8 w-8 cursor-pointer border-2 border-ink bg-transparent p-0" value={item.color} onChange={(e) => patch(item.id, { color: e.target.value })} onBlur={() => save(item)} />
+          <li key={item.id} className="flex items-center gap-3 border-b border-line-strong px-3 py-2.5 last:border-b-0">
+            <input type="color" aria-label="Color" className="h-8 w-8 cursor-pointer border border-line bg-transparent p-0 rounded-md" value={item.color} onChange={(e) => patch(item.id, { color: e.target.value })} onBlur={() => save(item)} />
             <input className="field-sm min-w-0 flex-1" value={item.name} onChange={(e) => patch(item.id, { name: e.target.value })} onBlur={() => save(item)} maxLength={60} />
             <span className="w-20 text-right text-xs text-ink-faint">{item.projects} {item.projects === 1 ? "proyecto" : "proyectos"}</span>
             <button className="text-ink-faint hover:text-danger" aria-label={`Eliminar ${item.name}`} onClick={() => remove(item)}>
@@ -63,8 +63,8 @@ export default function StatusesManager({ initial }: { initial: Item[] }) {
         ))}
       </ul>
 
-      <form onSubmit={add} className="flex items-center gap-2 border-2 border-dashed border-line-strong p-3">
-        <input type="color" aria-label="Color" className="h-8 w-8 cursor-pointer border-2 border-ink bg-transparent p-0" value={newColor} onChange={(e) => setNewColor(e.target.value)} />
+      <form onSubmit={add} className="flex items-center gap-2 border border-dashed border-line-strong p-3 rounded-md">
+        <input type="color" aria-label="Color" className="h-8 w-8 cursor-pointer border border-line bg-transparent p-0 rounded-md" value={newColor} onChange={(e) => setNewColor(e.target.value)} />
         <input className="field-sm min-w-0 flex-1" placeholder="Nuevo estado…" value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={60} />
         <button className="btn-primary btn-sm" disabled={!newName.trim()}>
           <PlusIcon size={14} /> Agregar

@@ -33,7 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const key = formatIssueKey(issue.project.key, issue.number);
     await notifyProject(issue.projectId, {
-      title: `💬 Comentario en ${key}`,
+      title: `Comentario en ${key}`,
       description: `**${user.name}** comentó en «${issue.title}»: ${parsed.data.body}`,
       color: DISCORD_COLOR.comment,
       mentionUserIds: [issue.assigneeUserId !== user.id ? issue.assigneeUserId : null, issue.reporterId !== user.id ? issue.reporterId : null],

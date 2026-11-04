@@ -74,7 +74,7 @@ export async function sendSprintBriefing(sprintId: string, actor?: { id: string;
     if (!sprint?.projectId || !sprint.project) return { delivered: "none", ai: !!insights };
 
     const s = summarizeTickets(data.tickets);
-    const headline = `🚀 Arrancó *${data.sprint.name}* en ${data.project.name}: ${s.count} tickets · ${s.points} pts${insights ? "" : geminiConfigured() ? " (sin sugerencias de IA: Gemini no respondió)" : ""}`;
+    const headline = `Arrancó *${data.sprint.name}* en ${data.project.name}: ${s.count} tickets · ${s.points} pts${insights ? "" : geminiConfigured() ? " (sin sugerencias de IA: Gemini no respondió)" : ""}`;
     const filename = `${(data.project.key ?? data.project.name).replace(/[^\w-]+/g, "_")}-${data.sprint.name.replace(/[^\w-]+/g, "_")}.pdf`;
     const link = `${getBaseUrl()}/api/sprints/${sprintId}/report`;
 

@@ -187,7 +187,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
-      <form onSubmit={save} className="space-y-4 border-2 border-ink bg-card p-5">
+      <form onSubmit={save} className="space-y-4 border border-line bg-card p-5 rounded-lg">
         <h2 className="font-display text-lg font-extrabold text-ink">Detalles</h2>
         <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
           <div>
@@ -237,7 +237,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
         </div>
       </form>
 
-      <section className="space-y-3 border-2 border-ink bg-card p-5">
+      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
         <h2 className="font-display text-lg font-extrabold text-ink">Definition of Ready</h2>
         <p className="text-sm text-ink-soft">
           Lo que necesitamos tener antes de empezar a trabajar un ticket (por ejemplo: estructura de datos del cliente, accesos, brief, diseño).
@@ -246,7 +246,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
         {readyItems.length === 0 && <p className="text-xs text-ink-faint">Todavía no hay ítems: sin ellos, el sprint se puede iniciar sin revisar nada.</p>}
         <ul className="space-y-1.5">
           {readyItems.map((item) => (
-            <li key={item} className="flex items-center gap-2 border-2 border-line-strong px-2.5 py-1.5 text-sm text-ink">
+            <li key={item} className="flex items-center gap-2 border border-line-strong px-2.5 py-1.5 text-sm text-ink rounded-md">
               <span className="min-w-0 flex-1 break-words">{item}</span>
               {isLead && (
                 <button className="btn-ghost btn-sm text-danger" disabled={savingReady} onClick={() => saveReady(readyItems.filter((i) => i !== item))} aria-label={`Quitar ${item}`}>
@@ -278,7 +278,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
         )}
       </section>
 
-      <section className="space-y-3 border-2 border-ink bg-card p-5">
+      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
         <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Discord</h2>
         <p className="text-sm text-ink-soft">
           Avisa en un canal cuando se crea un ticket, pasa a Hecho, se asigna o se comenta, y cuando un sprint empieza o termina.
@@ -305,7 +305,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
         )}
       </section>
 
-      <section className="space-y-3 border-2 border-ink bg-card p-5">
+      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
         <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Telegram</h2>
         <p className="text-sm text-ink-soft">
           Los mismos avisos que Discord, en un chat o grupo de Telegram. Se pueden usar los dos canales a la vez; funciona el que esté configurado.
@@ -338,7 +338,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
         )}
       </section>
 
-      <section className="space-y-3 border-2 border-ink bg-card p-5">
+      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
         <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Slack</h2>
         <p className="text-sm text-ink-soft">
           Los mismos avisos en un canal de Slack, con un Incoming Webhook. Cada persona puede cargar su ID de miembro en <b>Mi perfil</b> para recibir la mención.
@@ -353,14 +353,14 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
               <button className="btn-primary" disabled={savingSlack || !slackUrl.trim()} onClick={() => saveSlack(slackUrl.trim())}>Guardar</button>
             </div>
             {project.pdfEnabled && (
-            <div className="space-y-2 border-t-2 border-line-strong pt-3">
+            <div className="space-y-2 border-t border-line-strong pt-3">
               <p className="text-sm font-semibold text-ink">PDF al iniciar cada sprint</p>
               <p className="text-xs text-ink-soft">
                 Al iniciar un sprint se genera un PDF con todos sus tickets y sugerencias de Gemini y se manda a Slack. Para <b>adjuntar el PDF</b> hace falta
                 un bot de Slack (permisos <span className="font-mono">files:write</span>) agregado al canal, con su token en la variable <span className="font-mono">SLACK_BOT_TOKEN</span> del servidor, y acá el <b>ID del canal</b>.
                 Sin eso se manda un mensaje con el enlace de descarga por el webhook.
               </p>
-              <p className="text-xs text-ink-faint">Bot en el servidor: {project.slackBot ? "configurado ✓" : "falta SLACK_BOT_TOKEN"}.</p>
+              <p className="text-xs text-ink-faint">Bot en el servidor: {project.slackBot ? "configurado" : "falta SLACK_BOT_TOKEN"}.</p>
               <div className="flex flex-wrap gap-2">
                 <input className="field min-w-0 flex-1 font-mono" placeholder="ID del canal: C01ABCDE2F3" value={channelId} onChange={(e) => setChannelId(e.target.value)} />
                 <button className="btn-primary" disabled={savingChannel} onClick={saveChannel}>Guardar canal</button>
@@ -380,7 +380,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
       </section>
 
       {isLead && (
-        <section className="space-y-3 border-2 border-danger bg-card p-5">
+        <section className="space-y-3 border border-danger bg-card p-5 rounded-lg overflow-hidden">
           <h2 className="font-display text-lg font-extrabold text-danger">Zona de peligro</h2>
           <p className="text-sm text-ink-soft">Eliminar el proyecto borra todos sus tickets, sprints, comentarios y adjuntos.</p>
           <button className="btn-danger" onClick={removeProject}>Eliminar proyecto</button>

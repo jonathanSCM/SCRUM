@@ -58,7 +58,7 @@ export class IssueError extends Error {
   }
 }
 
-const EPIC_COLORS = ["#c084fc", "#2fe3a6", "#60a5fa", "#ffb020", "#fb7185", "#8b5cf6"];
+const EPIC_COLORS = ["#8b5cf6", "#14b88a", "#3b82f6", "#f59e0b", "#ef4444", "#a78bfa"];
 
 async function validateRefs(
   projectId: string,
@@ -138,7 +138,7 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
   await logHistory({ projectId, taskId: created.id, taskTitle: created.title, field: "ticket_creado", newValue: key, actor });
 
   await notifyProject(projectId, {
-    title: `🆕 ${key} creado en ${project.name}`,
+    title: `${key} creado en ${project.name}`,
     description: `**${actor.name}** creó ${ISSUE_TYPE_META[issueType as IssueType].label.toLowerCase()} «${created.title}»${
       created.assignee ? ` — asignado a ${created.assignee.name}` : ""
     }`,
@@ -304,7 +304,7 @@ export async function updateIssue(
   if (!options.silent) {
     if (becameDone) {
       await notifyProject(project.id, {
-        title: `✅ ${key} completado en ${project.name}`,
+        title: `${key} completado en ${project.name}`,
         description: `**${actor.name}** completó «${updated.title}»`,
         color: DISCORD_COLOR.done,
         mentionUserIds: [updated.assigneeUserId, project.leadUserId],
@@ -313,7 +313,7 @@ export async function updateIssue(
     }
     if (assigneeChanged && newAssignee && newAssignee.id !== actor.id) {
       await notifyProject(project.id, {
-        title: `👤 ${key} asignado en ${project.name}`,
+        title: `${key} asignado en ${project.name}`,
         description: `**${actor.name}** asignó «${updated.title}» a ${newAssignee.name}`,
         color: DISCORD_COLOR.assigned,
         mentionUserIds: [newAssignee.id],

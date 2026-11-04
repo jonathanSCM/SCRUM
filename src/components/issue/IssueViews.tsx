@@ -9,12 +9,12 @@ import { CalendarIcon, CommentIcon, DragIcon, PaperclipIcon, PriorityIcon, TypeI
 import { PointsBadge } from "@/components/ui/Lozenge";
 
 export function EpicChip({ epic }: { epic: NonNullable<IssueCardData["epic"]> }) {
-  const color = epic.color ?? "#c084fc";
+  const color = epic.color ?? "#8b5cf6";
   return (
     <span
       title={`Épica ${epic.key}: ${epic.title}`}
-      className="inline-block max-w-[9rem] truncate border-2 px-1.5 py-px text-[10px] font-extrabold uppercase tracking-wide"
-      style={{ color: "#150b22", background: color, borderColor: color }}
+      className="inline-block max-w-[9rem] truncate border px-1.5 py-px text-[10px] font-extrabold uppercase tracking-wide rounded-md"
+      style={{ color: "#1b1730", background: `${color}26`, borderColor: `${color}80` }}
     >
       {epic.title}
     </span>
@@ -40,7 +40,7 @@ export function LabelChips({ labels, max = 2 }: { labels: string[]; max?: number
   return (
     <>
       {labels.slice(0, max).map((l) => (
-        <span key={l} className="border-2 border-line-strong px-1 text-[10px] font-semibold text-ink-faint">
+        <span key={l} className="border border-line-strong px-1 text-[10px] font-semibold text-ink-faint rounded-md">
           {l}
         </span>
       ))}
@@ -79,9 +79,9 @@ export function IssueRowView({
       style={style}
       onClick={onOpen}
       className={cn(
-        "group flex cursor-pointer items-center gap-2.5 border-b-2 border-line-strong bg-card px-3 py-2 transition-colors hover:bg-card-2",
+        "group flex cursor-pointer items-center gap-2.5 border-b border-line-strong bg-card px-3 py-2 transition-colors hover:bg-card-2",
         selected && "bg-card-2 outline outline-2 -outline-offset-2 outline-moss",
-        dragging && "border-2 border-ink shadow-hard-sm"
+        dragging && "border border-line shadow-hard-sm rounded-md"
       )}
     >
       {handleProps && (
@@ -165,7 +165,7 @@ export function IssueCardView({
       style={{ ...style, borderTopColor: accent ?? undefined, borderTopWidth: accent ? 5 : undefined }}
       onClick={onOpen}
       className={cn(
-        "cursor-pointer select-none border-2 border-ink bg-card p-3 transition-[box-shadow,transform] duration-100",
+        "cursor-pointer select-none border border-line bg-card p-3 transition-[box-shadow,transform] duration-100",
         !dragging && !overlay && "hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-hard-sm",
         dragging && "opacity-35",
         overlay && "rotate-2 scale-[1.03] border-moss shadow-hard-purple"

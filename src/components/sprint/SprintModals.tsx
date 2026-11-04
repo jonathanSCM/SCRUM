@@ -112,7 +112,7 @@ export function StartSprintModal({
           {points > 0 ? <> · <b className="font-mono text-ink">{points} pts</b></> : null}.
         </p>
         {notReady.length > 0 && (
-          <div className="space-y-2 border-2 border-warn bg-card-2 p-3 text-sm">
+          <div className="space-y-2 border border-warn bg-card-2 p-3 text-sm rounded-lg">
             <p className="font-semibold text-ink">
               Falta información en {notReady.length} {notReady.length === 1 ? "ticket" : "tickets"} (Definition of Ready)
             </p>
@@ -247,11 +247,11 @@ export function CompleteSprintModal({
       >
         <div className="space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-3">
-            <div className="border-2 border-moss p-3">
-              <p className="font-display text-2xl font-extrabold text-moss">{doneCount}</p>
+            <div className="border border-moss p-3 rounded-md">
+              <p className="font-display text-2xl font-extrabold text-moss-ink">{doneCount}</p>
               <p className="text-xs text-ink-soft">tickets completados{donePoints > 0 ? ` · ${donePoints} pts` : ""}</p>
             </div>
-            <div className="border-2 border-line-strong p-3">
+            <div className="border border-line-strong p-3 rounded-md">
               <p className="font-display text-2xl font-extrabold text-ink">{openCount}</p>
               <p className="text-xs text-ink-soft">sin terminar</p>
             </div>
@@ -282,7 +282,7 @@ function Burst({ show }: { show: boolean }) {
       Array.from({ length: 28 }, (_, i) => {
         const angle = (i / 28) * Math.PI * 2 + (i % 3) * 0.2;
         const distance = 140 + ((i * 53) % 160);
-        return { i, x: Math.cos(angle) * distance, y: Math.sin(angle) * distance, color: ["#2fe3a6", "#8b5cf6", "#c084fc", "#ffb020", "#60a5fa"][i % 5], size: 8 + (i % 4) * 4, rot: (i * 47) % 180 };
+        return { i, x: Math.cos(angle) * distance, y: Math.sin(angle) * distance, color: ["#2fe3a6", "#8b5cf6", "#8b5cf6", "#ffb020", "#60a5fa"][i % 5], size: 8 + (i % 4) * 4, rot: (i * 47) % 180 };
       }),
     []
   );
@@ -293,7 +293,7 @@ function Burst({ show }: { show: boolean }) {
           {pieces.map((p) => (
             <motion.span
               key={p.i}
-              className="absolute border-2 border-ink"
+              className="absolute border border-line rounded-md"
               style={{ width: p.size, height: p.size, background: p.color }}
               initial={{ x: 0, y: 0, scale: 0.4, rotate: 0, opacity: 1 }}
               animate={{ x: p.x, y: p.y, scale: 1, rotate: p.rot, opacity: [1, 1, 0] }}
@@ -301,7 +301,7 @@ function Burst({ show }: { show: boolean }) {
             />
           ))}
           <motion.p
-            className="border-2 border-ink bg-moss px-5 py-3 font-display text-2xl font-black text-[#150b22]"
+            className="border border-line bg-moss px-5 py-3 font-display text-2xl font-black text-[#150b22] rounded-md"
             initial={{ scale: 0.4, rotate: -6, opacity: 0 }}
             animate={{ scale: 1, rotate: -3, opacity: 1 }}
             transition={{ type: "spring", stiffness: 400, damping: 14 }}

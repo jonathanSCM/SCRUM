@@ -69,7 +69,7 @@ export default function TeamManager({
   return (
     <div className="space-y-6">
       {createdPassword && (
-        <div className="border-2 border-rust bg-card p-4 text-sm rounded-xl2 shadow-[6px_6px_0_var(--moss)]">
+        <div className="border border-rust bg-card p-4 text-sm rounded-xl2 shadow-[6px_6px_0_var(--moss)]">
           <p className="font-semibold text-ink">Cuenta creada — pasale estos datos, no se van a volver a mostrar:</p>
           <p className="mt-1 text-ink-soft">
             Email: <span className="font-mono">{createdPassword.email}</span>

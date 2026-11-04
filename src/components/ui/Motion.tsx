@@ -48,7 +48,7 @@ export function ProgressBar({
 }) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
-    <div className={`overflow-hidden border-2 border-line bg-paper-deep ${className}`} style={{ height }} role="progressbar" aria-valuenow={clamped} aria-valuemin={0} aria-valuemax={100}>
+    <div className={`overflow-hidden border border-line bg-paper-deep ${className}`} style={{ height }} role="progressbar" aria-valuenow={clamped} aria-valuemin={0} aria-valuemax={100}>
       <motion.div
         className={`h-full ${striped ? "stripes" : ""}`}
         style={{ background: color }}

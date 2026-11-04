@@ -7,7 +7,7 @@ export function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const AVATAR_COLORS = ["#c084fc", "#2fe3a6", "#60a5fa", "#ffb020", "#fb7185", "#8b5cf6", "#5eead4", "#f9a8d4"];
+const AVATAR_COLORS = ["#c4b5fd", "#6ee7b7", "#93c5fd", "#fcd34d", "#fda4af", "#a78bfa", "#5eead4", "#f9a8d4"];
 
 // Color estable por nombre: la misma persona siempre se ve igual.
 export function colorForName(name: string): string {
