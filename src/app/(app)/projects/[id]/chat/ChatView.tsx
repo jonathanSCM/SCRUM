@@ -8,10 +8,10 @@ import { useToast } from "@/components/ui/Toaster";
 
 export type ChatMessage = { id: string; body: string; createdAt: string; author: { id: string; name: string } | null };
 
-const POLL_MS = 8000;
+const POLL_MS = 2000;
 
-// Chat del equipo del proyecto. Se refresca solo cada pocos segundos mientras
-// la pestaña está visible.
+// Chat del equipo del proyecto. Pregunta por mensajes nuevos cada 2 segundos
+// (solo con la pestaña visible) y al volver a ella.
 export default function ChatView({ projectId, initial, currentUserId, isLead }: { projectId: string; initial: ChatMessage[]; currentUserId: string; isLead: boolean }) {
   const toast = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>(initial);
@@ -37,8 +37,23 @@ export default function ChatView({ projectId, initial, currentUserId, isLead }: 
       const res = await api<ChatMessage[]>(url);
       if (res.ok) merge(res.data);
     }
-    const timer = setInterval(poll, POLL_MS);
-    return () => clearInterval(timer);
+    let running = false;
+    const tick = async () => {
+      if (running) return; // no se apilan consultas si el servidor tarda
+      running = true;
+      try {
+        await poll();
+      } finally {
+        running = false;
+      }
+    };
+    const timer = setInterval(tick, POLL_MS);
+    const onVisible = () => void tick();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [projectId, merge]);
 
   useEffect(() => {

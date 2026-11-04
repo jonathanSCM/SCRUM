@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
@@ -8,6 +8,7 @@ import { DISCORD_COLOR } from "@/lib/discord";
 import { notifyProject } from "@/lib/notify";
 import { parseStringList, ticketsNotReady } from "@/lib/scrum/ready";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
+import { sendSprintBriefing } from "@/lib/sprintBriefing";
 import { snapshotOnStart, validateStart } from "@/lib/scrum/sprintLifecycle";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -71,6 +72,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         { name: "Puntos", value: String(snapshot.committedPoints), inline: true },
         { name: "Termina", value: endDate.toLocaleDateString("es-AR", { timeZone: "UTC" }), inline: true },
       ],
+    });
+
+    // Informe PDF (con sugerencias de Gemini) al Slack del proyecto, sin hacer
+    // esperar a quien inició el sprint.
+    after(async () => {
+      await sendSprintBriefing(id, auth.user);
     });
 
     return NextResponse.json(started);

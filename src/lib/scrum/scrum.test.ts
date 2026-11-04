@@ -8,6 +8,9 @@ import { parseStringList, missingReadyItems, ticketsNotReady } from "./ready";
 import { formatTelegramText, TELEGRAM_TOKEN_PATTERN, TELEGRAM_CHAT_PATTERN } from "../telegram";
 import { formatSlackText, SLACK_WEBHOOK_PATTERN } from "../slack";
 import { extractActionItems } from "./notes";
+import { parseInsights, buildPrompt } from "../gemini";
+import { renderSprintPdf } from "../sprintPdf";
+import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTicket, type SprintReportData } from "./sprintReport";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
 describe("issueKey", () => {
@@ -303,5 +306,44 @@ describe("extractActionItems", () => {
   it("respeta el máximo", () => {
     const body = Array.from({ length: 50 }, (_, i) => `- punto ${i}`).join("\n");
     expect(extractActionItems(body, 5)).toHaveLength(5);
+  });
+});
+
+describe("informe del sprint", () => {
+  const t = (key: string, o: Partial<ReportTicket> = {}): ReportTicket => ({
+    key, type: "Tarea", title: `Ticket ${key}`, description: "", priority: "Media", priorityWeight: 2, points: 3, status: "Por hacer",
+    assignee: "Ana", epic: null, dueDate: null, readyMissing: [], ...o,
+  });
+  const data: SprintReportData = {
+    project: { name: "Proyecto ñandú", key: "PRO", description: "desc" },
+    sprint: { id: "s1", name: "Sprint 1", goal: "Salir a producción 🚀", startDate: "2026-11-02T00:00:00.000Z", endDate: "2026-11-15T23:59:59.000Z" },
+    tickets: [t("PRO-1", { priorityWeight: 4, priority: "Urgente" }), t("PRO-2", { points: null, assignee: null, readyMissing: ["Accesos"] }), t("PRO-10", { assignee: "Ana", points: 8 })],
+  };
+  it("ordena por prioridad y clave", () => {
+    expect(sortTickets(data.tickets).map((x) => x.key)).toEqual(["PRO-1", "PRO-2", "PRO-10"]);
+  });
+  it("resume y sugiere sin IA", () => {
+    const s = summarizeTickets(data.tickets);
+    expect(s).toMatchObject({ count: 3, points: 11, unestimated: 1, unassigned: 1, notReady: 1 });
+    expect(basicSuggestions(data.tickets).join(" ")).toMatch(/sin responsable/);
+  });
+  it("quita emojis para el PDF", () => {
+    expect(pdfSafe("Hola 🚀 ñandú «x»")).toBe("Hola  ñandú «x»");
+  });
+  it("parsea la respuesta de Gemini (con o sin ```json) y descarta claves inventadas", () => {
+    const keys = new Set(["PRO-1", "PRO-2"]);
+    const raw = '```json\n{"summary":"ok","suggestions":["a"],"risks":[],"suggestedOrder":["PRO-2","XX-9"],"ticketTips":[{"key":"PRO-1","tip":"hacelo"},{"key":"XX-9","tip":"no"}]}\n```';
+    const parsed = parseInsights(raw, keys);
+    expect(parsed?.suggestedOrder).toEqual(["PRO-2"]);
+    expect(parsed?.ticketTips).toEqual([{ key: "PRO-1", tip: "hacelo" }]);
+    expect(parseInsights("no es json", keys)).toBeNull();
+    expect(buildPrompt(data)).toContain("PRO-1");
+  });
+  it("genera un PDF válido, con y sin IA", async () => {
+    const withAi = await renderSprintPdf(data, { summary: "Resumen", suggestions: ["Una"], risks: ["Riesgo"], suggestedOrder: ["PRO-1"], ticketTips: [{ key: "PRO-1", tip: "tip" }] });
+    const without = await renderSprintPdf(data, null);
+    expect(withAi.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(without.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(withAi.length).toBeGreaterThan(2000);
   });
 });

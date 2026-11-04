@@ -14,16 +14,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const parsed = parseBody(slackWebhookSchema, await readJson(req));
   if ("error" in parsed) return parsed.error;
-  const url = parsed.data.slackWebhookUrl || null;
+  const { slackWebhookUrl, slackChannelId } = parsed.data;
 
   try {
-    const project = await prisma.project.findUnique({ where: { id }, select: { slackWebhookUrl: true } });
+    const project = await prisma.project.findUnique({ where: { id }, select: { slackWebhookUrl: true, slackChannelId: true } });
     if (!project) return notFound("Proyecto no encontrado");
-    await prisma.project.update({ where: { id }, data: { slackWebhookUrl: url } });
-    if (!!project.slackWebhookUrl !== !!url) {
-      await logHistory({ projectId: id, field: "slack_webhook", newValue: url ? "activado" : "desactivado", actor: auth.user });
+    // Solo se tocan los campos que vienen en la petición.
+    const data: { slackWebhookUrl?: string | null; slackChannelId?: string | null } = {};
+    if (slackWebhookUrl !== undefined) data.slackWebhookUrl = slackWebhookUrl || null;
+    if (slackChannelId !== undefined) data.slackChannelId = slackChannelId || null;
+    const updated = await prisma.project.update({ where: { id }, data, select: { slackWebhookUrl: true, slackChannelId: true } });
+    if (!!project.slackWebhookUrl !== !!updated.slackWebhookUrl) {
+      await logHistory({ projectId: id, field: "slack_webhook", newValue: updated.slackWebhookUrl ? "activado" : "desactivado", actor: auth.user });
     }
-    return NextResponse.json({ configured: !!url, hint: url ? url.slice(-6) : null });
+    return NextResponse.json({
+      configured: !!updated.slackWebhookUrl,
+      hint: updated.slackWebhookUrl ? updated.slackWebhookUrl.slice(-6) : null,
+      channelId: updated.slackChannelId,
+    });
   } catch (e) {
     return errorResponse(e);
   }

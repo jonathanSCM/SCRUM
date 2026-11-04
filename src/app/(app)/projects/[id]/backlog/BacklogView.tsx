@@ -205,6 +205,15 @@ export default function BacklogView({
     });
   }
 
+  const [sendingReport, setSendingReport] = useState<string | null>(null);
+  async function sendReport(s: SprintData) {
+    setSendingReport(s.id);
+    const res = await api<{ delivered: "file" | "link"; ai: boolean }>(`/api/sprints/${s.id}/briefing`, "POST", {});
+    setSendingReport(null);
+    if (!res.ok) return toast.error(res.error);
+    toast.success(res.data.delivered === "file" ? "PDF enviado al canal de Slack" : "Enlace del informe enviado a Slack");
+  }
+
   async function createSprint() {
     setCreatingSprint(true);
     const res = await api(`/api/projects/${projectId}/sprints`, "POST", {});
@@ -363,6 +372,12 @@ export default function BacklogView({
                       </button>
                     ) : (
                       <button className="btn-mint btn-sm" onClick={() => setCompleteFor(s)}>Completar sprint</button>
+                    )}
+                    <a className="btn-ghost btn-sm" href={`/api/sprints/${s.id}/report`} target="_blank" rel="noreferrer" title="PDF del sprint con sugerencias (tarda unos segundos)">PDF</a>
+                    {s.state === "ACTIVE" && (
+                      <button className="btn-ghost btn-sm" disabled={sendingReport === s.id} onClick={() => sendReport(s)} title="Genera el PDF y lo manda al Slack del proyecto">
+                        {sendingReport === s.id ? "Enviando…" : "Enviar a Slack"}
+                      </button>
                     )}
                     <button className="btn-ghost btn-sm" onClick={() => setEditFor(s)}>Editar</button>
                     {isLead && s.state === "PLANNED" && (

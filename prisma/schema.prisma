@@ -85,6 +85,7 @@ model Project {
 
   // Slack: Incoming Webhook (secreto, nunca se devuelve completo por la API).
   slackWebhookUrl String?
+  slackChannelId  String? // para subir archivos (PDF del sprint) con el bot de Slack
 
   // Definition of Ready: JSON con los textos que un ticket debe cubrir antes de empezar.
   readyItems String @default("[]")

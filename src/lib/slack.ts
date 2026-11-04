@@ -56,3 +56,47 @@ export async function resolveSlackMention(...userIds: Array<string | null | unde
   }
   return null;
 }
+
+// ---- Subir un archivo (PDF) al canal ----
+// Un Incoming Webhook no puede subir archivos: hace falta un bot con permisos
+// files:write (+ chat:write) agregado al canal. Token en SLACK_BOT_TOKEN.
+export const SLACK_CHANNEL_ID_PATTERN = /^[CG][A-Z0-9]{8,12}$/;
+
+export function slackBotConfigured(): boolean {
+  return !!process.env.SLACK_BOT_TOKEN;
+}
+
+export async function uploadFileToSlack(opts: { channelId: string; filename: string; content: Buffer; title: string; comment?: string }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) return { ok: false, error: "Falta SLACK_BOT_TOKEN" };
+  const auth = { Authorization: `Bearer ${token}` };
+  try {
+    const step1 = await fetch("https://slack.com/api/files.getUploadURLExternal", {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ filename: opts.filename, length: String(opts.content.length) }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const s1 = (await step1.json()) as { ok: boolean; upload_url?: string; file_id?: string; error?: string };
+    if (!s1.ok || !s1.upload_url || !s1.file_id) return { ok: false, error: s1.error ?? "getUploadURLExternal falló" };
+
+    const step2 = await fetch(s1.upload_url, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: new Uint8Array(opts.content),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!step2.ok) return { ok: false, error: `La subida respondió ${step2.status}` };
+
+    const step3 = await fetch("https://slack.com/api/files.completeUploadExternal", {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ files: [{ id: s1.file_id, title: opts.title }], channel_id: opts.channelId, initial_comment: opts.comment }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const s3 = (await step3.json()) as { ok: boolean; error?: string };
+    return s3.ok ? { ok: true } : { ok: false, error: s3.error ?? "completeUploadExternal falló" };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.name : "desconocido" };
+  }
+}

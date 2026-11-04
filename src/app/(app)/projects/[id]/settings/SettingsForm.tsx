@@ -22,6 +22,8 @@ type Props = {
     readyItems: string[];
     webhookConfigured: boolean;
     webhookHint: string | null;
+    slackChannelId: string;
+    slackBot: boolean;
     slackConfigured: boolean;
     slackHint: string | null;
     telegramConfigured: boolean;
@@ -101,7 +103,18 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
   const [slackUrl, setSlackUrl] = useState("");
   const [slackConfigured, setSlackConfigured] = useState(project.slackConfigured);
   const [slackHint, setSlackHint] = useState(project.slackHint);
+  const [channelId, setChannelId] = useState(project.slackChannelId);
+  const [savingChannel, setSavingChannel] = useState(false);
   const [savingSlack, setSavingSlack] = useState(false);
+
+  async function saveChannel() {
+    setSavingChannel(true);
+    const res = await api<{ channelId: string | null }>(`/api/projects/${project.id}/slack`, "PATCH", { slackChannelId: channelId.trim() });
+    setSavingChannel(false);
+    if (!res.ok) return toast.error(res.error);
+    setChannelId(res.data.channelId ?? "");
+    toast.success(res.data.channelId ? "Canal de Slack guardado" : "Canal de Slack quitado");
+  }
   const [testingSlack, setTestingSlack] = useState(false);
 
   async function saveSlack(url: string | null) {
@@ -337,6 +350,19 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
             <div className="flex flex-wrap gap-2">
               <input className="field min-w-0 flex-1" type="password" autoComplete="off" placeholder="https://hooks.slack.com/services/…" value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} />
               <button className="btn-primary" disabled={savingSlack || !slackUrl.trim()} onClick={() => saveSlack(slackUrl.trim())}>Guardar</button>
+            </div>
+            <div className="space-y-2 border-t-2 border-line-strong pt-3">
+              <p className="text-sm font-semibold text-ink">PDF al iniciar cada sprint</p>
+              <p className="text-xs text-ink-soft">
+                Al iniciar un sprint se genera un PDF con todos sus tickets y sugerencias de Gemini y se manda a Slack. Para <b>adjuntar el PDF</b> hace falta
+                un bot de Slack (permisos <span className="font-mono">files:write</span>) agregado al canal, con su token en la variable <span className="font-mono">SLACK_BOT_TOKEN</span> del servidor, y acá el <b>ID del canal</b>.
+                Sin eso se manda un mensaje con el enlace de descarga por el webhook.
+              </p>
+              <p className="text-xs text-ink-faint">Bot en el servidor: {project.slackBot ? "configurado ✓" : "falta SLACK_BOT_TOKEN"}.</p>
+              <div className="flex flex-wrap gap-2">
+                <input className="field min-w-0 flex-1 font-mono" placeholder="ID del canal: C01ABCDE2F3" value={channelId} onChange={(e) => setChannelId(e.target.value)} />
+                <button className="btn-primary" disabled={savingChannel} onClick={saveChannel}>Guardar canal</button>
+              </div>
             </div>
             {slackConfigured && (
               <div className="flex gap-2">

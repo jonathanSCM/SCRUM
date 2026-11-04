@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { SLACK_USER_ID_PATTERN, SLACK_WEBHOOK_PATTERN } from "@/lib/slack";
+import { SLACK_CHANNEL_ID_PATTERN, SLACK_USER_ID_PATTERN, SLACK_WEBHOOK_PATTERN } from "@/lib/slack";
 import { TELEGRAM_CHAT_PATTERN, TELEGRAM_TOKEN_PATTERN, TELEGRAM_USERNAME_PATTERN } from "@/lib/telegram";
 import { ISSUE_TYPES, STATUSES, PRIORITIES } from "@/lib/scrum/constants";
 
@@ -73,7 +73,9 @@ export const telegramConfigSchema = z.object({
 });
 
 export const slackWebhookSchema = z.object({
-  slackWebhookUrl: z.string().trim().regex(SLACK_WEBHOOK_PATTERN, "Tiene que ser una URL de Incoming Webhook de Slack (https://hooks.slack.com/services/…)").or(z.literal("")),
+  slackWebhookUrl: z.string().trim().regex(SLACK_WEBHOOK_PATTERN, "Tiene que ser una URL de Incoming Webhook de Slack (https://hooks.slack.com/services/…)").or(z.literal("")).optional(),
+  // Canal donde el bot sube el PDF del sprint (ID tipo C01ABCDE2F3, no el nombre).
+  slackChannelId: z.string().trim().regex(SLACK_CHANNEL_ID_PATTERN, "ID de canal inválido (empieza con C o G, ej. C01ABCDE2F3)").or(z.literal("")).optional(),
 });
 
 export const changePasswordSchema = z.object({
