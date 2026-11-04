@@ -2,6 +2,7 @@ import "server-only";
 import type { IssueWithRefs } from "@/lib/issues";
 import type { Sprint } from "@prisma/client";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
+import { parseStringList } from "@/lib/scrum/ready";
 import { parseLabels } from "@/lib/scrum/labels";
 import type { IssueStatus, IssueType, Priority, SprintState } from "@/lib/scrum/constants";
 import type { IssueCardData, SprintData } from "@/lib/types";
@@ -24,6 +25,7 @@ export function toIssueCard(task: IssueWithRefs, projectKey: string | null): Iss
     priority: task.priority as Priority,
     storyPoints: task.storyPoints,
     labels: parseLabels(task.labels),
+    readyDone: parseStringList(task.readyDone),
     rank: task.rank,
     dueDate: iso(task.dueDate),
     createdAt: task.createdAt.toISOString(),

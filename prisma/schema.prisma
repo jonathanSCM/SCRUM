@@ -75,6 +75,9 @@ model Project {
 
   discordWebhookUrl String?
 
+  // Definition of Ready: JSON con los textos que un ticket debe cubrir antes de empezar.
+  readyItems String @default("[]")
+
   statusId String
   status   StatusOption @relation(fields: [statusId], references: [id])
 
@@ -136,6 +139,7 @@ model Task {
   priority    String  @default("MEDIA") // URGENTE | ALTA | MEDIA | BAJA
   storyPoints Int?
   labels      String  @default("[]")
+  readyDone   String  @default("[]") // ítems de la Definition of Ready ya cubiertos
   rank        Float   @default(0)
   epicColor   String?
 

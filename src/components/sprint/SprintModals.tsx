@@ -29,6 +29,8 @@ export function StartSprintModal({
   sprint,
   issueCount,
   points,
+  isLead,
+  notReady,
 }: {
   open: boolean;
   onClose: () => void;
@@ -36,6 +38,8 @@ export function StartSprintModal({
   sprint: Pick<SprintData, "id" | "name" | "goal" | "startDate" | "endDate">;
   issueCount: number;
   points: number;
+  isLead: boolean;
+  notReady: Array<{ key: string; title: string; missing: string[] }>;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -45,9 +49,12 @@ export function StartSprintModal({
   const [start, setStart] = useState(sprint.startDate?.slice(0, 10) ?? todayInput());
   const [end, setEnd] = useState(sprint.endDate?.slice(0, 10) ?? addDays(todayInput(), 13));
   const [saving, setSaving] = useState(false);
+  const [force, setForce] = useState(false);
+  const blocked = notReady.length > 0 && !force;
 
   useEffect(() => {
     if (open) {
+      setForce(false);
       setName(sprint.name);
       setGoal(sprint.goal);
       const s = sprint.startDate?.slice(0, 10) ?? todayInput();
@@ -75,6 +82,7 @@ export function StartSprintModal({
       goal,
       startDate: `${start}T00:00:00.000Z`,
       endDate: `${end}T23:59:59.000Z`,
+      ...(force ? { force: true } : {}),
     });
     setSaving(false);
     if (!res.ok) return toast.error(res.error);
@@ -92,7 +100,7 @@ export function StartSprintModal({
       footer={
         <>
           <button type="button" className="btn-ghost" onClick={onClose}>Cancelar</button>
-          <button type="submit" form="start-sprint-form" className="btn-mint" disabled={saving}>
+          <button type="submit" form="start-sprint-form" className="btn-mint" disabled={saving || blocked}>
             {saving ? "Iniciando…" : "Iniciar sprint"}
           </button>
         </>
@@ -103,6 +111,28 @@ export function StartSprintModal({
           Se compromete a <b className="text-ink">{issueCount} {issueCount === 1 ? "ticket" : "tickets"}</b>
           {points > 0 ? <> · <b className="font-mono text-ink">{points} pts</b></> : null}.
         </p>
+        {notReady.length > 0 && (
+          <div className="space-y-2 border-2 border-warn bg-card-2 p-3 text-sm">
+            <p className="font-semibold text-ink">
+              Falta información en {notReady.length} {notReady.length === 1 ? "ticket" : "tickets"} (Definition of Ready)
+            </p>
+            <ul className="max-h-40 space-y-1 overflow-y-auto text-xs text-ink-soft">
+              {notReady.map((t) => (
+                <li key={t.key}>
+                  <span className="font-mono text-ink">{t.key}</span> {t.title} — <span className="text-warn">falta: {t.missing.join(", ")}</span>
+                </li>
+              ))}
+            </ul>
+            {isLead ? (
+              <label className="flex items-center gap-2 text-xs text-ink">
+                <input type="checkbox" className="h-4 w-4 accent-moss" checked={force} onChange={(e) => setForce(e.target.checked)} />
+                Iniciar de todas formas (queda registrado)
+              </label>
+            ) : (
+              <p className="text-xs text-ink-faint">Completá el checklist de cada ticket, o pedile a un líder que fuerce el inicio.</p>
+            )}
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Nombre del sprint</label>
           <input data-autofocus className="field" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />

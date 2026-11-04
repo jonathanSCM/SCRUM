@@ -26,6 +26,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.deployUrl !== undefined) data.deployUrl = body.deployUrl || null;
     if (body.stack !== undefined) data.stack = JSON.stringify(body.stack);
 
+    if (body.readyItems !== undefined) {
+      if (user.role !== "LEAD") return NextResponse.json({ error: "Solo un líder puede cambiar la Definition of Ready" }, { status: 403 });
+      data.readyItems = JSON.stringify([...new Set(body.readyItems)]);
+    }
+
     let newStatus: { id: string; name: string } | null = null;
     if (body.statusId !== undefined && body.statusId !== current.statusId) {
       newStatus = await prisma.statusOption.findUnique({ where: { id: body.statusId } });
@@ -54,6 +59,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     if (newLead !== undefined) {
       await logHistory({ projectId: id, field: "encargado_proyecto", oldValue: current.lead?.name ?? null, newValue: newLead?.name ?? "Sin asignar", actor: user });
+    }
+    if (body.readyItems !== undefined && updated.readyItems !== current.readyItems) {
+      await logHistory({ projectId: id, field: "ready_proyecto", newValue: `${body.readyItems.length} ítems`, actor: user });
     }
     if (body.description !== undefined && body.description !== current.description) {
       await logHistory({ projectId: id, field: "descripcion_proyecto", newValue: "editada", actor: user });

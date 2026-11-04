@@ -375,6 +375,7 @@ export default function BacklogView({
                   {!isCollapsed && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
                       <IssueList
+                        readyItems={options.readyItems}
                         container={s.id}
                         ids={ids}
                         byId={byId}
@@ -407,6 +408,7 @@ export default function BacklogView({
               {!collapsed.has(BACKLOG) && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
                   <IssueList
+                        readyItems={options.readyItems}
                     container={BACKLOG}
                     ids={(lists[BACKLOG] ?? []).filter((id) => byId[id] && matches(byId[id]))}
                     byId={byId}
@@ -496,6 +498,12 @@ export default function BacklogView({
           sprint={startFor}
           issueCount={summary[startFor.id]?.count ?? 0}
           points={summary[startFor.id]?.points ?? 0}
+          isLead={isLead}
+          notReady={(lists[startFor.id] ?? [])
+            .map((id) => byId[id])
+            .filter(Boolean)
+            .map((i) => ({ key: i.key, title: i.title, missing: options.readyItems.filter((r) => !i.readyDone.includes(r)) }))
+            .filter((i) => i.missing.length > 0)}
         />
       )}
       {completeFor && (
@@ -545,8 +553,10 @@ function IssueList({
   onStatusChange,
   onOpen,
   emptyText,
+  readyItems,
 }: {
   container: string;
+  readyItems: string[];
   ids: string[];
   byId: Record<string, IssueCardData>;
   disabled: boolean;
@@ -569,6 +579,7 @@ function IssueList({
             onToggleSelect={onToggleSelect}
             onStatusChange={(s) => onStatusChange(byId[id], s)}
             onOpen={() => onOpen(byId[id])}
+            readyItems={readyItems}
           />
         ))}
       </SortableContext>
@@ -584,7 +595,9 @@ function SortableRow({
   onToggleSelect,
   onStatusChange,
   onOpen,
+  readyItems,
 }: {
+  readyItems: string[];
   issue: IssueCardData;
   disabled: boolean;
   selected: boolean;
@@ -601,6 +614,7 @@ function SortableRow({
         onToggleSelect={onToggleSelect}
         onStatusChange={onStatusChange}
         onOpen={onOpen}
+        readyItems={readyItems}
         handleProps={disabled ? undefined : { ...attributes, ...listeners }}
       />
     </div>

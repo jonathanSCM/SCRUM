@@ -41,6 +41,7 @@ type IssueDetail = {
   priority: Priority;
   storyPoints: number | null;
   labels: string[];
+  readyDone: string[];
   dueDate: string | null;
   createdAt: string;
   updatedAt: string;
@@ -64,7 +65,7 @@ type Payload = {
   attachments: Attachment[];
   history: HistoryRow[];
   children: Child[];
-  options: { members: UserRef[]; sprints: SprintOption[]; epics: EpicOption[] };
+  options: { members: UserRef[]; sprints: SprintOption[]; epics: EpicOption[]; readyItems: string[] };
 };
 
 // Panel lateral de un ticket (estilo Jira). Se abre con ?issue=PRO-12 desde
@@ -258,6 +259,10 @@ function DrawerBody({
                 </ul>
               )}
             </section>
+          )}
+
+          {!isEpic && data.options.readyItems.length > 0 && (
+            <ReadyChecklist items={data.options.readyItems} done={issue.readyDone} onChange={(readyDone) => patch({ readyDone })} />
           )}
 
           <Attachments issueId={issue.id} items={data.attachments} onChange={load} />
@@ -551,6 +556,34 @@ function DescriptionEditor({ value, onSave }: { value: string; onSave: (v: strin
           {value || <span className="text-ink-faint">Agregá una descripción…</span>}
         </div>
       )}
+    </section>
+  );
+}
+
+// Definition of Ready: qué falta para poder empezar este ticket.
+function ReadyChecklist({ items, done, onChange }: { items: string[]; done: string[]; onChange: (done: string[]) => void }) {
+  const covered = items.filter((i) => done.includes(i)).length;
+  const ready = covered === items.length;
+  function toggle(item: string) {
+    // Se conservan los ítems que ya no están en la definición para no perder el dato.
+    onChange(done.includes(item) ? done.filter((d) => d !== item) : [...done, item]);
+  }
+  return (
+    <section>
+      <h3 className="mb-2 flex items-center gap-2 font-display text-sm font-bold text-ink">
+        Definition of Ready <span className="font-mono text-ink-faint">({covered}/{items.length})</span>
+        <span className={`lozenge ${ready ? "text-moss" : "text-warn"}`}>{ready ? "Listo para empezar" : "Falta información"}</span>
+      </h3>
+      <ul className="space-y-1.5">
+        {items.map((item) => (
+          <li key={item}>
+            <label className="flex cursor-pointer items-center gap-2 border-2 border-line-strong px-2.5 py-1.5 text-sm text-ink hover:border-moss">
+              <input type="checkbox" className="h-4 w-4 accent-moss" checked={done.includes(item)} onChange={() => toggle(item)} />
+              <span className="min-w-0 flex-1 break-words">{item}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

@@ -79,6 +79,7 @@ export const updateProjectSchema = z.object({
   description: z.string().max(5000).optional(),
   deployUrl: z.string().trim().max(500).nullable().optional(),
   stack: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+  readyItems: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
 });
 
 export const discordWebhookSchema = z.object({
@@ -111,6 +112,7 @@ export const createIssueSchema = z.object({
   priority: priority.optional(),
   storyPoints: storyPoints.optional(),
   labels: labels.optional(),
+  readyDone: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
   assigneeUserId: z.string().min(1).nullable().optional(),
   sprintId: z.string().min(1).nullable().optional(),
   epicId: z.string().min(1).nullable().optional(),
@@ -126,6 +128,7 @@ export const updateIssueSchema = z.object({
   priority: priority.optional(),
   storyPoints: storyPoints.optional(),
   labels: labels.optional(),
+  readyDone: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
   assigneeUserId: z.string().min(1).nullable().optional(),
   sprintId: z.string().min(1).nullable().optional(),
   epicId: z.string().min(1).nullable().optional(),
@@ -169,6 +172,8 @@ export const startSprintSchema = z.object({
   goal: z.string().trim().max(500).optional(),
   startDate: optionalDate,
   endDate: optionalDate,
+  // Un líder puede iniciar aunque falte información (Definition of Ready).
+  force: z.boolean().optional(),
 });
 
 export const completeSprintSchema = z.object({

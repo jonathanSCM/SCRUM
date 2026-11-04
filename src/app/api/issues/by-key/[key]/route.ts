@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { findIssueByKey } from "@/lib/issues";
+import { parseStringList } from "@/lib/scrum/ready";
 import { parseLabels } from "@/lib/scrum/labels";
 
 // Todo lo que necesita el panel lateral de un ticket en una sola llamada: el
@@ -18,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
     if (!issue) return notFound("Ticket no encontrado");
 
     const [project, comments, attachments, history, members, sprints, epics] = await Promise.all([
-      prisma.project.findUnique({ where: { id: issue.projectId }, select: { id: true, key: true, name: true } }),
+      prisma.project.findUnique({ where: { id: issue.projectId }, select: { id: true, key: true, name: true, readyItems: true } }),
       prisma.comment.findMany({
         where: { taskId: issue.id },
         orderBy: { createdAt: "asc" },
@@ -54,12 +55,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
 
     return NextResponse.json({
       children,
-      issue: { ...issue, labels: parseLabels(issue.labels) },
+      issue: { ...issue, labels: parseLabels(issue.labels), readyDone: parseStringList(issue.readyDone) },
       project,
       comments,
       attachments,
       history,
-      options: { members, sprints, epics },
+      options: { members, sprints, epics, readyItems: parseStringList(project?.readyItems) },
     });
   } catch (e) {
     return errorResponse(e);

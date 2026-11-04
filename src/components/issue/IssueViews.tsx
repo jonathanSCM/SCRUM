@@ -60,6 +60,7 @@ export function IssueRowView({
   dragging,
   handleProps,
   style,
+  readyItems,
 }: {
   issue: IssueCardData;
   selected?: boolean;
@@ -69,8 +70,10 @@ export function IssueRowView({
   dragging?: boolean;
   handleProps?: Record<string, unknown>;
   style?: CSSProperties;
+  readyItems?: string[];
 }) {
   const done = issue.status === "DONE";
+  const readyMissing = readyItems && !done ? readyItems.filter((i) => !issue.readyDone.includes(i)).length : 0;
   return (
     <div
       style={style}
@@ -100,6 +103,11 @@ export function IssueRowView({
       <span className="w-[4.2rem] shrink-0 font-mono text-xs text-ink-faint">{issue.key}</span>
       <span className={cn("min-w-0 flex-1 truncate text-sm font-medium", done ? "text-ink-faint line-through" : "text-ink")}>{issue.title}</span>
 
+      {readyMissing > 0 && (
+        <span className="hidden shrink-0 text-xs font-semibold text-warn sm:inline" title="Faltan ítems de la Definition of Ready">
+          Falta info ({readyMissing})
+        </span>
+      )}
       <span className="hidden items-center gap-1.5 lg:flex">
         <LabelChips labels={issue.labels} />
       </span>

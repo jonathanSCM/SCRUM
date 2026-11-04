@@ -19,6 +19,7 @@ type Props = {
     stack: string[];
     statusId: string;
     leadUserId: string;
+    readyItems: string[];
     webhookConfigured: boolean;
     webhookHint: string | null;
   };
@@ -36,6 +37,27 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
   const [statusId, setStatusId] = useState(project.statusId);
   const [leadUserId, setLeadUserId] = useState(project.leadUserId);
   const [saving, setSaving] = useState(false);
+
+  const [readyItems, setReadyItems] = useState<string[]>(project.readyItems);
+  const [newReady, setNewReady] = useState("");
+  const [savingReady, setSavingReady] = useState(false);
+
+  async function saveReady(items: string[]) {
+    setSavingReady(true);
+    const res = await api(`/api/projects/${project.id}`, "PATCH", { readyItems: items });
+    setSavingReady(false);
+    if (!res.ok) return toast.error(res.error);
+    setReadyItems(items);
+    toast.success("Definition of Ready guardada");
+    router.refresh();
+  }
+
+  function addReady() {
+    const text = newReady.trim();
+    if (!text || readyItems.includes(text)) return;
+    setNewReady("");
+    saveReady([...readyItems, text]);
+  }
 
   const [webhook, setWebhook] = useState("");
   const [configured, setConfigured] = useState(project.webhookConfigured);
@@ -140,6 +162,47 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
           <button className="btn-primary" disabled={saving || !name.trim()}>{saving ? "Guardando…" : "Guardar cambios"}</button>
         </div>
       </form>
+
+      <section className="space-y-3 border-2 border-ink bg-card p-5">
+        <h2 className="font-display text-lg font-extrabold text-ink">Definition of Ready</h2>
+        <p className="text-sm text-ink-soft">
+          Lo que necesitamos tener antes de empezar a trabajar un ticket (por ejemplo: estructura de datos del cliente, accesos, brief, diseño).
+          Cada ticket tiene este checklist y no se puede iniciar un sprint con tickets incompletos, salvo que un líder lo fuerce.
+        </p>
+        {readyItems.length === 0 && <p className="text-xs text-ink-faint">Todavía no hay ítems: sin ellos, el sprint se puede iniciar sin revisar nada.</p>}
+        <ul className="space-y-1.5">
+          {readyItems.map((item) => (
+            <li key={item} className="flex items-center gap-2 border-2 border-line-strong px-2.5 py-1.5 text-sm text-ink">
+              <span className="min-w-0 flex-1 break-words">{item}</span>
+              {isLead && (
+                <button className="btn-ghost btn-sm text-danger" disabled={savingReady} onClick={() => saveReady(readyItems.filter((i) => i !== item))} aria-label={`Quitar ${item}`}>
+                  Quitar
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+        {isLead ? (
+          <div className="flex gap-2">
+            <input
+              className="field min-w-0 flex-1"
+              placeholder="Ej: Estructura de datos que pasa el cliente"
+              value={newReady}
+              maxLength={200}
+              onChange={(e) => setNewReady(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addReady();
+                }
+              }}
+            />
+            <button className="btn-primary" disabled={savingReady || !newReady.trim()} onClick={addReady}>Añadir</button>
+          </div>
+        ) : (
+          <p className="text-xs text-ink-faint">Solo un líder puede cambiar la Definition of Ready.</p>
+        )}
+      </section>
 
       <section className="space-y-3 border-2 border-ink bg-card p-5">
         <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Discord</h2>

@@ -82,7 +82,7 @@ Pestaña **Ceremonias** por proyecto, ligada al sprint:
 ## 6. Estado
 
 - [x] Fase 1: sprint activo protegido (solo LEAD saca tickets), exportar a Excel y "Mis tareas". Los tickets ya nacen en el backlog salvo que se cree desde el tablero (sprint activo) o desde un sprint.
-- [ ] Fase 2: Definition of Ready + Planning
+- [x] Fase 2: Definition of Ready (lista por proyecto en Ajustes, checklist en cada ticket, aviso "Falta info" en el backlog, el sprint no inicia con tickets incompletos salvo que un LEAD lo fuerce). La pestaña Planning aparte queda pendiente: el Backlog ya cumple ese papel.
 - [ ] Notificaciones por Telegram
 - [ ] Fases 3–5
 

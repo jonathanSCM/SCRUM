@@ -19,6 +19,7 @@ export type IssueCardData = {
   priority: Priority;
   storyPoints: number | null;
   labels: string[];
+  readyDone: string[];
   rank: number;
   dueDate: string | null;
   createdAt: string;
@@ -50,4 +51,6 @@ export type ProjectOptions = {
   members: UserRef[];
   epics: EpicRef[];
   sprints: Array<{ id: string; name: string; state: SprintState }>;
+  // Definition of Ready del proyecto
+  readyItems: string[];
 };

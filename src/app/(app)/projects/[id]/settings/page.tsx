@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
 import { getProjectOrNotFound } from "@/lib/projectData";
+import { parseStringList } from "@/lib/scrum/ready";
 import SettingsForm from "./SettingsForm";
 
 export default async function ProjectSettingsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,6 +33,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
         stack,
         statusId: project.statusId,
         leadUserId: project.leadUserId ?? "",
+        readyItems: parseStringList(project.readyItems),
         webhookConfigured: !!project.discordWebhookUrl,
         webhookHint: project.discordWebhookUrl ? project.discordWebhookUrl.slice(-6) : null,
       }}

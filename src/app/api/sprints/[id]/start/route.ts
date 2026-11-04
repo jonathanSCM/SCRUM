@@ -5,6 +5,8 @@ import { errorResponse, notFound } from "@/lib/api";
 import { parseBody, readJson, startSprintSchema } from "@/lib/validation";
 import { logHistory } from "@/lib/history";
 import { notifyDiscord, DISCORD_COLOR } from "@/lib/discord";
+import { parseStringList, ticketsNotReady } from "@/lib/scrum/ready";
+import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { snapshotOnStart, validateStart } from "@/lib/scrum/sprintLifecycle";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -16,7 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if ("error" in parsed) return parsed.error;
 
   try {
-    const sprint = await prisma.sprint.findUnique({ where: { id }, include: { project: { select: { id: true, name: true } } } });
+    const sprint = await prisma.sprint.findUnique({ where: { id }, include: { project: { select: { id: true, name: true, key: true, readyItems: true } } } });
     if (!sprint || !sprint.projectId || !sprint.project) return notFound("Sprint no encontrado");
 
     const name = parsed.data.name ?? sprint.name;
@@ -27,7 +29,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const problem = validateStart({ name, startDate, endDate, state: sprint.state, hasOtherActiveSprint: otherActive > 0 });
     if (problem) return NextResponse.json({ error: problem }, { status: 400 });
 
-    const tasks = await prisma.task.findMany({ where: { sprintId: id, issueType: { not: "EPIC" } }, select: { id: true, status: true, storyPoints: true } });
+    const tasks = await prisma.task.findMany({ where: { sprintId: id, issueType: { not: "EPIC" } }, select: { id: true, number: true, title: true, readyDone: true, status: true, storyPoints: true } });
+
+    // Definition of Ready: no se inicia con tickets a los que les falta información,
+    // salvo que un líder lo fuerce.
+    const notReady = ticketsNotReady(
+      parseStringList(sprint.project.readyItems),
+      tasks.map((t) => ({ key: formatIssueKey(sprint.project!.key, t.number), title: t.title, readyDone: parseStringList(t.readyDone) }))
+    );
+    if (notReady.length > 0) {
+      if (!parsed.data.force) {
+        return NextResponse.json(
+          { error: `${notReady.length} ${notReady.length === 1 ? "ticket no cumple" : "tickets no cumplen"} la Definition of Ready: ${notReady.slice(0, 5).map((t) => t.key).join(", ")}${notReady.length > 5 ? "…" : ""}`, notReady },
+          { status: 400 }
+        );
+      }
+      if (auth.user.role !== "LEAD") return NextResponse.json({ error: "Solo un líder puede iniciar un sprint sin cumplir la Definition of Ready" }, { status: 403 });
+    }
     const snapshot = snapshotOnStart(tasks);
     const now = new Date();
 
@@ -42,6 +60,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     ]);
 
     await logHistory({ projectId: sprint.projectId, field: "sprint_iniciado", newValue: name, actor: auth.user });
+    if (notReady.length > 0) await logHistory({ projectId: sprint.projectId, field: "sprint_iniciado_sin_ready", newValue: `${name}: ${notReady.length} tickets sin DoR`, actor: auth.user });
     await notifyDiscord(sprint.projectId, {
       title: `🚀 Sprint iniciado: ${name}`,
       description: `**${auth.user.name}** inició el sprint en ${sprint.project.name}.${started.goal ? `\n**Objetivo:** ${started.goal}` : ""}`,

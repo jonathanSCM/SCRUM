@@ -4,6 +4,7 @@ import { rankBetween, needsRebalance, rebalance, compareByRank, RANK_STEP } from
 import { computeBurndown } from "./burndown";
 import { computeVelocity } from "./velocity";
 import { validateStart, snapshotOnStart, planCompletion, durationToEnd, daysRemaining, validateLeaveActiveSprint } from "./sprintLifecycle";
+import { parseStringList, missingReadyItems, ticketsNotReady } from "./ready";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
 describe("issueKey", () => {
@@ -234,5 +235,26 @@ describe("validateLeaveActiveSprint", () => {
   it("no afecta a sprints planificados ni a cambios que no sacan el ticket", () => {
     expect(validateLeaveActiveSprint({ ...base, currentSprintState: "PLANNED", actorRole: "MEMBER" })).toBeNull();
     expect(validateLeaveActiveSprint({ ...base, nextSprintId: "s1", actorRole: "MEMBER" })).toBeNull();
+  });
+});
+
+describe("ready (Definition of Ready)", () => {
+  const template = ["Estructura de datos", "Accesos"];
+  it("parsea listas y tolera basura", () => {
+    expect(parseStringList('["a","b"]')).toEqual(["a", "b"]);
+    expect(parseStringList("nope")).toEqual([]);
+    expect(parseStringList('[1,"x",""]')).toEqual(["x"]);
+  });
+  it("calcula lo que falta", () => {
+    expect(missingReadyItems(template, ["Accesos"])).toEqual(["Estructura de datos"]);
+    expect(missingReadyItems(template, ["Accesos", "Estructura de datos", "viejo"])).toEqual([]);
+  });
+  it("lista los tickets incompletos y no bloquea si no hay definición", () => {
+    const tasks = [
+      { key: "A-1", title: "uno", readyDone: ["Accesos", "Estructura de datos"] },
+      { key: "A-2", title: "dos", readyDone: [] },
+    ];
+    expect(ticketsNotReady(template, tasks)).toEqual([{ key: "A-2", title: "dos", missing: template }]);
+    expect(ticketsNotReady([], tasks)).toEqual([]);
   });
 });

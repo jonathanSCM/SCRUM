@@ -4,6 +4,7 @@ import { logHistory } from "@/lib/history";
 import { notifyDiscord, resolveDiscordMention, DISCORD_COLOR } from "@/lib/discord";
 import { getBaseUrl } from "@/lib/baseUrl";
 import { formatIssueKey, parseIssueKey } from "@/lib/scrum/issueKey";
+import { parseStringList } from "@/lib/scrum/ready";
 import { parseLabels } from "@/lib/scrum/labels";
 import { validateLeaveActiveSprint } from "@/lib/scrum/sprintLifecycle";
 import { needsRebalance, rankBetween, rebalance, RANK_STEP } from "@/lib/scrum/rank";
@@ -39,6 +40,7 @@ export type IssuePatch = {
   priority?: Priority;
   storyPoints?: number | null;
   labels?: string[];
+  readyDone?: string[];
   assigneeUserId?: string | null;
   sprintId?: string | null;
   epicId?: string | null;
@@ -116,6 +118,7 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
         priority: input.priority ?? "MEDIA",
         storyPoints: input.storyPoints ?? null,
         labels: JSON.stringify(input.labels ?? []),
+        readyDone: JSON.stringify(input.readyDone ?? []),
         rank: (top._max.rank ?? 0) + RANK_STEP,
         epicColor: issueType === "EPIC" ? input.epicColor ?? EPIC_COLORS[epicCount % EPIC_COLORS.length] : null,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
@@ -265,6 +268,13 @@ export async function updateIssue(
     if (before !== after) {
       data.labels = JSON.stringify(patch.labels);
       track("etiquetas_ticket", before || null, after || null);
+    }
+  }
+  if (patch.readyDone !== undefined) {
+    const before = parseStringList(current.readyDone).join("|");
+    if (before !== patch.readyDone.join("|")) {
+      data.readyDone = JSON.stringify(patch.readyDone);
+      track("listo_ticket", `${parseStringList(current.readyDone).length}`, `${patch.readyDone.length}`);
     }
   }
   if (patch.dueDate !== undefined) {
