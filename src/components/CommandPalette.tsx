@@ -149,8 +149,8 @@ export default function CommandPalette() {
           >
             <motion.div
               className="w-full max-w-xl border border-line bg-card rounded-lg"
-              initial={{ y: -16, scale: 0.97, boxShadow: "0 0 0 var(--moss)" }}
-              animate={{ y: 0, scale: 1, boxShadow: "8px 8px 0 var(--moss)" }}
+              initial={{ y: -16, scale: 0.97, boxShadow: "0 0 0 rgba(27, 23, 48, 0)" }}
+              animate={{ y: 0, scale: 1, boxShadow: "0 12px 32px rgba(27, 23, 48, 0.16)" }}
               exit={{ y: -8, opacity: 0, transition: { duration: 0.1 } }}
               transition={{ type: "spring", stiffness: 460, damping: 32 }}
               onClick={(e) => e.stopPropagation()}

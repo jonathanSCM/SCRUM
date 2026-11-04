@@ -108,6 +108,7 @@ body {
   }
 }
 
+@layer components {
 /* ---- Shared component classes ---- */
 
 .font-display {
@@ -280,4 +281,5 @@ body {
 /* barras de progreso "en proceso": plano, sin rayas */
 .stripes {
   opacity: 0.85;
+}
 }

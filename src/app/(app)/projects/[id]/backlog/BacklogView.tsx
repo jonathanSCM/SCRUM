@@ -418,7 +418,7 @@ export default function BacklogView({
                 <ChevronIcon open={!collapsed.has(BACKLOG)} size={16} />
               </button>
               <h2 className="font-display text-base font-extrabold text-ink">Backlog</h2>
-              <span className="text-xs text-ink-faint">{summary[BACKLOG]?.count ?? 0} tickets</span>
+              <span className="text-xs text-ink-faint">{summary[BACKLOG]?.count ?? 0} {(summary[BACKLOG]?.count ?? 0) === 1 ? "ticket" : "tickets"}</span>
               <span className="ml-auto"><SummaryChips info={summary[BACKLOG]} /></span>
             </header>
             <AnimatePresence initial={false}>

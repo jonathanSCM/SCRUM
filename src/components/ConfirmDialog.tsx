@@ -56,8 +56,8 @@ export default function ConfirmDialogProvider({ children }: { children: React.Re
               role="alertdialog"
               aria-modal="true"
               className="w-full max-w-sm border border-line bg-card p-5 rounded-lg"
-              initial={{ scale: 0.94, y: 12, boxShadow: "0 0 0 var(--danger)" }}
-              animate={{ scale: 1, y: 0, boxShadow: `7px 7px 0 ${state.options.danger === false ? "var(--moss)" : "var(--danger)"}` }}
+              initial={{ scale: 0.94, y: 12, boxShadow: "0 0 0 rgba(27, 23, 48, 0)" }}
+              animate={{ scale: 1, y: 0, boxShadow: "0 12px 32px rgba(27, 23, 48, 0.16)" }}
               exit={{ scale: 0.97, opacity: 0, transition: { duration: 0.1 } }}
               transition={{ type: "spring", stiffness: 480, damping: 30 }}
               onClick={(e) => e.stopPropagation()}

@@ -305,7 +305,7 @@ function Burst({ show }: { show: boolean }) {
             initial={{ scale: 0.4, rotate: -6, opacity: 0 }}
             animate={{ scale: 1, rotate: -3, opacity: 1 }}
             transition={{ type: "spring", stiffness: 400, damping: 14 }}
-            style={{ boxShadow: "6px 6px 0 var(--rust)" }}
+            style={{ boxShadow: "0 12px 32px rgba(27, 23, 48, 0.16)" }}
           >
             ¡Sprint cerrado!
           </motion.p>

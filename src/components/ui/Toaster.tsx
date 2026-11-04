@@ -65,7 +65,7 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
               exit={{ opacity: 0, x: 40, transition: { duration: 0.15 } }}
               transition={{ type: "spring", stiffness: 520, damping: 34 }}
               className="pointer-events-auto flex items-start gap-3 border border-line bg-card p-3 text-sm rounded-lg"
-              style={{ boxShadow: `5px 5px 0 ${TONE_STYLE[t.tone].shadow}` }}
+              style={{ boxShadow: "0 12px 32px rgba(27, 23, 48, 0.16)" }}
               role={t.tone === "error" ? "alert" : "status"}
             >
               <span className="mt-0.5 shrink-0" style={{ color: TONE_STYLE[t.tone].color }}>

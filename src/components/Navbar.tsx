@@ -80,8 +80,8 @@ export default function Navbar({ userName, isLead }: { userName: string; isLead:
                   <motion.div
                     role="menu"
                     className="absolute right-0 top-full z-50 mt-3 w-52 border border-line bg-card rounded-lg"
-                    initial={{ opacity: 0, y: -6, boxShadow: "0 0 0 var(--moss)" }}
-                    animate={{ opacity: 1, y: 0, boxShadow: "5px 5px 0 var(--moss)" }}
+                    initial={{ opacity: 0, y: -6, boxShadow: "0 0 0 rgba(27, 23, 48, 0)" }}
+                    animate={{ opacity: 1, y: 0, boxShadow: "0 12px 32px rgba(27, 23, 48, 0.16)" }}
                     exit={{ opacity: 0, y: -6, transition: { duration: 0.1 } }}
                     transition={{ type: "spring", stiffness: 500, damping: 32 }}
                   >

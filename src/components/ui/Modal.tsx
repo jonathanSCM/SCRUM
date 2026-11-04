@@ -55,8 +55,8 @@ export default function Modal({
             aria-modal="true"
             aria-label={title}
             className={`w-full ${width} border border-line bg-card`}
-            initial={{ opacity: 0, y: 24, scale: 0.96, boxShadow: "0px 0px 0 var(--moss)" }}
-            animate={{ opacity: 1, y: 0, scale: 1, boxShadow: "8px 8px 0 var(--moss)" }}
+            initial={{ opacity: 0, y: 24, scale: 0.96, boxShadow: "0 0 0 rgba(27, 23, 48, 0)" }}
+            animate={{ opacity: 1, y: 0, scale: 1, boxShadow: "0 12px 32px rgba(27, 23, 48, 0.16)" }}
             exit={{ opacity: 0, y: 12, scale: 0.98, transition: { duration: 0.12 } }}
             transition={{ type: "spring", stiffness: 420, damping: 30 }}
           >
