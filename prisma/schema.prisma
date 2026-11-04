@@ -158,6 +158,7 @@ model Task {
   priority    String  @default("MEDIA") // URGENTE | ALTA | MEDIA | BAJA
   storyPoints Int?
   labels      String  @default("[]")
+  checklist   String  @default("[]") // [{ id, text, done }] dentro de la tarjeta
   readyDone   String  @default("[]") // ítems de la Definition of Ready ya cubiertos
   rank        Float   @default(0)
   epicColor   String?
@@ -181,6 +182,11 @@ model Task {
   epicId   String?
   epic     Task?   @relation("EpicChildren", fields: [epicId], references: [id], onDelete: SetNull)
   children Task[]  @relation("EpicChildren")
+
+  // Historia > tarea/bug (la épica sigue en epicId).
+  parentId String?
+  parent   Task?   @relation("StoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  subtasks Task[]  @relation("StoryChildren")
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

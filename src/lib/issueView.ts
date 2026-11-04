@@ -3,6 +3,7 @@ import type { IssueWithRefs } from "@/lib/issues";
 import type { Sprint } from "@prisma/client";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { parseStringList } from "@/lib/scrum/ready";
+import { checklistProgress, parseChecklist } from "@/lib/scrum/checklist";
 import { parseLabels } from "@/lib/scrum/labels";
 import type { IssueStatus, IssueType, Priority, SprintState } from "@/lib/scrum/constants";
 import type { IssueCardData, SprintData } from "@/lib/types";
@@ -26,6 +27,8 @@ export function toIssueCard(task: IssueWithRefs, projectKey: string | null): Iss
     storyPoints: task.storyPoints,
     labels: parseLabels(task.labels),
     readyDone: parseStringList(task.readyDone),
+    checklist: checklistProgress(parseChecklist(task.checklist)),
+    parent: task.parent ? { id: task.parent.id, key: formatIssueKey(projectKey, task.parent.number), title: task.parent.title } : null,
     rank: task.rank,
     dueDate: iso(task.dueDate),
     createdAt: task.createdAt.toISOString(),

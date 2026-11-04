@@ -12,6 +12,7 @@ import { parseInsights, buildPrompt } from "../gemini";
 import { renderSprintPdf } from "../sprintPdf";
 import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTicket, type SprintReportData } from "./sprintReport";
 import { isValidDateString, shiftDate, missingStandups, summarizeReview, localDateString } from "./ceremonies";
+import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from "./checklist";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
 describe("issueKey", () => {
@@ -370,5 +371,24 @@ describe("ceremonias", () => {
     ]);
     expect(r).toMatchObject({ committed: 3, completed: 2, committedPoints: 8, completedPoints: 3 });
     expect(r.notDone).toEqual([{ key: "P-2", title: "b", status: "IN_PROGRESS" }]);
+  });
+});
+
+describe("checklist y jerarquía", () => {
+  it("parsea el checklist y calcula el progreso", () => {
+    const items = parseChecklist('[{"id":"a","text":"x","done":true},{"id":"b","text":"y","done":false},{"bad":1}]');
+    expect(items).toHaveLength(2);
+    expect(checklistProgress(items)).toEqual({ done: 1, total: 2 });
+    expect(parseChecklist("nope")).toEqual([]);
+  });
+  it("solo tareas y bugs cuelgan de una historia", () => {
+    expect(canHaveParent("TASK")).toBe(true);
+    expect(canHaveParent("BUG")).toBe(true);
+    expect(canHaveParent("STORY")).toBe(false);
+    expect(canHaveParent("EPIC")).toBe(false);
+  });
+  it("progreso de una historia", () => {
+    expect(storyProgress([{ status: "DONE" }, { status: "TODO" }, { status: "DONE" }, { status: "DONE" }])).toEqual({ done: 3, total: 4, pct: 75 });
+    expect(storyProgress([])).toEqual({ done: 0, total: 0, pct: 0 });
   });
 });

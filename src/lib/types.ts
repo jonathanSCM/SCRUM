@@ -20,6 +20,8 @@ export type IssueCardData = {
   storyPoints: number | null;
   labels: string[];
   readyDone: string[];
+  checklist: { done: number; total: number };
+  parent: { id: string; key: string; title: string } | null;
   rank: number;
   dueDate: string | null;
   createdAt: string;

@@ -6,6 +6,7 @@ import { notifyProject } from "@/lib/notify";
 import { getBaseUrl } from "@/lib/baseUrl";
 import { formatIssueKey, parseIssueKey } from "@/lib/scrum/issueKey";
 import { parseStringList } from "@/lib/scrum/ready";
+import { canHaveParent, parseChecklist, type ChecklistItem } from "@/lib/scrum/checklist";
 import { parseLabels } from "@/lib/scrum/labels";
 import { validateLeaveActiveSprint } from "@/lib/scrum/sprintLifecycle";
 import { needsRebalance, rankBetween, rebalance, RANK_STEP } from "@/lib/scrum/rank";
@@ -26,6 +27,7 @@ export const issueInclude = {
   assignee: { select: { id: true, name: true } },
   reporter: { select: { id: true, name: true } },
   epic: { select: { id: true, number: true, title: true, epicColor: true } },
+  parent: { select: { id: true, number: true, title: true } },
   _count: { select: { comments: true, attachments: true } },
 } satisfies Prisma.TaskInclude;
 
@@ -42,6 +44,8 @@ export type IssuePatch = {
   storyPoints?: number | null;
   labels?: string[];
   readyDone?: string[];
+  checklist?: ChecklistItem[];
+  parentId?: string | null;
   assigneeUserId?: string | null;
   sprintId?: string | null;
   epicId?: string | null;
@@ -62,7 +66,7 @@ const EPIC_COLORS = ["#8b5cf6", "#14b88a", "#3b82f6", "#f59e0b", "#ef4444", "#a7
 
 async function validateRefs(
   projectId: string,
-  refs: { sprintId?: string | null; epicId?: string | null; assigneeUserId?: string | null; issueType?: IssueType },
+  refs: { sprintId?: string | null; epicId?: string | null; parentId?: string | null; assigneeUserId?: string | null; issueType?: IssueType },
   selfId?: string
 ) {
   if (refs.sprintId) {
@@ -76,6 +80,12 @@ async function validateRefs(
     if (refs.epicId === selfId) throw new IssueError("Un ticket no puede ser su propia épica");
     const epic = await prisma.task.findUnique({ where: { id: refs.epicId }, select: { projectId: true, issueType: true } });
     if (!epic || epic.projectId !== projectId || epic.issueType !== "EPIC") throw new IssueError("Esa épica no existe en el proyecto");
+  }
+  if (refs.parentId) {
+    if (!refs.issueType || !canHaveParent(refs.issueType)) throw new IssueError("Solo las tareas y los bugs pueden colgar de una historia");
+    if (refs.parentId === selfId) throw new IssueError("Un ticket no puede ser su propia historia");
+    const parent = await prisma.task.findUnique({ where: { id: refs.parentId }, select: { projectId: true, issueType: true } });
+    if (!parent || parent.projectId !== projectId || parent.issueType !== "STORY") throw new IssueError("Esa historia no existe en el proyecto");
   }
   if (refs.assigneeUserId) {
     const user = await prisma.user.findUnique({ where: { id: refs.assigneeUserId }, select: { id: true } });
@@ -98,7 +108,8 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
   const issueType = input.issueType ?? "TASK";
   const sprintId = issueType === "EPIC" ? null : input.sprintId ?? null;
   const epicId = issueType === "EPIC" ? null : input.epicId ?? null;
-  await validateRefs(projectId, { sprintId, epicId, assigneeUserId: input.assigneeUserId, issueType });
+  const parentId = canHaveParent(issueType) ? input.parentId ?? null : null;
+  await validateRefs(projectId, { sprintId, epicId, parentId, assigneeUserId: input.assigneeUserId, issueType });
 
   const status = issueType === "EPIC" ? "TODO" : input.status ?? "TODO";
   const now = new Date();
@@ -126,6 +137,8 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
         assigneeUserId: input.assigneeUserId ?? null,
         reporterId: actor.id,
         epicId,
+        parentId,
+        checklist: JSON.stringify(input.checklist ?? []),
         sprintId,
         sprintAddedAt: sprintId ? now : null,
         completedAt: status === "DONE" ? now : null,
@@ -233,6 +246,30 @@ export async function updateIssue(
   }
   if (patch.epicColor !== undefined && issueType === "EPIC") data.epicColor = patch.epicColor;
 
+  // Historia padre: solo tareas y bugs; si el ticket cambia a otro tipo, se suelta.
+  if (!canHaveParent(issueType)) {
+    if (patch.parentId) throw new IssueError("Solo las tareas y los bugs pueden colgar de una historia");
+    if (current.parentId) data.parentId = null;
+  } else if (patch.parentId !== undefined && patch.parentId !== current.parentId) {
+    await validateRefs(project.id, { parentId: patch.parentId, issueType }, current.id);
+    data.parentId = patch.parentId;
+    const target = patch.parentId ? await prisma.task.findUnique({ where: { id: patch.parentId }, select: { number: true, title: true } }) : null;
+    const before = current.parentId ? await prisma.task.findUnique({ where: { id: current.parentId }, select: { number: true, title: true } }) : null;
+    track(
+      "historia_ticket",
+      before ? `${formatIssueKey(project.key, before.number)} ${before.title}` : null,
+      target ? `${formatIssueKey(project.key, target.number)} ${target.title}` : null
+    );
+  }
+  if (patch.checklist !== undefined) {
+    const before = parseChecklist(current.checklist);
+    const same = JSON.stringify(before) === JSON.stringify(patch.checklist);
+    if (!same) {
+      data.checklist = JSON.stringify(patch.checklist);
+      if (patch.checklist.length !== before.length) track("checklist_ticket", `${before.length}`, `${patch.checklist.length}`);
+    }
+  }
+
   let assigneeChanged = false;
   let newAssignee: { id: string; name: string } | null = current.assignee;
   if (patch.assigneeUserId !== undefined && patch.assigneeUserId !== current.assigneeUserId) {
@@ -291,6 +328,8 @@ export async function updateIssue(
   if (Object.keys(data).length === 0) return current;
 
   const updated = await prisma.$transaction(async (tx) => {
+    // Si una historia deja de serlo, sus tareas quedan sueltas.
+    if (current.issueType === "STORY" && issueType !== "STORY") await tx.task.updateMany({ where: { parentId: current.id }, data: { parentId: null } });
     // Si una épica pasa a ser otro tipo, sus hijos quedan sin épica.
     if (wasEpic && issueType !== "EPIC") await tx.task.updateMany({ where: { epicId: current.id }, data: { epicId: null } });
     return tx.task.update({ where: { id: issueId }, data, include: issueInclude });

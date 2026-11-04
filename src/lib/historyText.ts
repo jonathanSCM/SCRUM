@@ -12,6 +12,8 @@ export const HISTORY_LABEL: Record<string, string> = {
   encargado_ticket: "Encargado",
   sprint_ticket: "Sprint",
   epica_ticket: "Épica",
+  historia_ticket: "Historia",
+  checklist_ticket: "Checklist (ítems)",
   etiquetas_ticket: "Etiquetas",
   fecha_limite_ticket: "Fecha límite",
   comentario: "Comentario",

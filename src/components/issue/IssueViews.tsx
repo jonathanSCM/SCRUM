@@ -103,6 +103,16 @@ export function IssueRowView({
       <span className="w-[4.2rem] shrink-0 font-mono text-xs text-ink-faint">{issue.key}</span>
       <span className={cn("min-w-0 flex-1 truncate text-sm font-medium", done ? "text-ink-faint line-through" : "text-ink")}>{issue.title}</span>
 
+      {issue.parent && (
+        <span className="hidden max-w-[8rem] shrink-0 truncate font-mono text-[11px] text-ink-faint md:inline" title={`Historia ${issue.parent.key}: ${issue.parent.title}`}>
+          {issue.parent.key}
+        </span>
+      )}
+      {issue.checklist.total > 0 && (
+        <span className="hidden shrink-0 font-mono text-[11px] text-ink-faint sm:inline" title="Checklist">
+          {issue.checklist.done}/{issue.checklist.total}
+        </span>
+      )}
       {readyMissing > 0 && (
         <span className="hidden shrink-0 text-xs font-semibold text-warn sm:inline" title="Faltan ítems de la Definition of Ready">
           Falta info ({readyMissing})

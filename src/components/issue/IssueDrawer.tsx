@@ -42,6 +42,8 @@ type IssueDetail = {
   storyPoints: number | null;
   labels: string[];
   readyDone: string[];
+  checklist: Array<{ id: string; text: string; done: boolean }>;
+  parentId: string | null;
   dueDate: string | null;
   createdAt: string;
   updatedAt: string;
@@ -65,7 +67,7 @@ type Payload = {
   attachments: Attachment[];
   history: HistoryRow[];
   children: Child[];
-  options: { members: UserRef[]; sprints: SprintOption[]; epics: EpicOption[]; readyItems: string[] };
+  options: { members: UserRef[]; sprints: SprintOption[]; epics: EpicOption[]; stories: Array<{ id: string; number: number | null; title: string }>; readyItems: string[] };
 };
 
 // Panel lateral de un ticket (estilo Jira). Se abre con ?issue=PRO-12 desde
@@ -215,6 +217,8 @@ function DrawerBody({
   }
 
   const isEpic = issue.issueType === "EPIC";
+  const isStory = issue.issueType === "STORY";
+  const canHaveParent = issue.issueType === "TASK" || issue.issueType === "BUG";
   const done = data.children.filter((c) => c.status === "DONE").length;
 
   return (
@@ -234,13 +238,13 @@ function DrawerBody({
 
           <DescriptionEditor value={issue.description} onSave={(description) => patch({ description })} />
 
-          {isEpic && (
+          {(isEpic || isStory) && (
             <section>
               <h3 className="mb-2 font-display text-sm font-bold text-ink">
-                Tickets de la épica <span className="font-mono text-ink-faint">({done}/{data.children.length})</span>
+                {isEpic ? "Tickets de la épica" : "Tareas de la historia"} <span className="font-mono text-ink-faint">({done}/{data.children.length})</span>
               </h3>
               {data.children.length === 0 ? (
-                <p className="text-sm text-ink-faint">Todavía no hay tickets en esta épica. Elegí la épica desde cualquier ticket.</p>
+                <p className="text-sm text-ink-faint">{isEpic ? "Todavía no hay tickets en esta épica. Elegí la épica desde cualquier ticket." : "Todavía no hay tareas en esta historia. Elegí la historia desde una tarea o un bug."}</p>
               ) : (
                 <ul className="space-y-1.5">
                   {data.children.map((c) => (
@@ -264,6 +268,8 @@ function DrawerBody({
           {!isEpic && data.options.readyItems.length > 0 && (
             <ReadyChecklist items={data.options.readyItems} done={issue.readyDone} onChange={(readyDone) => patch({ readyDone })} />
           )}
+
+          {!isEpic && <Checklist items={issue.checklist} onChange={(checklist) => patch({ checklist })} />}
 
           <Attachments issueId={issue.id} items={data.attachments} onChange={load} />
 
@@ -379,6 +385,17 @@ function DrawerBody({
                 <option value="">Backlog</option>
                 {data.options.sprints.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}{s.state === "ACTIVE" ? " (activo)" : ""}</option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          {canHaveParent && (
+            <Field label="Historia">
+              <select className="field field-sm" value={issue.parentId ?? ""} onChange={(e) => patch({ parentId: e.target.value || null })}>
+                <option value="">Sin historia</option>
+                {data.options.stories.map((st) => (
+                  <option key={st.id} value={st.id}>{data.project?.key}-{st.number} {st.title}</option>
                 ))}
               </select>
             </Field>
@@ -584,6 +601,54 @@ function ReadyChecklist({ items, done, onChange }: { items: string[]; done: stri
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+// Checklist propio de la tarjeta (pasos chicos que no merecen un ticket).
+function Checklist({ items, onChange }: { items: Array<{ id: string; text: string; done: boolean }>; onChange: (items: Array<{ id: string; text: string; done: boolean }>) => void }) {
+  const [draft, setDraft] = useState("");
+  const done = items.filter((i) => i.done).length;
+
+  function add() {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    onChange([...items, { id: Math.random().toString(36).slice(2, 10), text, done: false }]);
+  }
+
+  return (
+    <section>
+      <h3 className="mb-2 font-display text-sm font-bold text-ink">
+        Checklist {items.length > 0 && <span className="font-mono text-ink-faint">({done}/{items.length})</span>}
+      </h3>
+      {items.length > 0 && (
+        <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-paper-deep" aria-hidden="true">
+          <div className="h-full rounded-full bg-moss" style={{ width: `${(done / items.length) * 100}%` }} />
+        </div>
+      )}
+      <ul className="space-y-1">
+        {items.map((it) => (
+          <li key={it.id} className="group flex items-center gap-2 text-sm">
+            <input type="checkbox" className="h-4 w-4 accent-moss" checked={it.done} onChange={() => onChange(items.map((x) => (x.id === it.id ? { ...x, done: !x.done } : x)))} />
+            <span className={cn("min-w-0 flex-1 break-words", it.done ? "text-ink-faint line-through" : "text-ink")}>{it.text}</span>
+            <button className="hidden text-xs text-ink-faint hover:text-danger group-hover:inline" onClick={() => onChange(items.filter((x) => x.id !== it.id))} aria-label={`Quitar ${it.text}`}>quitar</button>
+          </li>
+        ))}
+      </ul>
+      <input
+        className="field field-sm mt-2"
+        placeholder="Agregar un paso y Enter"
+        maxLength={200}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            add();
+          }
+        }}
+      />
     </section>
   );
 }
