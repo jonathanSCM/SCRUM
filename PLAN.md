@@ -84,7 +84,8 @@ Pestaña **Ceremonias** por proyecto, ligada al sprint:
 - [x] Fase 1: sprint activo protegido (solo LEAD saca tickets), exportar a Excel y "Mis tareas". Los tickets ya nacen en el backlog salvo que se cree desde el tablero (sprint activo) o desde un sprint.
 - [x] Fase 2: Definition of Ready (lista por proyecto en Ajustes, checklist en cada ticket, aviso "Falta info" en el backlog, el sprint no inicia con tickets incompletos salvo que un LEAD lo fuerce). La pestaña Planning aparte queda pendiente: el Backlog ya cumple ese papel.
 - [x] Notificaciones por Telegram y Slack (además de Discord): cada proyecto configura los canales que quiera en Ajustes; cada persona carga su usuario para la mención en Mi perfil
-- [ ] Fases 3–5
+- [x] Fase 3: Notas públicas por proyecto (brief, reunión, general; fijar; convertir puntos en tickets del backlog) y Chat del equipo por proyecto
+- [ ] Fases 4–5 (ceremonias, jerarquía épica > historia > tarea, checklist, diseño)
 
 ## 7. Preguntas abiertas (resueltas arriba salvo)
 

@@ -8,6 +8,8 @@ const TABS = [
   { slug: "board", label: "Tablero" },
   { slug: "backlog", label: "Backlog" },
   { slug: "epics", label: "Épicas" },
+  { slug: "notes", label: "Notas" },
+  { slug: "chat", label: "Chat" },
   { slug: "reports", label: "Reportes" },
   { slug: "activity", label: "Actividad" },
   { slug: "settings", label: "Ajustes" },

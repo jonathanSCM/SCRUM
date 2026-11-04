@@ -30,6 +30,9 @@ export const HISTORY_LABEL: Record<string, string> = {
   descripcion_proyecto: "Descripción del proyecto",
   discord_webhook: "Webhook de Discord",
   telegram_config: "Telegram",
+  nota_creada: "Nota creada",
+  nota_eliminada: "Nota eliminada",
+  nota_a_tickets: "Tickets creados desde una nota",
   slack_webhook: "Webhook de Slack",
   // v1
   tarea_creada: "Tarea creada",

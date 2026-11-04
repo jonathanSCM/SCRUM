@@ -203,3 +203,24 @@ export const completeSprintSchema = z.object({
   // "BACKLOG" o el id de otro sprint planificado
   destination: z.string().min(1),
 });
+
+// ---- Notas y chat ----
+
+export const NOTE_KINDS = ["BRIEF", "REUNION", "GENERAL"] as const;
+
+export const createNoteSchema = z.object({
+  title: z.string().trim().min(1, "Título requerido").max(200),
+  body: z.string().max(50000).optional(),
+  kind: z.enum(NOTE_KINDS).optional(),
+  pinned: z.boolean().optional(),
+});
+
+export const updateNoteSchema = createNoteSchema.partial();
+
+export const noteToTicketsSchema = z.object({
+  items: z.array(z.string().trim().min(1).max(300)).min(1, "Elegí al menos un punto").max(30),
+});
+
+export const messageSchema = z.object({
+  body: z.string().trim().min(1, "El mensaje no puede estar vacío").max(3000),
+});

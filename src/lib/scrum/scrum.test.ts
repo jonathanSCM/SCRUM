@@ -7,6 +7,7 @@ import { validateStart, snapshotOnStart, planCompletion, durationToEnd, daysRema
 import { parseStringList, missingReadyItems, ticketsNotReady } from "./ready";
 import { formatTelegramText, TELEGRAM_TOKEN_PATTERN, TELEGRAM_CHAT_PATTERN } from "../telegram";
 import { formatSlackText, SLACK_WEBHOOK_PATTERN } from "../slack";
+import { extractActionItems } from "./notes";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
 describe("issueKey", () => {
@@ -282,5 +283,25 @@ describe("notificaciones Telegram / Slack", () => {
     expect(TELEGRAM_CHAT_PATTERN.test("@mi_canal")).toBe(true);
     expect(SLACK_WEBHOOK_PATTERN.test("https://hooks.slack.com/services/T000/B000/XXXX")).toBe(true);
     expect(SLACK_WEBHOOK_PATTERN.test("https://evil.test/services/T/B/X")).toBe(false);
+  });
+});
+
+describe("extractActionItems", () => {
+  it("saca viñetas, casillas y numeraciones; ignora lo marcado y los duplicados", () => {
+    const body = [
+      "Reunión con el cliente",
+      "- Pasar la estructura de datos",
+      "* [ ] Enviar cotización",
+      "- [x] Ya hecho",
+      "1. Configurar el bot",
+      "2) configurar el bot",
+      "texto suelto",
+      "• Revisar accesos",
+    ].join("\n");
+    expect(extractActionItems(body)).toEqual(["Pasar la estructura de datos", "Enviar cotización", "Configurar el bot", "Revisar accesos"]);
+  });
+  it("respeta el máximo", () => {
+    const body = Array.from({ length: 50 }, (_, i) => `- punto ${i}`).join("\n");
+    expect(extractActionItems(body, 5)).toHaveLength(5);
   });
 });

@@ -38,6 +38,8 @@ model User {
   ledProjects         Project[]            @relation("ProjectLead")
   comments            Comment[]
   attachments         Attachment[]
+  notes               Note[]
+  messages            ProjectMessage[]
 }
 
 model PasswordResetToken {
@@ -102,6 +104,8 @@ model Project {
   documents   Document[]
   attachments Attachment[]
   history     HistoryEntry[]
+  notes       Note[]
+  messages    ProjectMessage[]
 }
 
 // Sin uso desde la v2 (solo guardaba metadatos). Se reemplaza por Attachment.
@@ -241,4 +245,39 @@ model Attachment {
 
   uploadedById String?
   uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+}
+
+// Notas públicas del proyecto (brief, actas de reunión, acuerdos). Las ve y
+// las edita todo el equipo.
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  body      String   @default("")
+  kind      String   @default("GENERAL") // BRIEF | REUNION | GENERAL
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, updatedAt])
+}
+
+// Chat del equipo dentro de cada proyecto.
+model ProjectMessage {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
 }
