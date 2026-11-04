@@ -1,24 +1,40 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo, Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import Providers from "./providers";
 
-const display = Archivo({
-  subsets: ["latin"],
+// Fuentes empaquetadas en el proyecto (@fontsource): el build no depende de Google Fonts.
+const display = localFont({
   variable: "--font-display",
-  weight: ["600", "700", "800", "900"],
+  display: "swap",
+  src: [
+    { path: "../../node_modules/@fontsource/archivo/files/archivo-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../../node_modules/@fontsource/archivo/files/archivo-latin-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../../node_modules/@fontsource/archivo/files/archivo-latin-800-normal.woff2", weight: "800", style: "normal" },
+    { path: "../../node_modules/@fontsource/archivo/files/archivo-latin-900-normal.woff2", weight: "900", style: "normal" },
+  ],
 });
 
-const body = Inter({
-  subsets: ["latin"],
+const body = localFont({
   variable: "--font-body",
-  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+  src: [
+    { path: "../../node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../../node_modules/@fontsource/inter/files/inter-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../../node_modules/@fontsource/inter/files/inter-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../../node_modules/@fontsource/inter/files/inter-latin-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../../node_modules/@fontsource/inter/files/inter-latin-800-normal.woff2", weight: "800", style: "normal" },
+  ],
 });
 
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
+const mono = localFont({
   variable: "--font-mono",
-  weight: ["500", "600", "700"],
+  display: "swap",
+  src: [
+    { path: "../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {
