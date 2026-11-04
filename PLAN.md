@@ -69,7 +69,24 @@ Pestaña **Ceremonias** por proyecto, ligada al sprint:
 - Reglas en `src/lib/scrum/*` (puras, con tests); rutas API delgadas.
 - Todo permiso se valida en el servidor (`apiUser({ lead: true })`), no solo ocultando botones.
 
-## 5. Preguntas abiertas
+## 5. Decisiones tomadas (post-plan)
+
+- **Definition of Ready** = lista de información que tiene que estar disponible antes de empezar un sprint (p. ej. estructura de datos del cliente, accesos, brief). Se define por proyecto; sin ella no se inicia el sprint.
+- **No hace falta decidir roles por proyecto**: se usa el rol `LEAD` actual para las acciones restringidas.
+- **Duración del sprint configurable** (ya existe: 1, 2… semanas o personalizada al iniciar).
+- **Daily**: opcional y asíncrono dentro de la plataforma.
+- **Notificaciones**: Discord y Telegram; funciona el que esté configurado en el proyecto.
+- **Exportar**: a Excel (.xlsx), con "Mis tareas" por proyecto. Sin PDF por ahora.
+- Lo de la landing y la entrega de I-PASS queda fuera del plan.
+
+## 6. Estado
+
+- [x] Fase 1: sprint activo protegido (solo LEAD saca tickets), exportar a Excel y "Mis tareas". Los tickets ya nacen en el backlog salvo que se cree desde el tablero (sprint activo) o desde un sprint.
+- [ ] Fase 2: Definition of Ready + Planning
+- [ ] Notificaciones por Telegram
+- [ ] Fases 3–5
+
+## 7. Preguntas abiertas (resueltas arriba salvo)
 
 1. ¿Qué ítems forman la Definition of Ready? (propuesta: brief claro, criterios de aceptación, accesos/datos, contacto del cliente, estimación).
 2. ¿Quién es LEAD/PO por proyecto? ¿Puede un LEAD forzar un sprint sin DoR completo?
@@ -78,7 +95,7 @@ Pestaña **Ceremonias** por proyecto, ligada al sprint:
 5. ¿Notificaciones por Discord, Telegram o ambos? (la reunión lo dejó abierto).
 6. ¿Exportar solo CSV o también PDF del reporte de sprint?
 
-## 6. Fuera del Scrum (anotado de la reunión)
+## 8. Fuera del Scrum (anotado de la reunión)
 
 - Panel de administración de la landing (César): agregar proyectos requiere redeploy; máximo 8 proyectos visibles.
 - Entrega formal de I-PASS/Impacta: manuales, código del panel, APK y documento de credenciales (César, vía Drive).

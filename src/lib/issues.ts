@@ -5,6 +5,7 @@ import { notifyDiscord, resolveDiscordMention, DISCORD_COLOR } from "@/lib/disco
 import { getBaseUrl } from "@/lib/baseUrl";
 import { formatIssueKey, parseIssueKey } from "@/lib/scrum/issueKey";
 import { parseLabels } from "@/lib/scrum/labels";
+import { validateLeaveActiveSprint } from "@/lib/scrum/sprintLifecycle";
 import { needsRebalance, rankBetween, rebalance, RANK_STEP } from "@/lib/scrum/rank";
 import {
   ISSUE_TYPE_META,
@@ -28,7 +29,7 @@ export const issueInclude = {
 
 export type IssueWithRefs = Prisma.TaskGetPayload<{ include: typeof issueInclude }>;
 
-export type Actor = { id: string; name: string };
+export type Actor = { id: string; name: string; role?: "LEAD" | "MEMBER" };
 
 export type IssuePatch = {
   title?: string;
@@ -156,7 +157,7 @@ export async function updateIssue(
 ): Promise<IssueWithRefs> {
   const current = await prisma.task.findUnique({
     where: { id: issueId },
-    include: { ...issueInclude, project: { select: { id: true, key: true, name: true, leadUserId: true } }, sprint: { select: { name: true } } },
+    include: { ...issueInclude, project: { select: { id: true, key: true, name: true, leadUserId: true } }, sprint: { select: { name: true, state: true } } },
   });
   if (!current) throw new IssueError("Ticket no encontrado", 404);
   const { project } = current;
@@ -203,6 +204,15 @@ export async function updateIssue(
     current.id
   );
 
+  if (issueType !== "EPIC") {
+    const blocked = validateLeaveActiveSprint({
+      currentSprintState: current.sprint?.state ?? null,
+      currentSprintId: current.sprintId,
+      nextSprintId,
+      actorRole: actor.role,
+    });
+    if (blocked) throw new IssueError(blocked, 403);
+  }
   if (nextSprintId !== current.sprintId && issueType !== "EPIC") {
     data.sprintId = nextSprintId;
     data.sprintAddedAt = nextSprintId ? new Date() : null;

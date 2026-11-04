@@ -312,6 +312,12 @@ export default function BacklogView({
         )}
         <div className="ml-auto flex items-center gap-2">
           {completedSprints > 0 && <span className="hidden text-xs text-ink-faint sm:inline">{completedSprints} {completedSprints === 1 ? "sprint completado" : "sprints completados"} · ver en Reportes</span>}
+          <a className="btn-ghost btn-sm" href={`/api/projects/${projectId}/export`} download title="Descargar todos los tickets del proyecto en Excel">
+            Exportar Excel
+          </a>
+          <a className="btn-ghost btn-sm" href={`/api/projects/${projectId}/export?mine=1`} download title="Descargar solo mis tickets en Excel">
+            Mis tareas (Excel)
+          </a>
           <button className="btn-ghost btn-sm" disabled={creatingSprint} onClick={createSprint}>
             <PlusIcon size={14} /> Crear sprint
           </button>

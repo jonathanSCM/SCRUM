@@ -3,7 +3,7 @@ import { suggestProjectKey, normalizeProjectKey, isValidProjectKey, formatIssueK
 import { rankBetween, needsRebalance, rebalance, compareByRank, RANK_STEP } from "./rank";
 import { computeBurndown } from "./burndown";
 import { computeVelocity } from "./velocity";
-import { validateStart, snapshotOnStart, planCompletion, durationToEnd, daysRemaining } from "./sprintLifecycle";
+import { validateStart, snapshotOnStart, planCompletion, durationToEnd, daysRemaining, validateLeaveActiveSprint } from "./sprintLifecycle";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
 describe("issueKey", () => {
@@ -220,5 +220,19 @@ describe("legacyMap", () => {
     expect(sprintStateFromDates(new Date("2026-03-08"), new Date("2026-03-15"), now)).toBe("ACTIVE");
     expect(sprintStateFromDates(new Date("2026-03-12"), new Date("2026-03-20"), now)).toBe("PLANNED");
     expect(sprintStateFromDates(null, null, now)).toBe("PLANNED");
+  });
+});
+
+describe("validateLeaveActiveSprint", () => {
+  const base = { currentSprintState: "ACTIVE", currentSprintId: "s1", nextSprintId: null as string | null };
+  it("bloquea a un miembro que saca un ticket de un sprint activo", () => {
+    expect(validateLeaveActiveSprint({ ...base, actorRole: "MEMBER" })).toMatch(/líder/);
+  });
+  it("permite al líder", () => {
+    expect(validateLeaveActiveSprint({ ...base, actorRole: "LEAD" })).toBeNull();
+  });
+  it("no afecta a sprints planificados ni a cambios que no sacan el ticket", () => {
+    expect(validateLeaveActiveSprint({ ...base, currentSprintState: "PLANNED", actorRole: "MEMBER" })).toBeNull();
+    expect(validateLeaveActiveSprint({ ...base, nextSprintId: "s1", actorRole: "MEMBER" })).toBeNull();
   });
 });
