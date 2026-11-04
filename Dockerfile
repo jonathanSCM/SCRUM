@@ -28,17 +28,19 @@ ENV PORT=3000
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 # prisma/seed.ts (migración de datos viejos) reutiliza estas funciones puras.
-COPY --from=builder /app/src/lib/scrum ./src/lib/scrum
-COPY --from=builder /app/next.config.ts ./next.config.ts
-COPY --from=builder /app/package.json ./package.json
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --from=builder --chown=nextjs:nodejs /app/src/lib/scrum ./src/lib/scrum
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --chown=nextjs:nodejs --chmod=755 docker-entrypoint.sh ./docker-entrypoint.sh
 
-RUN chmod +x docker-entrypoint.sh && chown -R nextjs:nodejs /app
+# Sin "chown -R /app": duplicaba toda la carpeta node_modules en otra capa (~2 min y mucho disco).
+# Cada COPY ya asigna el dueño con --chown.
+RUN chown nextjs:nodejs /app
 
 USER nextjs
 EXPOSE 3000
