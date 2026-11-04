@@ -68,6 +68,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       title: `Sprint iniciado: ${name}`,
       description: `**${auth.user.name}** inició el sprint en ${sprint.project.name}.${started.goal ? `\n**Objetivo:** ${started.goal}` : ""}`,
       color: DISCORD_COLOR.sprintStarted,
+      pushAll: true,
+      excludeUserId: auth.user.id,
       fields: [
         { name: "Tickets", value: String(snapshot.committedCount), inline: true },
         { name: "Puntos", value: String(snapshot.committedPoints), inline: true },

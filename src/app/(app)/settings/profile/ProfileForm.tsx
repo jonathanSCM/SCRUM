@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
 import { useToast } from "@/components/ui/Toaster";
+import { PwaCard } from "@/components/PwaControls";
 
 export default function ProfileForm({ name: initialName, discordUserId: initialDiscord, telegramUsername: initialTelegram, slackUserId: initialSlack }: { name: string; discordUserId: string; telegramUsername: string; slackUserId: string }) {
   const router = useRouter();
@@ -41,6 +42,8 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
 
   return (
     <div className="space-y-8">
+      <PwaCard />
+
       <form onSubmit={save} className="space-y-4 border border-line bg-card p-5 rounded-lg">
         <h2 className="font-display text-lg font-extrabold text-ink">Datos</h2>
         <div>

@@ -36,6 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       title: `Comentario en ${key}`,
       description: `**${user.name}** comentó en «${issue.title}»: ${parsed.data.body}`,
       color: DISCORD_COLOR.comment,
+      excludeUserId: user.id,
       mentionUserIds: [issue.assigneeUserId !== user.id ? issue.assigneeUserId : null, issue.reporterId !== user.id ? issue.reporterId : null],
       url: `${getBaseUrl()}/projects/${issue.projectId}/board?issue=${key}`,
     });

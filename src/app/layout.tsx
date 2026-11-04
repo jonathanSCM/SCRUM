@@ -38,12 +38,15 @@ const mono = localFont({
 });
 
 export const metadata: Metadata = {
+  applicationName: "SCRUM ProShop",
+  appleWebApp: { capable: true, title: "SCRUM ProShop", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
   title: { default: "SCRUM ProShop", template: "%s · SCRUM ProShop" },
   description: "Backlog, sprints y tablero para los proyectos de ProShop",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: "#6d28d9",
   colorScheme: "light",
 };
 
