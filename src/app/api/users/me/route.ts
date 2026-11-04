@@ -11,7 +11,7 @@ export async function GET() {
   try {
     const me = await prisma.user.findUnique({
       where: { id: auth.user.id },
-      select: { id: true, name: true, email: true, role: true, discordUserId: true },
+      select: { id: true, name: true, email: true, role: true, discordUserId: true, telegramUsername: true, slackUserId: true },
     });
     if (!me) return notFound("Usuario no encontrado");
     return NextResponse.json(me);
@@ -34,8 +34,10 @@ export async function PATCH(req: Request) {
       data: {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.discordUserId !== undefined ? { discordUserId: body.discordUserId || null } : {}),
+        ...(body.slackUserId !== undefined ? { slackUserId: body.slackUserId || null } : {}),
+        ...(body.telegramUsername !== undefined ? { telegramUsername: body.telegramUsername || null } : {}),
       },
-      select: { id: true, name: true, email: true, role: true, discordUserId: true },
+      select: { id: true, name: true, email: true, role: true, discordUserId: true, telegramUsername: true, slackUserId: true },
     });
     return NextResponse.json(me);
   } catch (e) {

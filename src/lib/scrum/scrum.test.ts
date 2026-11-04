@@ -5,6 +5,8 @@ import { computeBurndown } from "./burndown";
 import { computeVelocity } from "./velocity";
 import { validateStart, snapshotOnStart, planCompletion, durationToEnd, daysRemaining, validateLeaveActiveSprint } from "./sprintLifecycle";
 import { parseStringList, missingReadyItems, ticketsNotReady } from "./ready";
+import { formatTelegramText, TELEGRAM_TOKEN_PATTERN, TELEGRAM_CHAT_PATTERN } from "../telegram";
+import { formatSlackText, SLACK_WEBHOOK_PATTERN } from "../slack";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
 describe("issueKey", () => {
@@ -256,5 +258,29 @@ describe("ready (Definition of Ready)", () => {
     ];
     expect(ticketsNotReady(template, tasks)).toEqual([{ key: "A-2", title: "dos", missing: template }]);
     expect(ticketsNotReady([], tasks)).toEqual([]);
+  });
+});
+
+describe("notificaciones Telegram / Slack", () => {
+  const msg = { title: "Hecho <b>", description: "**Ana** cerró «x» & más", url: "https://x.test/a", mentionUsername: "ana_dev", mentionSlackId: "U01ABCDE2F3" };
+  it("Telegram escapa HTML y convierte negritas", () => {
+    const text = formatTelegramText(msg);
+    expect(text).toContain("<b>Hecho &lt;b&gt;</b>");
+    expect(text).toContain("<b>Ana</b> cerró «x» &amp; más");
+    expect(text).toContain("@ana_dev");
+  });
+  it("Slack escapa y menciona por id", () => {
+    const text = formatSlackText(msg);
+    expect(text).toContain("*Ana*");
+    expect(text).toContain("&amp; más");
+    expect(text).toContain("<@U01ABCDE2F3>");
+  });
+  it("valida token, chat y webhook", () => {
+    expect(TELEGRAM_TOKEN_PATTERN.test("123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw")).toBe(true);
+    expect(TELEGRAM_TOKEN_PATTERN.test("basura")).toBe(false);
+    expect(TELEGRAM_CHAT_PATTERN.test("-1001234567890")).toBe(true);
+    expect(TELEGRAM_CHAT_PATTERN.test("@mi_canal")).toBe(true);
+    expect(SLACK_WEBHOOK_PATTERN.test("https://hooks.slack.com/services/T000/B000/XXXX")).toBe(true);
+    expect(SLACK_WEBHOOK_PATTERN.test("https://evil.test/services/T/B/X")).toBe(false);
   });
 });

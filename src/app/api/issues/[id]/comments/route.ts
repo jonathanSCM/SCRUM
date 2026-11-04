@@ -4,7 +4,8 @@ import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { commentSchema, parseBody, readJson } from "@/lib/validation";
 import { logHistory } from "@/lib/history";
-import { notifyDiscord, resolveDiscordMention, DISCORD_COLOR } from "@/lib/discord";
+import { DISCORD_COLOR } from "@/lib/discord";
+import { notifyProject } from "@/lib/notify";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { getBaseUrl } from "@/lib/baseUrl";
 
@@ -31,15 +32,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await logHistory({ projectId: issue.projectId, taskId: id, taskTitle: issue.title, field: "comentario", newValue: parsed.data.body.slice(0, 120), actor: user });
 
     const key = formatIssueKey(issue.project.key, issue.number);
-    const mention = await resolveDiscordMention(
-      issue.assigneeUserId !== user.id ? issue.assigneeUserId : null,
-      issue.reporterId !== user.id ? issue.reporterId : null
-    );
-    await notifyDiscord(issue.projectId, {
+    await notifyProject(issue.projectId, {
       title: `💬 Comentario en ${key}`,
       description: `**${user.name}** comentó en «${issue.title}»: ${parsed.data.body}`,
       color: DISCORD_COLOR.comment,
-      mentionUserId: mention,
+      mentionUserIds: [issue.assigneeUserId !== user.id ? issue.assigneeUserId : null, issue.reporterId !== user.id ? issue.reporterId : null],
       url: `${getBaseUrl()}/projects/${issue.projectId}/board?issue=${key}`,
     });
 

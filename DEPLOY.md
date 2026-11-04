@@ -41,3 +41,4 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - Los adjuntos de los tickets se guardan en la base de datos (máx. 5 MB cada uno). Si algún día pesan demasiado conviene pasarlos a un bucket de objetos.
 - La URL del webhook de Discord nunca se devuelve completa por la API: solo se muestra si hay una configurada y cómo termina.
 - Solo un Líder puede configurar webhooks, estados de proyecto, borrar proyectos/sprints y administrar usuarios.
+- **Notificaciones**: cada proyecto puede usar Discord (webhook), Telegram (token de bot + chat) y Slack (Incoming Webhook) a la vez, configurados por un Líder en Proyecto → Ajustes. Los secretos (webhook/token) nunca se devuelven completos por la API. Cada persona carga su ID/usuario en **Mi perfil** para recibir menciones.

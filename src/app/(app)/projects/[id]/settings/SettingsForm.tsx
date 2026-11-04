@@ -22,6 +22,11 @@ type Props = {
     readyItems: string[];
     webhookConfigured: boolean;
     webhookHint: string | null;
+    slackConfigured: boolean;
+    slackHint: string | null;
+    telegramConfigured: boolean;
+    telegramChatId: string;
+    telegramHint: string | null;
   };
 };
 
@@ -91,6 +96,61 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
     setHint(res.data.hint);
     setWebhook("");
     toast.success(res.data.configured ? "Webhook guardado" : "Webhook quitado");
+  }
+
+  const [slackUrl, setSlackUrl] = useState("");
+  const [slackConfigured, setSlackConfigured] = useState(project.slackConfigured);
+  const [slackHint, setSlackHint] = useState(project.slackHint);
+  const [savingSlack, setSavingSlack] = useState(false);
+  const [testingSlack, setTestingSlack] = useState(false);
+
+  async function saveSlack(url: string | null) {
+    setSavingSlack(true);
+    const res = await api<{ configured: boolean; hint: string | null }>(`/api/projects/${project.id}/slack`, "PATCH", { slackWebhookUrl: url ?? "" });
+    setSavingSlack(false);
+    if (!res.ok) return toast.error(res.error);
+    setSlackConfigured(res.data.configured);
+    setSlackHint(res.data.hint);
+    setSlackUrl("");
+    toast.success(res.data.configured ? "Webhook de Slack guardado" : "Webhook de Slack quitado");
+  }
+
+  async function testSlack() {
+    setTestingSlack(true);
+    const res = await api(`/api/projects/${project.id}/slack/test`, "POST", {});
+    setTestingSlack(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Mensaje de prueba enviado. Revisá el canal de Slack.");
+  }
+
+  const [tgToken, setTgToken] = useState("");
+  const [tgChat, setTgChat] = useState(project.telegramChatId);
+  const [tgConfigured, setTgConfigured] = useState(project.telegramConfigured);
+  const [tgHint, setTgHint] = useState(project.telegramHint);
+  const [savingTg, setSavingTg] = useState(false);
+  const [testingTg, setTestingTg] = useState(false);
+
+  async function saveTelegram(remove = false) {
+    setSavingTg(true);
+    const res = await api<{ configured: boolean; chatId: string | null; hint: string | null }>(`/api/projects/${project.id}/telegram`, "PATCH", {
+      botToken: remove ? "" : tgToken.trim(),
+      chatId: remove ? "" : tgChat.trim(),
+    });
+    setSavingTg(false);
+    if (!res.ok) return toast.error(res.error);
+    setTgConfigured(res.data.configured);
+    setTgHint(res.data.hint);
+    setTgChat(res.data.chatId ?? "");
+    setTgToken("");
+    toast.success(res.data.configured ? "Telegram guardado" : "Telegram quitado");
+  }
+
+  async function testTelegram() {
+    setTestingTg(true);
+    const res = await api(`/api/projects/${project.id}/telegram/test`, "POST", {});
+    setTestingTg(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Mensaje de prueba enviado. Revisá el chat de Telegram.");
   }
 
   async function testWebhook() {
@@ -228,6 +288,65 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
           </>
         ) : (
           <p className="text-xs text-ink-faint">Solo un líder puede configurar el webhook. {configured ? "Está activo." : "Todavía no está configurado."}</p>
+        )}
+      </section>
+
+      <section className="space-y-3 border-2 border-ink bg-card p-5">
+        <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Telegram</h2>
+        <p className="text-sm text-ink-soft">
+          Los mismos avisos que Discord, en un chat o grupo de Telegram. Se pueden usar los dos canales a la vez; funciona el que esté configurado.
+          Cada persona puede cargar su usuario de Telegram en <b>Mi perfil</b> para recibir la mención.
+        </p>
+        {isLead ? (
+          <>
+            <p className="text-xs text-ink-faint">
+              {tgConfigured ? <>Telegram configurado (token termina en <span className="font-mono text-ink">…{tgHint}</span>, chat <span className="font-mono text-ink">{tgChat}</span>).</> : "Todavía no hay Telegram configurado."}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input className="field font-mono" type="password" autoComplete="off" placeholder="Token del bot (de @BotFather)" value={tgToken} onChange={(e) => setTgToken(e.target.value)} />
+              <input className="field font-mono" placeholder="Chat: -1001234567890 o @canal" value={tgChat} onChange={(e) => setTgChat(e.target.value)} />
+            </div>
+            <p className="text-xs text-ink-faint">
+              Crea el bot con @BotFather, añádelo al grupo y usa el id del grupo (empieza con -). El token solo se guarda, no se vuelve a mostrar.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn-primary" disabled={savingTg || !tgToken.trim() || !tgChat.trim()} onClick={() => saveTelegram()}>Guardar</button>
+              {tgConfigured && (
+                <>
+                  <button className="btn-ghost btn-sm" disabled={testingTg} onClick={testTelegram}>{testingTg ? "Enviando…" : "Enviar mensaje de prueba"}</button>
+                  <button className="btn-ghost btn-sm text-danger" disabled={savingTg} onClick={() => saveTelegram(true)}>Quitar Telegram</button>
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-ink-faint">Solo un líder puede configurar Telegram. {tgConfigured ? "Está activo." : "Todavía no está configurado."}</p>
+        )}
+      </section>
+
+      <section className="space-y-3 border-2 border-ink bg-card p-5">
+        <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Slack</h2>
+        <p className="text-sm text-ink-soft">
+          Los mismos avisos en un canal de Slack, con un Incoming Webhook. Cada persona puede cargar su ID de miembro en <b>Mi perfil</b> para recibir la mención.
+        </p>
+        {isLead ? (
+          <>
+            <p className="text-xs text-ink-faint">
+              {slackConfigured ? <>Webhook configurado (termina en <span className="font-mono text-ink">…{slackHint}</span>).</> : "Todavía no hay webhook de Slack configurado."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <input className="field min-w-0 flex-1" type="password" autoComplete="off" placeholder="https://hooks.slack.com/services/…" value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} />
+              <button className="btn-primary" disabled={savingSlack || !slackUrl.trim()} onClick={() => saveSlack(slackUrl.trim())}>Guardar</button>
+            </div>
+            {slackConfigured && (
+              <div className="flex gap-2">
+                <button className="btn-ghost btn-sm" disabled={testingSlack} onClick={testSlack}>{testingSlack ? "Enviando…" : "Enviar mensaje de prueba"}</button>
+                <button className="btn-ghost btn-sm text-danger" disabled={savingSlack} onClick={() => saveSlack(null)}>Quitar webhook</button>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-ink-faint">Solo un líder puede configurar Slack. {slackConfigured ? "Está activo." : "Todavía no está configurado."}</p>
         )}
       </section>
 

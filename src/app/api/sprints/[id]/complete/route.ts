@@ -4,7 +4,8 @@ import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { completeSprintSchema, parseBody, readJson } from "@/lib/validation";
 import { logHistory } from "@/lib/history";
-import { notifyDiscord, DISCORD_COLOR } from "@/lib/discord";
+import { DISCORD_COLOR } from "@/lib/discord";
+import { notifyProject } from "@/lib/notify";
 import { planCompletion } from "@/lib/scrum/sprintLifecycle";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -51,7 +52,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       oldValue: `${plan.completedCount}/${tasks.length} tickets`,
       actor: auth.user,
     });
-    await notifyDiscord(sprint.projectId, {
+    await notifyProject(sprint.projectId, {
       title: `🏁 Sprint completado: ${sprint.name}`,
       description: `**${auth.user.name}** cerró el sprint en ${sprint.project.name}.`,
       color: DISCORD_COLOR.sprintCompleted,

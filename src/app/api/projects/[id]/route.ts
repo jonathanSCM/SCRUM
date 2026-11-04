@@ -4,7 +4,8 @@ import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { parseBody, readJson, updateProjectSchema } from "@/lib/validation";
 import { logHistory } from "@/lib/history";
-import { notifyDiscord, resolveDiscordMention, DISCORD_COLOR } from "@/lib/discord";
+import { DISCORD_COLOR } from "@/lib/discord";
+import { notifyProject } from "@/lib/notify";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await apiUser();
@@ -49,12 +50,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (newStatus) {
       await logHistory({ projectId: id, field: "estado_proyecto", oldValue: current.status.name, newValue: newStatus.name, actor: user });
-      const mention = await resolveDiscordMention(updated.leadUserId);
-      await notifyDiscord(id, {
+      await notifyProject(id, {
         title: `📌 ${updated.name}`,
         description: `El proyecto pasó de «${current.status.name}» a «${newStatus.name}»`,
         color: DISCORD_COLOR.status,
-        mentionUserId: mention,
+        mentionUserIds: [updated.leadUserId],
       });
     }
     if (newLead !== undefined) {

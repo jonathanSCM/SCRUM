@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logHistory } from "@/lib/history";
-import { notifyDiscord, resolveDiscordMention, DISCORD_COLOR } from "@/lib/discord";
+import { DISCORD_COLOR } from "@/lib/discord";
+import { notifyProject } from "@/lib/notify";
 import { getBaseUrl } from "@/lib/baseUrl";
 import { formatIssueKey, parseIssueKey } from "@/lib/scrum/issueKey";
 import { parseStringList } from "@/lib/scrum/ready";
@@ -136,14 +137,13 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
   const key = formatIssueKey(project.key, created.number);
   await logHistory({ projectId, taskId: created.id, taskTitle: created.title, field: "ticket_creado", newValue: key, actor });
 
-  const mention = await resolveDiscordMention(created.assigneeUserId);
-  await notifyDiscord(projectId, {
+  await notifyProject(projectId, {
     title: `🆕 ${key} creado en ${project.name}`,
     description: `**${actor.name}** creó ${ISSUE_TYPE_META[issueType as IssueType].label.toLowerCase()} «${created.title}»${
       created.assignee ? ` — asignado a ${created.assignee.name}` : ""
     }`,
     color: DISCORD_COLOR.created,
-    mentionUserId: mention,
+    mentionUserIds: [created.assigneeUserId],
     url: issueUrl(projectId, key),
   });
 
@@ -303,22 +303,20 @@ export async function updateIssue(
 
   if (!options.silent) {
     if (becameDone) {
-      const mention = await resolveDiscordMention(updated.assigneeUserId, project.leadUserId);
-      await notifyDiscord(project.id, {
+      await notifyProject(project.id, {
         title: `✅ ${key} completado en ${project.name}`,
         description: `**${actor.name}** completó «${updated.title}»`,
         color: DISCORD_COLOR.done,
-        mentionUserId: mention,
+        mentionUserIds: [updated.assigneeUserId, project.leadUserId],
         url: issueUrl(project.id, key),
       });
     }
     if (assigneeChanged && newAssignee && newAssignee.id !== actor.id) {
-      const mention = await resolveDiscordMention(newAssignee.id);
-      await notifyDiscord(project.id, {
+      await notifyProject(project.id, {
         title: `👤 ${key} asignado en ${project.name}`,
         description: `**${actor.name}** asignó «${updated.title}» a ${newAssignee.name}`,
         color: DISCORD_COLOR.assigned,
-        mentionUserId: mention,
+        mentionUserIds: [newAssignee.id],
         url: issueUrl(project.id, key),
       });
     }

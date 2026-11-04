@@ -66,17 +66,6 @@ function truncate(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
-// Avisa en el canal del proyecto (si tiene webhook configurado).
-export async function notifyDiscord(projectId: string, message: DiscordMessage): Promise<void> {
-  try {
-    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { discordWebhookUrl: true } });
-    if (!project?.discordWebhookUrl) return;
-    await sendToDiscordWebhook(project.discordWebhookUrl, message);
-  } catch (err) {
-    console.error("[discord] no se pudo preparar la notificación:", err);
-  }
-}
-
 // Devuelve el Discord ID del primer usuario (en el orden dado) que lo tenga
 // configurado, para mencionarlo en el mensaje.
 export async function resolveDiscordMention(...userIds: Array<string | null | undefined>): Promise<string | null> {

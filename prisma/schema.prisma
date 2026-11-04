@@ -29,6 +29,8 @@ model User {
   lockedUntil         DateTime?
   createdAt           DateTime  @default(now())
   discordUserId       String?
+  telegramUsername    String?
+  slackUserId         String?
 
   passwordResetTokens PasswordResetToken[]
   assignedIssues      Task[]               @relation("TaskAssignee")
@@ -74,6 +76,13 @@ model Project {
   taskSeq     Int      @default(0)
 
   discordWebhookUrl String?
+
+  // Telegram: token del bot (secreto, nunca se devuelve por la API) y chat/grupo destino.
+  telegramBotToken String?
+  telegramChatId   String?
+
+  // Slack: Incoming Webhook (secreto, nunca se devuelve completo por la API).
+  slackWebhookUrl String?
 
   // Definition of Ready: JSON con los textos que un ticket debe cubrir antes de empezar.
   readyItems String @default("[]")

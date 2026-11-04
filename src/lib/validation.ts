@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { SLACK_USER_ID_PATTERN, SLACK_WEBHOOK_PATTERN } from "@/lib/slack";
+import { TELEGRAM_CHAT_PATTERN, TELEGRAM_TOKEN_PATTERN, TELEGRAM_USERNAME_PATTERN } from "@/lib/telegram";
 import { ISSUE_TYPES, STATUSES, PRIORITIES } from "@/lib/scrum/constants";
 
 export function parseBody<T>(schema: z.ZodType<T>, raw: unknown): { data: T } | { error: NextResponse } {
@@ -45,12 +47,33 @@ export const resetPasswordSchema = z.object({
 
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(1, "Nombre requerido").max(100).optional(),
+  slackUserId: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || SLACK_USER_ID_PATTERN.test(v), "Tiene que ser tu ID de miembro de Slack (empieza con U o W, ej. U01ABCDE2F3)")
+    .nullish(),
+  telegramUsername: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/^@/, ""))
+    .refine((v) => v === "" || TELEGRAM_USERNAME_PATTERN.test(v), "Usuario de Telegram inválido (5 a 32 letras, números o _)")
+    .nullish(),
   discordUserId: z
     .string()
     .trim()
     .regex(/^\d{17,20}$/, "Tiene que ser el ID numérico de Discord (17 a 20 dígitos)")
     .nullish()
     .or(z.literal("")),
+});
+
+export const telegramConfigSchema = z.object({
+  // Vacío = quitar la configuración.
+  botToken: z.string().trim().regex(TELEGRAM_TOKEN_PATTERN, "Token de bot inválido (formato 123456:ABC…)").or(z.literal("")),
+  chatId: z.string().trim().regex(TELEGRAM_CHAT_PATTERN, "Chat inválido: usá el id numérico del grupo o @canal").or(z.literal("")),
+});
+
+export const slackWebhookSchema = z.object({
+  slackWebhookUrl: z.string().trim().regex(SLACK_WEBHOOK_PATTERN, "Tiene que ser una URL de Incoming Webhook de Slack (https://hooks.slack.com/services/…)").or(z.literal("")),
 });
 
 export const changePasswordSchema = z.object({

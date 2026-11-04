@@ -35,6 +35,11 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
         leadUserId: project.leadUserId ?? "",
         readyItems: parseStringList(project.readyItems),
         webhookConfigured: !!project.discordWebhookUrl,
+        slackConfigured: !!project.slackWebhookUrl,
+        slackHint: project.slackWebhookUrl ? project.slackWebhookUrl.slice(-6) : null,
+        telegramConfigured: !!project.telegramBotToken && !!project.telegramChatId,
+        telegramChatId: project.telegramChatId ?? "",
+        telegramHint: project.telegramBotToken ? project.telegramBotToken.slice(-4) : null,
         webhookHint: project.discordWebhookUrl ? project.discordWebhookUrl.slice(-6) : null,
       }}
     />
