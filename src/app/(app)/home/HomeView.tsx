@@ -24,20 +24,20 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
 
   const tiles = [
     { label: "Proyectos", value: kpis.projects, tone: "text-ink" },
-    { label: "Sprints activos", value: kpis.activeSprints, tone: "text-moss" },
+    { label: "Sprints activos", value: kpis.activeSprints, tone: "text-moss-ink" },
     { label: "Tickets abiertos", value: kpis.open, tone: "text-ink" },
     { label: "Vencidos", value: kpis.overdue, tone: kpis.overdue > 0 ? "text-danger" : "text-ink" },
-    { label: "Hechos esta semana", value: kpis.doneWeek, tone: "text-moss" },
+    { label: "Hechos esta semana", value: kpis.doneWeek, tone: "text-moss-ink" },
   ];
 
   return (
     <main className="mx-auto w-full max-w-[1400px] px-4 pb-16 pt-8 sm:px-6">
-      <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Hola{first ? `, ${first}` : ""} 👋</h1>
+      <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Hola{first ? `, ${first}` : ""}</h1>
       <p className="mb-6 text-sm text-ink-soft">Así está el portafolio hoy.</p>
 
       <motion.div variants={staggerParent} initial="hidden" animate="show" className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-5">
         {tiles.map((t) => (
-          <motion.div key={t.label} variants={staggerChild} className="lift border-2 border-ink bg-card p-4">
+          <motion.div key={t.label} variants={staggerChild} className="lift border border-line bg-card p-4 rounded-lg">
             <p className="text-xs font-semibold text-ink-faint">{t.label}</p>
             <p className={cn("font-display text-4xl font-black", t.tone)}>
               <AnimatedNumber value={t.value} />
@@ -51,20 +51,20 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
           <section>
             <h2 className="mb-2 font-display text-lg font-extrabold text-ink">Sprints activos</h2>
             {sprints.length === 0 ? (
-              <p className="border-2 border-dashed border-line-strong p-5 text-sm text-ink-faint">No hay sprints en curso. Iniciá uno desde el backlog de un proyecto.</p>
+              <p className="border border-dashed border-line-strong p-5 text-sm text-ink-faint rounded-md">No hay sprints en curso. Iniciá uno desde el backlog de un proyecto.</p>
             ) : (
               <motion.ul variants={staggerParent} initial="hidden" animate="show" className="space-y-3">
                 {sprints.map((s) => {
                   const left = daysRemaining(s.endDate ? new Date(s.endDate) : null);
                   return (
                     <motion.li key={s.id} variants={staggerChild}>
-                      <Link href={`/projects/${s.projectId}/board`} className="lift block border-2 border-ink bg-card p-4">
+                      <Link href={`/projects/${s.projectId}/board`} className="lift block border border-line bg-card p-4 rounded-lg">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-moss">{s.projectKey}</span>
+                          <span className="font-mono text-xs font-bold text-moss-ink">{s.projectKey}</span>
                           <span className="font-display font-extrabold text-ink">{s.projectName}</span>
                           <span className="text-sm text-ink-soft">· {s.name}</span>
                           {left !== null && (
-                            <span className={cn("lozenge ml-auto", left < 0 ? "text-danger" : left <= 2 ? "text-warn" : "text-moss")}>
+                            <span className={cn("lozenge ml-auto", left < 0 ? "text-danger" : left <= 2 ? "text-warn" : "text-moss-ink")}>
                               {left < 0 ? "vencido" : left === 0 ? "termina hoy" : `${left} d`}
                             </span>
                           )}
@@ -87,12 +87,12 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
           <section>
             <h2 className="mb-2 font-display text-lg font-extrabold text-ink">Vencidos</h2>
             {overdue.length === 0 ? (
-              <p className="border-2 border-dashed border-line-strong p-5 text-sm text-ink-faint">Nada vencido. 🎯</p>
+              <p className="border border-dashed border-line-strong p-5 text-sm text-ink-faint rounded-md">Nada vencido.</p>
             ) : (
-              <ul className="border-2 border-ink bg-card">
+              <ul className="border border-line bg-card rounded-lg">
                 {overdue.map((t) => (
                   <li key={t.id}>
-                    <button onClick={() => openIssue(t.key)} className="flex w-full items-center gap-3 border-b-2 border-line-strong px-3 py-2 text-left last:border-b-0 hover:bg-card-2">
+                    <button onClick={() => openIssue(t.key)} className="flex w-full items-center gap-3 border-b border-line-strong px-3 py-2 text-left last:border-b-0 hover:bg-card-2">
                       <span className="w-16 shrink-0 font-mono text-xs text-ink-faint">{t.key}</span>
                       <span className="min-w-0 flex-1 truncate text-sm text-ink">{t.title}</span>
                       <span className="text-xs font-semibold text-danger">{formatDate(t.dueDate)}</span>
@@ -109,14 +109,14 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
           <section>
             <h2 className="mb-2 font-display text-lg font-extrabold text-ink">Carga por persona</h2>
             {workload.length === 0 ? (
-              <p className="border-2 border-dashed border-line-strong p-5 text-sm text-ink-faint">Sin tickets asignados.</p>
+              <p className="border border-dashed border-line-strong p-5 text-sm text-ink-faint rounded-md">Sin tickets asignados.</p>
             ) : (
-              <ul className="space-y-2 border-2 border-ink bg-card p-4">
+              <ul className="space-y-2 border border-line bg-card p-4 rounded-lg">
                 {workload.map((w) => (
                   <li key={w.name} className="flex items-center gap-3 text-sm">
                     <Avatar name={w.name} size={22} />
                     <span className="w-28 truncate text-ink">{w.name}</span>
-                    <div className="h-3 flex-1 border-2 border-line bg-paper-deep">
+                    <div className="h-3 flex-1 border border-line bg-paper-deep rounded-lg">
                       <motion.div className="h-full bg-accent" initial={{ width: 0 }} animate={{ width: `${(w.count / maxLoad) * 100}%` }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} />
                     </div>
                     <span className="w-16 text-right font-mono text-xs text-ink-faint">{w.count}{w.points ? ` · ${w.points}p` : ""}</span>
@@ -129,16 +129,16 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
           <section>
             <h2 className="mb-2 font-display text-lg font-extrabold text-ink">Actividad reciente</h2>
             {activity.length === 0 ? (
-              <p className="border-2 border-dashed border-line-strong p-5 text-sm text-ink-faint">Todavía no pasó nada.</p>
+              <p className="border border-dashed border-line-strong p-5 text-sm text-ink-faint rounded-md">Todavía no pasó nada.</p>
             ) : (
-              <ul className="border-2 border-ink bg-card">
+              <ul className="border border-line bg-card rounded-lg">
                 {activity.map((a) => (
-                  <li key={a.id} className="flex gap-3 border-b-2 border-line-strong px-3 py-2.5 last:border-b-0">
+                  <li key={a.id} className="flex gap-3 border-b border-line-strong px-3 py-2.5 last:border-b-0">
                     <Avatar name={a.who} size={22} />
                     <div className="min-w-0 flex-1 text-xs">
                       <p className="text-ink"><b>{a.who}</b> <span className="text-ink-soft">· {a.label}</span></p>
                       <p className="truncate text-ink-faint">
-                        <Link href={`/projects/${a.projectId}/activity`} className="hover:text-moss">{a.projectName}</Link>
+                        <Link href={`/projects/${a.projectId}/activity`} className="hover:text-moss-ink">{a.projectName}</Link>
                         {a.detail ? ` — ${a.detail}` : ""}
                       </p>
                     </div>

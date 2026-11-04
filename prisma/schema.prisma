@@ -29,6 +29,8 @@ model User {
   lockedUntil         DateTime?
   createdAt           DateTime  @default(now())
   discordUserId       String?
+  telegramUsername    String?
+  slackUserId         String?
 
   passwordResetTokens PasswordResetToken[]
   assignedIssues      Task[]               @relation("TaskAssignee")
@@ -36,6 +38,10 @@ model User {
   ledProjects         Project[]            @relation("ProjectLead")
   comments            Comment[]
   attachments         Attachment[]
+  notes               Note[]
+  messages            ProjectMessage[]
+  standups            StandupEntry[]
+  retroItems          RetroItem[]
 }
 
 model PasswordResetToken {
@@ -75,6 +81,17 @@ model Project {
 
   discordWebhookUrl String?
 
+  // Telegram: token del bot (secreto, nunca se devuelve por la API) y chat/grupo destino.
+  telegramBotToken String?
+  telegramChatId   String?
+
+  // Slack: Incoming Webhook (secreto, nunca se devuelve completo por la API).
+  slackWebhookUrl String?
+  slackChannelId  String? // para subir archivos (PDF del sprint) con el bot de Slack
+
+  // Definition of Ready: JSON con los textos que un ticket debe cubrir antes de empezar.
+  readyItems String @default("[]")
+
   statusId String
   status   StatusOption @relation(fields: [statusId], references: [id])
 
@@ -90,6 +107,11 @@ model Project {
   documents   Document[]
   attachments Attachment[]
   history     HistoryEntry[]
+  notes       Note[]
+  messages    ProjectMessage[]
+  standups    StandupEntry[]
+  retroItems  RetroItem[]
+  contacts    ProjectContact[]
 }
 
 // Sin uso desde la v2 (solo guardaba metadatos). Se reemplaza por Attachment.
@@ -136,6 +158,8 @@ model Task {
   priority    String  @default("MEDIA") // URGENTE | ALTA | MEDIA | BAJA
   storyPoints Int?
   labels      String  @default("[]")
+  checklist   String  @default("[]") // [{ id, text, done }] dentro de la tarjeta
+  readyDone   String  @default("[]") // ítems de la Definition of Ready ya cubiertos
   rank        Float   @default(0)
   epicColor   String?
 
@@ -158,6 +182,11 @@ model Task {
   epicId   String?
   epic     Task?   @relation("EpicChildren", fields: [epicId], references: [id], onDelete: SetNull)
   children Task[]  @relation("EpicChildren")
+
+  // Historia > tarea/bug (la épica sigue en epicId).
+  parentId String?
+  parent   Task?   @relation("StoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  subtasks Task[]  @relation("StoryChildren")
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -192,7 +221,8 @@ model Sprint {
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  tasks Task[]
+  tasks      Task[]
+  retroItems RetroItem[]
 
   @@index([projectId, state])
 }
@@ -228,4 +258,93 @@ model Attachment {
 
   uploadedById String?
   uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+}
+
+// Notas públicas del proyecto (brief, actas de reunión, acuerdos). Las ve y
+// las edita todo el equipo.
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  body      String   @default("")
+  kind      String   @default("GENERAL") // BRIEF | REUNION | GENERAL
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, updatedAt])
+}
+
+// Chat del equipo dentro de cada proyecto.
+model ProjectMessage {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+}
+
+// Daily asíncrono: una entrada por persona y día (fecha "YYYY-MM-DD").
+model StandupEntry {
+  id        String   @id @default(cuid())
+  date      String
+  yesterday String   @default("")
+  today     String   @default("")
+  blockers  String   @default("")
+  help      String   @default("") // "¿en qué te puedo ayudar?"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId, date])
+  @@index([projectId, date])
+}
+
+// Retro de un sprint: qué funcionó, qué mejorar y acuerdos (que pueden pasar a ticket).
+model RetroItem {
+  id        String   @id @default(cuid())
+  column    String // WENT_WELL | IMPROVE | ACTION
+  body      String
+  ticketKey String? // si el acuerdo ya se convirtió en ticket
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  sprintId String
+  sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, sprintId])
+}
+
+// Ayuda y contactos: quién sabe de qué / a quién llamar en cada proyecto.
+model ProjectContact {
+  id        String   @id @default(cuid())
+  name      String
+  role      String   @default("")
+  contact   String   @default("")
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }

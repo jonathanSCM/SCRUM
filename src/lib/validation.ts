@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { SLACK_CHANNEL_ID_PATTERN, SLACK_USER_ID_PATTERN, SLACK_WEBHOOK_PATTERN } from "@/lib/slack";
+import { TELEGRAM_CHAT_PATTERN, TELEGRAM_TOKEN_PATTERN, TELEGRAM_USERNAME_PATTERN } from "@/lib/telegram";
 import { ISSUE_TYPES, STATUSES, PRIORITIES } from "@/lib/scrum/constants";
 
 export function parseBody<T>(schema: z.ZodType<T>, raw: unknown): { data: T } | { error: NextResponse } {
@@ -45,12 +47,35 @@ export const resetPasswordSchema = z.object({
 
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(1, "Nombre requerido").max(100).optional(),
+  slackUserId: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || SLACK_USER_ID_PATTERN.test(v), "Tiene que ser tu ID de miembro de Slack (empieza con U o W, ej. U01ABCDE2F3)")
+    .nullish(),
+  telegramUsername: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/^@/, ""))
+    .refine((v) => v === "" || TELEGRAM_USERNAME_PATTERN.test(v), "Usuario de Telegram inválido (5 a 32 letras, números o _)")
+    .nullish(),
   discordUserId: z
     .string()
     .trim()
     .regex(/^\d{17,20}$/, "Tiene que ser el ID numérico de Discord (17 a 20 dígitos)")
     .nullish()
     .or(z.literal("")),
+});
+
+export const telegramConfigSchema = z.object({
+  // Vacío = quitar la configuración.
+  botToken: z.string().trim().regex(TELEGRAM_TOKEN_PATTERN, "Token de bot inválido (formato 123456:ABC…)").or(z.literal("")),
+  chatId: z.string().trim().regex(TELEGRAM_CHAT_PATTERN, "Chat inválido: usá el id numérico del grupo o @canal").or(z.literal("")),
+});
+
+export const slackWebhookSchema = z.object({
+  slackWebhookUrl: z.string().trim().regex(SLACK_WEBHOOK_PATTERN, "Tiene que ser una URL de Incoming Webhook de Slack (https://hooks.slack.com/services/…)").or(z.literal("")).optional(),
+  // Canal donde el bot sube el PDF del sprint (ID tipo C01ABCDE2F3, no el nombre).
+  slackChannelId: z.string().trim().regex(SLACK_CHANNEL_ID_PATTERN, "ID de canal inválido (empieza con C o G, ej. C01ABCDE2F3)").or(z.literal("")).optional(),
 });
 
 export const changePasswordSchema = z.object({
@@ -79,6 +104,7 @@ export const updateProjectSchema = z.object({
   description: z.string().max(5000).optional(),
   deployUrl: z.string().trim().max(500).nullable().optional(),
   stack: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+  readyItems: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
 });
 
 export const discordWebhookSchema = z.object({
@@ -111,6 +137,9 @@ export const createIssueSchema = z.object({
   priority: priority.optional(),
   storyPoints: storyPoints.optional(),
   labels: labels.optional(),
+  readyDone: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
+  checklist: z.array(z.object({ id: z.string().min(1).max(40), text: z.string().trim().min(1).max(200), done: z.boolean() })).max(50).optional(),
+  parentId: z.string().min(1).nullable().optional(),
   assigneeUserId: z.string().min(1).nullable().optional(),
   sprintId: z.string().min(1).nullable().optional(),
   epicId: z.string().min(1).nullable().optional(),
@@ -126,6 +155,9 @@ export const updateIssueSchema = z.object({
   priority: priority.optional(),
   storyPoints: storyPoints.optional(),
   labels: labels.optional(),
+  readyDone: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
+  checklist: z.array(z.object({ id: z.string().min(1).max(40), text: z.string().trim().min(1).max(200), done: z.boolean() })).max(50).optional(),
+  parentId: z.string().min(1).nullable().optional(),
   assigneeUserId: z.string().min(1).nullable().optional(),
   sprintId: z.string().min(1).nullable().optional(),
   epicId: z.string().min(1).nullable().optional(),
@@ -169,9 +201,61 @@ export const startSprintSchema = z.object({
   goal: z.string().trim().max(500).optional(),
   startDate: optionalDate,
   endDate: optionalDate,
+  // Un líder puede iniciar aunque falte información (Definition of Ready).
+  force: z.boolean().optional(),
 });
 
 export const completeSprintSchema = z.object({
   // "BACKLOG" o el id de otro sprint planificado
   destination: z.string().min(1),
 });
+
+// ---- Notas y chat ----
+
+export const NOTE_KINDS = ["BRIEF", "REUNION", "PLANNING", "REVIEW", "GENERAL"] as const;
+
+export const createNoteSchema = z.object({
+  title: z.string().trim().min(1, "Título requerido").max(200),
+  body: z.string().max(50000).optional(),
+  kind: z.enum(NOTE_KINDS).optional(),
+  pinned: z.boolean().optional(),
+});
+
+export const updateNoteSchema = createNoteSchema.partial();
+
+export const noteToTicketsSchema = z.object({
+  items: z.array(z.string().trim().min(1).max(300)).min(1, "Elegí al menos un punto").max(30),
+});
+
+export const messageSchema = z.object({
+  body: z.string().trim().min(1, "El mensaje no puede estar vacío").max(3000),
+});
+
+// ---- Ceremonias ----
+
+const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida");
+const standupText = z.string().trim().max(2000).optional();
+
+export const standupSchema = z.object({
+  date: dateString,
+  yesterday: standupText,
+  today: standupText,
+  blockers: standupText,
+  help: standupText,
+});
+
+export const RETRO_COLUMNS = ["WENT_WELL", "IMPROVE", "ACTION"] as const;
+
+export const retroItemSchema = z.object({
+  sprintId: z.string().min(1),
+  column: z.enum(RETRO_COLUMNS),
+  body: z.string().trim().min(1, "Escribí algo").max(500),
+});
+
+export const contactSchema = z.object({
+  name: z.string().trim().min(1, "Nombre requerido").max(100),
+  role: z.string().trim().max(100).optional(),
+  contact: z.string().trim().max(200).optional(),
+  notes: z.string().trim().max(1000).optional(),
+});
+export const updateContactSchema = contactSchema.partial();

@@ -1,10 +1,14 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logHistory } from "@/lib/history";
-import { notifyDiscord, resolveDiscordMention, DISCORD_COLOR } from "@/lib/discord";
+import { DISCORD_COLOR } from "@/lib/discord";
+import { notifyProject } from "@/lib/notify";
 import { getBaseUrl } from "@/lib/baseUrl";
 import { formatIssueKey, parseIssueKey } from "@/lib/scrum/issueKey";
+import { parseStringList } from "@/lib/scrum/ready";
+import { canHaveParent, parseChecklist, type ChecklistItem } from "@/lib/scrum/checklist";
 import { parseLabels } from "@/lib/scrum/labels";
+import { validateLeaveActiveSprint } from "@/lib/scrum/sprintLifecycle";
 import { needsRebalance, rankBetween, rebalance, RANK_STEP } from "@/lib/scrum/rank";
 import {
   ISSUE_TYPE_META,
@@ -23,12 +27,13 @@ export const issueInclude = {
   assignee: { select: { id: true, name: true } },
   reporter: { select: { id: true, name: true } },
   epic: { select: { id: true, number: true, title: true, epicColor: true } },
+  parent: { select: { id: true, number: true, title: true } },
   _count: { select: { comments: true, attachments: true } },
 } satisfies Prisma.TaskInclude;
 
 export type IssueWithRefs = Prisma.TaskGetPayload<{ include: typeof issueInclude }>;
 
-export type Actor = { id: string; name: string };
+export type Actor = { id: string; name: string; role?: "LEAD" | "MEMBER" };
 
 export type IssuePatch = {
   title?: string;
@@ -38,6 +43,9 @@ export type IssuePatch = {
   priority?: Priority;
   storyPoints?: number | null;
   labels?: string[];
+  readyDone?: string[];
+  checklist?: ChecklistItem[];
+  parentId?: string | null;
   assigneeUserId?: string | null;
   sprintId?: string | null;
   epicId?: string | null;
@@ -54,11 +62,11 @@ export class IssueError extends Error {
   }
 }
 
-const EPIC_COLORS = ["#c084fc", "#2fe3a6", "#60a5fa", "#ffb020", "#fb7185", "#8b5cf6"];
+const EPIC_COLORS = ["#8b5cf6", "#14b88a", "#3b82f6", "#f59e0b", "#ef4444", "#a78bfa"];
 
 async function validateRefs(
   projectId: string,
-  refs: { sprintId?: string | null; epicId?: string | null; assigneeUserId?: string | null; issueType?: IssueType },
+  refs: { sprintId?: string | null; epicId?: string | null; parentId?: string | null; assigneeUserId?: string | null; issueType?: IssueType },
   selfId?: string
 ) {
   if (refs.sprintId) {
@@ -72,6 +80,12 @@ async function validateRefs(
     if (refs.epicId === selfId) throw new IssueError("Un ticket no puede ser su propia épica");
     const epic = await prisma.task.findUnique({ where: { id: refs.epicId }, select: { projectId: true, issueType: true } });
     if (!epic || epic.projectId !== projectId || epic.issueType !== "EPIC") throw new IssueError("Esa épica no existe en el proyecto");
+  }
+  if (refs.parentId) {
+    if (!refs.issueType || !canHaveParent(refs.issueType)) throw new IssueError("Solo las tareas y los bugs pueden colgar de una historia");
+    if (refs.parentId === selfId) throw new IssueError("Un ticket no puede ser su propia historia");
+    const parent = await prisma.task.findUnique({ where: { id: refs.parentId }, select: { projectId: true, issueType: true } });
+    if (!parent || parent.projectId !== projectId || parent.issueType !== "STORY") throw new IssueError("Esa historia no existe en el proyecto");
   }
   if (refs.assigneeUserId) {
     const user = await prisma.user.findUnique({ where: { id: refs.assigneeUserId }, select: { id: true } });
@@ -94,7 +108,8 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
   const issueType = input.issueType ?? "TASK";
   const sprintId = issueType === "EPIC" ? null : input.sprintId ?? null;
   const epicId = issueType === "EPIC" ? null : input.epicId ?? null;
-  await validateRefs(projectId, { sprintId, epicId, assigneeUserId: input.assigneeUserId, issueType });
+  const parentId = canHaveParent(issueType) ? input.parentId ?? null : null;
+  await validateRefs(projectId, { sprintId, epicId, parentId, assigneeUserId: input.assigneeUserId, issueType });
 
   const status = issueType === "EPIC" ? "TODO" : input.status ?? "TODO";
   const now = new Date();
@@ -115,12 +130,15 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
         priority: input.priority ?? "MEDIA",
         storyPoints: input.storyPoints ?? null,
         labels: JSON.stringify(input.labels ?? []),
+        readyDone: JSON.stringify(input.readyDone ?? []),
         rank: (top._max.rank ?? 0) + RANK_STEP,
         epicColor: issueType === "EPIC" ? input.epicColor ?? EPIC_COLORS[epicCount % EPIC_COLORS.length] : null,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         assigneeUserId: input.assigneeUserId ?? null,
         reporterId: actor.id,
         epicId,
+        parentId,
+        checklist: JSON.stringify(input.checklist ?? []),
         sprintId,
         sprintAddedAt: sprintId ? now : null,
         completedAt: status === "DONE" ? now : null,
@@ -132,14 +150,13 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
   const key = formatIssueKey(project.key, created.number);
   await logHistory({ projectId, taskId: created.id, taskTitle: created.title, field: "ticket_creado", newValue: key, actor });
 
-  const mention = await resolveDiscordMention(created.assigneeUserId);
-  await notifyDiscord(projectId, {
-    title: `🆕 ${key} creado en ${project.name}`,
+  await notifyProject(projectId, {
+    title: `${key} creado en ${project.name}`,
     description: `**${actor.name}** creó ${ISSUE_TYPE_META[issueType as IssueType].label.toLowerCase()} «${created.title}»${
       created.assignee ? ` — asignado a ${created.assignee.name}` : ""
     }`,
     color: DISCORD_COLOR.created,
-    mentionUserId: mention,
+    mentionUserIds: [created.assigneeUserId],
     url: issueUrl(projectId, key),
   });
 
@@ -156,7 +173,7 @@ export async function updateIssue(
 ): Promise<IssueWithRefs> {
   const current = await prisma.task.findUnique({
     where: { id: issueId },
-    include: { ...issueInclude, project: { select: { id: true, key: true, name: true, leadUserId: true } }, sprint: { select: { name: true } } },
+    include: { ...issueInclude, project: { select: { id: true, key: true, name: true, leadUserId: true } }, sprint: { select: { name: true, state: true } } },
   });
   if (!current) throw new IssueError("Ticket no encontrado", 404);
   const { project } = current;
@@ -203,6 +220,15 @@ export async function updateIssue(
     current.id
   );
 
+  if (issueType !== "EPIC") {
+    const blocked = validateLeaveActiveSprint({
+      currentSprintState: current.sprint?.state ?? null,
+      currentSprintId: current.sprintId,
+      nextSprintId,
+      actorRole: actor.role,
+    });
+    if (blocked) throw new IssueError(blocked, 403);
+  }
   if (nextSprintId !== current.sprintId && issueType !== "EPIC") {
     data.sprintId = nextSprintId;
     data.sprintAddedAt = nextSprintId ? new Date() : null;
@@ -219,6 +245,30 @@ export async function updateIssue(
     );
   }
   if (patch.epicColor !== undefined && issueType === "EPIC") data.epicColor = patch.epicColor;
+
+  // Historia padre: solo tareas y bugs; si el ticket cambia a otro tipo, se suelta.
+  if (!canHaveParent(issueType)) {
+    if (patch.parentId) throw new IssueError("Solo las tareas y los bugs pueden colgar de una historia");
+    if (current.parentId) data.parentId = null;
+  } else if (patch.parentId !== undefined && patch.parentId !== current.parentId) {
+    await validateRefs(project.id, { parentId: patch.parentId, issueType }, current.id);
+    data.parentId = patch.parentId;
+    const target = patch.parentId ? await prisma.task.findUnique({ where: { id: patch.parentId }, select: { number: true, title: true } }) : null;
+    const before = current.parentId ? await prisma.task.findUnique({ where: { id: current.parentId }, select: { number: true, title: true } }) : null;
+    track(
+      "historia_ticket",
+      before ? `${formatIssueKey(project.key, before.number)} ${before.title}` : null,
+      target ? `${formatIssueKey(project.key, target.number)} ${target.title}` : null
+    );
+  }
+  if (patch.checklist !== undefined) {
+    const before = parseChecklist(current.checklist);
+    const same = JSON.stringify(before) === JSON.stringify(patch.checklist);
+    if (!same) {
+      data.checklist = JSON.stringify(patch.checklist);
+      if (patch.checklist.length !== before.length) track("checklist_ticket", `${before.length}`, `${patch.checklist.length}`);
+    }
+  }
 
   let assigneeChanged = false;
   let newAssignee: { id: string; name: string } | null = current.assignee;
@@ -257,6 +307,13 @@ export async function updateIssue(
       track("etiquetas_ticket", before || null, after || null);
     }
   }
+  if (patch.readyDone !== undefined) {
+    const before = parseStringList(current.readyDone).join("|");
+    if (before !== patch.readyDone.join("|")) {
+      data.readyDone = JSON.stringify(patch.readyDone);
+      track("listo_ticket", `${parseStringList(current.readyDone).length}`, `${patch.readyDone.length}`);
+    }
+  }
   if (patch.dueDate !== undefined) {
     const before = current.dueDate ? current.dueDate.toISOString().slice(0, 10) : null;
     const nextDate = patch.dueDate ? new Date(patch.dueDate) : null;
@@ -271,6 +328,8 @@ export async function updateIssue(
   if (Object.keys(data).length === 0) return current;
 
   const updated = await prisma.$transaction(async (tx) => {
+    // Si una historia deja de serlo, sus tareas quedan sueltas.
+    if (current.issueType === "STORY" && issueType !== "STORY") await tx.task.updateMany({ where: { parentId: current.id }, data: { parentId: null } });
     // Si una épica pasa a ser otro tipo, sus hijos quedan sin épica.
     if (wasEpic && issueType !== "EPIC") await tx.task.updateMany({ where: { epicId: current.id }, data: { epicId: null } });
     return tx.task.update({ where: { id: issueId }, data, include: issueInclude });
@@ -283,22 +342,20 @@ export async function updateIssue(
 
   if (!options.silent) {
     if (becameDone) {
-      const mention = await resolveDiscordMention(updated.assigneeUserId, project.leadUserId);
-      await notifyDiscord(project.id, {
-        title: `✅ ${key} completado en ${project.name}`,
+      await notifyProject(project.id, {
+        title: `${key} completado en ${project.name}`,
         description: `**${actor.name}** completó «${updated.title}»`,
         color: DISCORD_COLOR.done,
-        mentionUserId: mention,
+        mentionUserIds: [updated.assigneeUserId, project.leadUserId],
         url: issueUrl(project.id, key),
       });
     }
     if (assigneeChanged && newAssignee && newAssignee.id !== actor.id) {
-      const mention = await resolveDiscordMention(newAssignee.id);
-      await notifyDiscord(project.id, {
-        title: `👤 ${key} asignado en ${project.name}`,
+      await notifyProject(project.id, {
+        title: `${key} asignado en ${project.name}`,
         description: `**${actor.name}** asignó «${updated.title}» a ${newAssignee.name}`,
         color: DISCORD_COLOR.assigned,
-        mentionUserId: mention,
+        mentionUserIds: [newAssignee.id],
         url: issueUrl(project.id, key),
       });
     }

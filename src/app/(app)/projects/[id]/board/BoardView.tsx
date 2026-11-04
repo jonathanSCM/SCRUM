@@ -170,11 +170,11 @@ export default function BoardView({
   return (
     <div>
       {/* Encabezado del sprint */}
-      <div className="mb-5 border-2 border-ink bg-card p-4">
+      <div className="mb-5 border border-line bg-card p-4 rounded-lg">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <h2 className="font-display text-xl font-extrabold text-ink">{sprint.name}</h2>
           {left !== null && (
-            <span className={cn("lozenge", left < 0 ? "text-danger" : left <= 2 ? "text-warn" : "text-moss")}>
+            <span className={cn("lozenge", left < 0 ? "text-danger" : left <= 2 ? "text-warn" : "text-moss-ink")}>
               {left < 0 ? `Vencido hace ${-left} d` : left === 0 ? "Termina hoy" : `${left} d restantes`}
             </span>
           )}
@@ -198,7 +198,7 @@ export default function BoardView({
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <button
           onClick={() => setMine((v) => !v)}
-          className={cn("border-2 px-2.5 py-1 text-xs font-bold transition-colors", mine ? "border-moss bg-moss text-[#150b22]" : "border-line-strong text-ink-soft hover:text-ink")}
+          className={cn("border px-2.5 py-1 text-xs font-bold transition-colors rounded-md", mine ? "border-rust bg-rust text-white" : "border-line-strong text-ink-soft hover:text-ink")}
           aria-pressed={mine}
         >
           Solo mis tickets
@@ -272,8 +272,8 @@ function Column({ id, status, ids, byId, onOpen }: { id: string; status: IssueSt
   const meta = STATUS_META[status];
   const points = ids.reduce((n, i) => n + (byId[i]?.storyPoints ?? 0), 0);
   return (
-    <div ref={setNodeRef} className={cn("flex min-h-[200px] flex-col border-2 bg-card-2/40 transition-colors", isOver ? "border-moss bg-card-2" : "border-line-strong")}>
-      <div className="flex items-center gap-2 border-b-2 border-line-strong px-3 py-2">
+    <div ref={setNodeRef} className={cn("flex min-h-[200px] flex-col border bg-card-2/40 transition-colors rounded-md", isOver ? "border-moss bg-card-2" : "border-line-strong")}>
+      <div className="flex items-center gap-2 border-b border-line-strong px-3 py-2">
         <span className="h-2.5 w-2.5" style={{ background: meta.color }} />
         <span className="text-xs font-extrabold uppercase tracking-wide text-ink-soft">{meta.label}</span>
         <span className="font-mono text-xs text-ink-faint">{ids.length}</span>

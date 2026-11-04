@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
 import { getProjectIssues, getProjectOptions, getProjectOrNotFound, getProjectSprints } from "@/lib/projectData";
+import { sprintPdfEnabled } from "@/lib/features";
 import BacklogView from "./BacklogView";
 
 export default async function BacklogPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,6 +29,7 @@ export default async function BacklogPage({ params }: { params: Promise<{ id: st
       currentUserId={session.user.id}
       isLead={session.user.role === "LEAD"}
       completedSprints={completedCount}
+      pdfEnabled={sprintPdfEnabled()}
     />
   );
 }

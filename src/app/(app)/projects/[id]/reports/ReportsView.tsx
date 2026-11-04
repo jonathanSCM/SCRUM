@@ -51,27 +51,27 @@ export default function ReportsView({
         <Stat label="Velocidad promedio" value={velocity.average} unit={velocity.unit === "points" ? "pts" : "tickets"} />
       </div>
 
-      <section className="border-2 border-ink bg-card p-4">
+      <section className="border border-line bg-card p-4 rounded-lg overflow-hidden">
         <h2 className="mb-1 font-display text-lg font-extrabold text-ink">Burndown</h2>
         <p className="mb-3 text-xs text-ink-faint">Trabajo restante ({unit}) por día contra la línea ideal. Solo cuenta los tickets que hoy pertenecen al sprint.</p>
         <BurndownChart data={burndown} />
       </section>
 
-      <section className="border-2 border-ink bg-card p-4">
+      <section className="border border-line bg-card p-4 rounded-lg overflow-hidden">
         <h2 className="mb-1 font-display text-lg font-extrabold text-ink">Velocidad</h2>
         <p className="mb-3 text-xs text-ink-faint">Comprometido vs. completado en los últimos sprints cerrados.</p>
         <VelocityChart data={velocity} />
       </section>
 
-      <section className="border-2 border-ink bg-card">
-        <h2 className="border-b-2 border-ink px-4 py-3 font-display text-lg font-extrabold text-ink">Reporte del sprint</h2>
+      <section className="border border-line bg-card rounded-lg overflow-hidden">
+        <h2 className="border-b border-line px-4 py-3 font-display text-lg font-extrabold text-ink">Reporte del sprint</h2>
         <div className="grid gap-0 lg:grid-cols-2">
-          <div className="lg:border-r-2 lg:border-line-strong">
-            <h3 className="border-b-2 border-line-strong bg-card-2 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-moss">Completado · {done.length}</h3>
+          <div className="lg:border-r lg:border-line-strong">
+            <h3 className="border-b border-line-strong bg-card-2 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-moss-ink">Completado · {done.length}</h3>
             {done.length === 0 ? <p className="px-4 py-4 text-xs text-ink-faint">Nada completado todavía.</p> : done.map((i) => <IssueRowView key={i.id} issue={i} onOpen={() => openIssue(i.key)} />)}
           </div>
           <div>
-            <h3 className="border-b-2 border-line-strong bg-card-2 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-warn">
+            <h3 className="border-b border-line-strong bg-card-2 px-4 py-2 text-xs font-extrabold uppercase tracking-wide text-warn">
               {selected.state === "COMPLETED" ? "No completado" : "Pendiente"} · {notDone.length}
             </h3>
             {notDone.length === 0 ? (
@@ -88,9 +88,9 @@ export default function ReportsView({
 
 function Stat({ label, value, unit, accent }: { label: string; value: number; unit: string; accent?: boolean }) {
   return (
-    <div className={`border-2 p-3 ${accent ? "border-moss" : "border-line-strong"} bg-card`}>
+    <div className={`border p-3 ${accent ? "border-moss" : "border-line-strong"} bg-card`}>
       <p className="text-xs font-semibold text-ink-faint">{label}</p>
-      <p className={`font-display text-3xl font-extrabold ${accent ? "text-moss" : "text-ink"}`}>
+      <p className={`font-display text-3xl font-extrabold ${accent ? "text-moss-ink" : "text-ink"}`}>
         <AnimatedNumber value={value} />
         <span className="ml-1 text-xs font-medium text-ink-faint">{unit}</span>
       </p>
@@ -119,7 +119,7 @@ function BurndownChart({ data }: { data: BurndownResult }) {
   }
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Gráfico burndown">
+    <svg viewBox={`0 0 ${W} ${H}`} className="mx-auto w-full max-w-4xl" role="img" aria-label="Gráfico burndown">
       {ticks.map((t) => (
         <g key={t}>
           <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} stroke="var(--line)" strokeWidth={1} />
@@ -134,14 +134,14 @@ function BurndownChart({ data }: { data: BurndownResult }) {
         ) : null
       )}
       <path d={ideal} fill="none" stroke="var(--ink-faint)" strokeWidth={2} strokeDasharray="6 5" />
-      <motion.path d={realPath} fill="none" stroke="var(--moss)" strokeWidth={3.5} strokeLinejoin="miter" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }} />
+      <motion.path d={realPath} fill="none" stroke="var(--moss)" strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }} />
       {real.map((p) => (
-        <rect key={p.label} x={x(pts.indexOf(p)) - 4} y={y(p.remaining as number) - 4} width={8} height={8} fill="var(--moss)" stroke="var(--paper)" strokeWidth={2}>
+        <rect key={p.label} x={x(pts.indexOf(p)) - 4} y={y(p.remaining as number) - 4} width={8} height={8} rx={4} fill="var(--moss)" stroke="var(--paper)" strokeWidth={2}>
           <title>{`${p.label}: ${p.remaining} restantes (ideal ${p.ideal})`}</title>
         </rect>
       ))}
       <g fontSize={11} fontFamily="var(--font-body)">
-        <rect x={W - 190} y={6} width={10} height={10} fill="var(--moss)" />
+        <rect x={W - 190} y={6} width={10} height={10} rx={2} fill="var(--moss)" />
         <text x={W - 175} y={15} fill="var(--ink-soft)">Real</text>
         <line x1={W - 130} x2={W - 112} y1={11} y2={11} stroke="var(--ink-faint)" strokeWidth={2} strokeDasharray="4 3" />
         <text x={W - 106} y={15} fill="var(--ink-soft)">Ideal</text>
@@ -161,7 +161,7 @@ function VelocityChart({ data }: { data: VelocityResult }) {
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Gráfico de velocidad">
+      <svg viewBox={`0 0 ${W} ${H}`} className="mx-auto w-full max-w-4xl" role="img" aria-label="Gráfico de velocidad">
         <line x1={PAD.l} x2={W - PAD.r} y1={H - PAD.b} y2={H - PAD.b} stroke="var(--line-strong)" strokeWidth={2} />
         {data.bars.map((b, i) => {
           const cx = PAD.l + slot * i + slot / 2;
@@ -178,9 +178,9 @@ function VelocityChart({ data }: { data: VelocityResult }) {
           );
         })}
         <g fontSize={11}>
-          <rect x={PAD.l} y={4} width={10} height={10} fill="var(--ink-faint)" />
+          <rect x={PAD.l} y={4} width={10} height={10} rx={2} fill="var(--ink-faint)" />
           <text x={PAD.l + 15} y={13} fill="var(--ink-soft)">Comprometido</text>
-          <rect x={PAD.l + 105} y={4} width={10} height={10} fill="var(--moss)" />
+          <rect x={PAD.l + 105} y={4} width={10} height={10} rx={2} fill="var(--moss)" />
           <text x={PAD.l + 120} y={13} fill="var(--ink-soft)">Completado</text>
         </g>
       </svg>

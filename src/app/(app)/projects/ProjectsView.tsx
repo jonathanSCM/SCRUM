@@ -79,9 +79,9 @@ export default function ProjectsView({ projects, statuses }: { projects: Project
         <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Proyectos</h1>
         <input className="field-sm w-full sm:ml-4 sm:w-60" placeholder="Buscar proyecto…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Buscar proyecto" />
         <div className="ml-auto flex items-center gap-2">
-          <div className="flex border-2 border-ink" role="group" aria-label="Vista">
+          <div className="flex border border-line rounded-md" role="group" aria-label="Vista">
             {(["board", "table"] as const).map((v) => (
-              <button key={v} onClick={() => changeView(v)} aria-pressed={view === v} className={cn("px-3 py-1 text-xs font-bold", view === v ? "bg-moss text-[#150b22]" : "text-ink-soft hover:text-ink")}>
+              <button key={v} onClick={() => changeView(v)} aria-pressed={view === v} className={cn("px-3 py-1 text-xs font-bold", view === v ? "bg-rust text-white" : "text-ink-soft hover:text-ink")}>
                 {v === "board" ? "Tablero" : "Tabla"}
               </button>
             ))}
@@ -115,9 +115,9 @@ export default function ProjectsView({ projects, statuses }: { projects: Project
 function StatusColumn({ status, projects }: { status: Status; projects: ProjectCardData[] }) {
   const { setNodeRef, isOver } = useDroppable({ id: status.id });
   return (
-    <div ref={setNodeRef} className={cn("min-h-[220px] w-72 shrink-0 border-2 bg-card-2/40 transition-colors", isOver ? "border-moss bg-card-2" : "border-line-strong")}>
-      <div className="flex items-center gap-2 border-b-2 border-line-strong px-3 py-2">
-        <span className="h-2.5 w-2.5" style={{ background: status.color }} />
+    <div ref={setNodeRef} className={cn("min-h-[220px] w-72 shrink-0 border bg-card-2/40 transition-colors rounded-md", isOver ? "border-moss bg-card-2" : "border-line-strong")}>
+      <div className="flex items-center gap-2 border-b border-line-strong px-3 py-2">
+        <span className="h-2.5 w-2.5 rounded-sm" style={{ background: status.color }} />
         <span className="text-xs font-extrabold uppercase tracking-wide text-ink-soft">{status.name}</span>
         <span className="font-mono text-xs text-ink-faint">{projects.length}</span>
       </div>
@@ -147,10 +147,10 @@ function ProjectCard({ project, overlay }: { project: ProjectCardData; overlay?:
     <Link
       href={`/projects/${project.id}/board`}
       draggable={false}
-      className={cn("lift block border-2 border-ink bg-card p-3", overlay && "rotate-2 border-moss shadow-hard-purple")}
+      className={cn("lift block border border-line bg-card p-3 rounded-lg", overlay && "rotate-2 border-moss shadow-hard-purple")}
     >
       <div className="flex items-center gap-2">
-        <span className="font-mono text-[11px] font-bold text-moss">{project.key}</span>
+        <span className="font-mono text-[11px] font-bold text-moss-ink">{project.key}</span>
         <Avatar name={project.lead} size={20} />
       </div>
       <p className="mt-1 font-display text-base font-extrabold leading-tight text-ink">{project.name}</p>
@@ -163,7 +163,7 @@ function ProjectCard({ project, overlay }: { project: ProjectCardData; overlay?:
       </div>
       {project.activeSprint && (
         <p className="mt-2 text-xs text-ink-soft">
-          <span className="lozenge text-moss">{project.activeSprint.name}</span>
+          <span className="lozenge text-moss-ink">{project.activeSprint.name}</span>
           {left !== null ? <span className="ml-2 text-ink-faint">{left < 0 ? "vencido" : `${left} d`}</span> : null}
         </p>
       )}
@@ -174,9 +174,9 @@ function ProjectCard({ project, overlay }: { project: ProjectCardData; overlay?:
 function ProjectTable({ projects, statuses }: { projects: ProjectCardData[]; statuses: Status[] }) {
   const byId = new Map(statuses.map((s) => [s.id, s]));
   return (
-    <div className="overflow-x-auto border-2 border-ink bg-card">
+    <div className="overflow-x-auto border border-line bg-card rounded-lg">
       <table className="w-full min-w-[640px] text-left text-sm">
-        <thead className="border-b-2 border-ink bg-card-2 text-xs uppercase tracking-wide text-ink-faint">
+        <thead className="border-b border-line bg-card-2 text-xs uppercase tracking-wide text-ink-faint">
           <tr>
             <th className="px-3 py-2">Clave</th>
             <th className="px-3 py-2">Proyecto</th>
@@ -188,10 +188,10 @@ function ProjectTable({ projects, statuses }: { projects: ProjectCardData[]; sta
         </thead>
         <tbody>
           {projects.map((p) => (
-            <tr key={p.id} className="border-b-2 border-line-strong last:border-b-0 hover:bg-card-2">
-              <td className="px-3 py-2 font-mono text-xs text-moss">{p.key}</td>
+            <tr key={p.id} className="border-b border-line-strong last:border-b-0 hover:bg-card-2">
+              <td className="px-3 py-2 font-mono text-xs text-moss-ink">{p.key}</td>
               <td className="px-3 py-2 font-semibold"><Link href={`/projects/${p.id}/board`} className="text-ink hover:underline">{p.name}</Link></td>
-              <td className="px-3 py-2"><span className="lozenge" style={{ color: byId.get(p.statusId)?.color }}>{byId.get(p.statusId)?.name}</span></td>
+              <td className="px-3 py-2"><span className="lozenge" style={{ color: `color-mix(in srgb, ${byId.get(p.statusId)?.color ?? "#6f6a88"} 60%, #1b1730)` }}>{byId.get(p.statusId)?.name}</span></td>
               <td className="px-3 py-2 text-ink-soft">{p.lead ?? "—"}</td>
               <td className="px-3 py-2 text-ink-soft">{p.activeSprint?.name ?? "—"}</td>
               <td className="px-3 py-2 text-right font-mono text-xs">{p.done}/{p.total} · {pct(p.done, p.total)}%</td>

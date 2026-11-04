@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { findIssueByKey } from "@/lib/issues";
+import { parseChecklist } from "@/lib/scrum/checklist";
+import { parseStringList } from "@/lib/scrum/ready";
 import { parseLabels } from "@/lib/scrum/labels";
 
 // Todo lo que necesita el panel lateral de un ticket en una sola llamada: el
@@ -17,8 +19,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
     const issue = await findIssueByKey(key);
     if (!issue) return notFound("Ticket no encontrado");
 
-    const [project, comments, attachments, history, members, sprints, epics] = await Promise.all([
-      prisma.project.findUnique({ where: { id: issue.projectId }, select: { id: true, key: true, name: true } }),
+    const [project, comments, attachments, history, members, sprints, epics, stories] = await Promise.all([
+      prisma.project.findUnique({ where: { id: issue.projectId }, select: { id: true, key: true, name: true, readyItems: true } }),
       prisma.comment.findMany({
         where: { taskId: issue.id },
         orderBy: { createdAt: "asc" },
@@ -41,12 +43,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
         orderBy: { number: "asc" },
         select: { id: true, number: true, title: true, epicColor: true },
       }),
+      prisma.task.findMany({
+        where: { projectId: issue.projectId, issueType: "STORY" },
+        orderBy: { number: "asc" },
+        select: { id: true, number: true, title: true },
+      }),
     ]);
 
     const children =
-      issue.issueType === "EPIC"
+      issue.issueType === "EPIC" || issue.issueType === "STORY"
         ? await prisma.task.findMany({
-            where: { epicId: issue.id },
+            where: issue.issueType === "EPIC" ? { epicId: issue.id } : { parentId: issue.id },
             orderBy: { number: "asc" },
             select: { id: true, number: true, title: true, status: true, storyPoints: true, issueType: true },
           })
@@ -54,12 +61,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
 
     return NextResponse.json({
       children,
-      issue: { ...issue, labels: parseLabels(issue.labels) },
+      issue: { ...issue, labels: parseLabels(issue.labels), readyDone: parseStringList(issue.readyDone), checklist: parseChecklist(issue.checklist) },
       project,
       comments,
       attachments,
       history,
-      options: { members, sprints, epics },
+      options: { members, sprints, epics, stories, readyItems: parseStringList(project?.readyItems) },
     });
   } catch (e) {
     return errorResponse(e);

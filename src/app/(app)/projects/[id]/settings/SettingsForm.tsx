@@ -19,8 +19,17 @@ type Props = {
     stack: string[];
     statusId: string;
     leadUserId: string;
+    readyItems: string[];
     webhookConfigured: boolean;
     webhookHint: string | null;
+    slackChannelId: string;
+    slackBot: boolean;
+    pdfEnabled: boolean;
+    slackConfigured: boolean;
+    slackHint: string | null;
+    telegramConfigured: boolean;
+    telegramChatId: string;
+    telegramHint: string | null;
   };
 };
 
@@ -36,6 +45,27 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
   const [statusId, setStatusId] = useState(project.statusId);
   const [leadUserId, setLeadUserId] = useState(project.leadUserId);
   const [saving, setSaving] = useState(false);
+
+  const [readyItems, setReadyItems] = useState<string[]>(project.readyItems);
+  const [newReady, setNewReady] = useState("");
+  const [savingReady, setSavingReady] = useState(false);
+
+  async function saveReady(items: string[]) {
+    setSavingReady(true);
+    const res = await api(`/api/projects/${project.id}`, "PATCH", { readyItems: items });
+    setSavingReady(false);
+    if (!res.ok) return toast.error(res.error);
+    setReadyItems(items);
+    toast.success("Definition of Ready guardada");
+    router.refresh();
+  }
+
+  function addReady() {
+    const text = newReady.trim();
+    if (!text || readyItems.includes(text)) return;
+    setNewReady("");
+    saveReady([...readyItems, text]);
+  }
 
   const [webhook, setWebhook] = useState("");
   const [configured, setConfigured] = useState(project.webhookConfigured);
@@ -71,6 +101,72 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
     toast.success(res.data.configured ? "Webhook guardado" : "Webhook quitado");
   }
 
+  const [slackUrl, setSlackUrl] = useState("");
+  const [slackConfigured, setSlackConfigured] = useState(project.slackConfigured);
+  const [slackHint, setSlackHint] = useState(project.slackHint);
+  const [channelId, setChannelId] = useState(project.slackChannelId);
+  const [savingChannel, setSavingChannel] = useState(false);
+  const [savingSlack, setSavingSlack] = useState(false);
+
+  async function saveChannel() {
+    setSavingChannel(true);
+    const res = await api<{ channelId: string | null }>(`/api/projects/${project.id}/slack`, "PATCH", { slackChannelId: channelId.trim() });
+    setSavingChannel(false);
+    if (!res.ok) return toast.error(res.error);
+    setChannelId(res.data.channelId ?? "");
+    toast.success(res.data.channelId ? "Canal de Slack guardado" : "Canal de Slack quitado");
+  }
+  const [testingSlack, setTestingSlack] = useState(false);
+
+  async function saveSlack(url: string | null) {
+    setSavingSlack(true);
+    const res = await api<{ configured: boolean; hint: string | null }>(`/api/projects/${project.id}/slack`, "PATCH", { slackWebhookUrl: url ?? "" });
+    setSavingSlack(false);
+    if (!res.ok) return toast.error(res.error);
+    setSlackConfigured(res.data.configured);
+    setSlackHint(res.data.hint);
+    setSlackUrl("");
+    toast.success(res.data.configured ? "Webhook de Slack guardado" : "Webhook de Slack quitado");
+  }
+
+  async function testSlack() {
+    setTestingSlack(true);
+    const res = await api(`/api/projects/${project.id}/slack/test`, "POST", {});
+    setTestingSlack(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Mensaje de prueba enviado. Revisá el canal de Slack.");
+  }
+
+  const [tgToken, setTgToken] = useState("");
+  const [tgChat, setTgChat] = useState(project.telegramChatId);
+  const [tgConfigured, setTgConfigured] = useState(project.telegramConfigured);
+  const [tgHint, setTgHint] = useState(project.telegramHint);
+  const [savingTg, setSavingTg] = useState(false);
+  const [testingTg, setTestingTg] = useState(false);
+
+  async function saveTelegram(remove = false) {
+    setSavingTg(true);
+    const res = await api<{ configured: boolean; chatId: string | null; hint: string | null }>(`/api/projects/${project.id}/telegram`, "PATCH", {
+      botToken: remove ? "" : tgToken.trim(),
+      chatId: remove ? "" : tgChat.trim(),
+    });
+    setSavingTg(false);
+    if (!res.ok) return toast.error(res.error);
+    setTgConfigured(res.data.configured);
+    setTgHint(res.data.hint);
+    setTgChat(res.data.chatId ?? "");
+    setTgToken("");
+    toast.success(res.data.configured ? "Telegram guardado" : "Telegram quitado");
+  }
+
+  async function testTelegram() {
+    setTestingTg(true);
+    const res = await api(`/api/projects/${project.id}/telegram/test`, "POST", {});
+    setTestingTg(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Mensaje de prueba enviado. Revisá el chat de Telegram.");
+  }
+
   async function testWebhook() {
     setTesting(true);
     const res = await api(`/api/projects/${project.id}/discord-webhook/test`, "POST", {});
@@ -91,7 +187,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
-      <form onSubmit={save} className="space-y-4 border-2 border-ink bg-card p-5">
+      <form onSubmit={save} className="space-y-4 border border-line bg-card p-5 rounded-lg">
         <h2 className="font-display text-lg font-extrabold text-ink">Detalles</h2>
         <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
           <div>
@@ -141,7 +237,48 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
         </div>
       </form>
 
-      <section className="space-y-3 border-2 border-ink bg-card p-5">
+      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
+        <h2 className="font-display text-lg font-extrabold text-ink">Definition of Ready</h2>
+        <p className="text-sm text-ink-soft">
+          Lo que necesitamos tener antes de empezar a trabajar un ticket (por ejemplo: estructura de datos del cliente, accesos, brief, diseño).
+          Cada ticket tiene este checklist y no se puede iniciar un sprint con tickets incompletos, salvo que un líder lo fuerce.
+        </p>
+        {readyItems.length === 0 && <p className="text-xs text-ink-faint">Todavía no hay ítems: sin ellos, el sprint se puede iniciar sin revisar nada.</p>}
+        <ul className="space-y-1.5">
+          {readyItems.map((item) => (
+            <li key={item} className="flex items-center gap-2 border border-line-strong px-2.5 py-1.5 text-sm text-ink rounded-md">
+              <span className="min-w-0 flex-1 break-words">{item}</span>
+              {isLead && (
+                <button className="btn-ghost btn-sm text-danger" disabled={savingReady} onClick={() => saveReady(readyItems.filter((i) => i !== item))} aria-label={`Quitar ${item}`}>
+                  Quitar
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+        {isLead ? (
+          <div className="flex gap-2">
+            <input
+              className="field min-w-0 flex-1"
+              placeholder="Ej: Estructura de datos que pasa el cliente"
+              value={newReady}
+              maxLength={200}
+              onChange={(e) => setNewReady(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addReady();
+                }
+              }}
+            />
+            <button className="btn-primary" disabled={savingReady || !newReady.trim()} onClick={addReady}>Añadir</button>
+          </div>
+        ) : (
+          <p className="text-xs text-ink-faint">Solo un líder puede cambiar la Definition of Ready.</p>
+        )}
+      </section>
+
+      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
         <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Discord</h2>
         <p className="text-sm text-ink-soft">
           Avisa en un canal cuando se crea un ticket, pasa a Hecho, se asigna o se comenta, y cuando un sprint empieza o termina.
@@ -168,8 +305,82 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
         )}
       </section>
 
+      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
+        <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Telegram</h2>
+        <p className="text-sm text-ink-soft">
+          Los mismos avisos que Discord, en un chat o grupo de Telegram. Se pueden usar los dos canales a la vez; funciona el que esté configurado.
+          Cada persona puede cargar su usuario de Telegram en <b>Mi perfil</b> para recibir la mención.
+        </p>
+        {isLead ? (
+          <>
+            <p className="text-xs text-ink-faint">
+              {tgConfigured ? <>Telegram configurado (token termina en <span className="font-mono text-ink">…{tgHint}</span>, chat <span className="font-mono text-ink">{tgChat}</span>).</> : "Todavía no hay Telegram configurado."}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input className="field font-mono" type="password" autoComplete="off" placeholder="Token del bot (de @BotFather)" value={tgToken} onChange={(e) => setTgToken(e.target.value)} />
+              <input className="field font-mono" placeholder="Chat: -1001234567890 o @canal" value={tgChat} onChange={(e) => setTgChat(e.target.value)} />
+            </div>
+            <p className="text-xs text-ink-faint">
+              Crea el bot con @BotFather, añádelo al grupo y usa el id del grupo (empieza con -). El token solo se guarda, no se vuelve a mostrar.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn-primary" disabled={savingTg || !tgToken.trim() || !tgChat.trim()} onClick={() => saveTelegram()}>Guardar</button>
+              {tgConfigured && (
+                <>
+                  <button className="btn-ghost btn-sm" disabled={testingTg} onClick={testTelegram}>{testingTg ? "Enviando…" : "Enviar mensaje de prueba"}</button>
+                  <button className="btn-ghost btn-sm text-danger" disabled={savingTg} onClick={() => saveTelegram(true)}>Quitar Telegram</button>
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-ink-faint">Solo un líder puede configurar Telegram. {tgConfigured ? "Está activo." : "Todavía no está configurado."}</p>
+        )}
+      </section>
+
+      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
+        <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Slack</h2>
+        <p className="text-sm text-ink-soft">
+          Los mismos avisos en un canal de Slack, con un Incoming Webhook. Cada persona puede cargar su ID de miembro en <b>Mi perfil</b> para recibir la mención.
+        </p>
+        {isLead ? (
+          <>
+            <p className="text-xs text-ink-faint">
+              {slackConfigured ? <>Webhook configurado (termina en <span className="font-mono text-ink">…{slackHint}</span>).</> : "Todavía no hay webhook de Slack configurado."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <input className="field min-w-0 flex-1" type="password" autoComplete="off" placeholder="https://hooks.slack.com/services/…" value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} />
+              <button className="btn-primary" disabled={savingSlack || !slackUrl.trim()} onClick={() => saveSlack(slackUrl.trim())}>Guardar</button>
+            </div>
+            {project.pdfEnabled && (
+            <div className="space-y-2 border-t border-line-strong pt-3">
+              <p className="text-sm font-semibold text-ink">PDF al iniciar cada sprint</p>
+              <p className="text-xs text-ink-soft">
+                Al iniciar un sprint se genera un PDF con todos sus tickets y sugerencias de Gemini y se manda a Slack. Para <b>adjuntar el PDF</b> hace falta
+                un bot de Slack (permisos <span className="font-mono">files:write</span>) agregado al canal, con su token en la variable <span className="font-mono">SLACK_BOT_TOKEN</span> del servidor, y acá el <b>ID del canal</b>.
+                Sin eso se manda un mensaje con el enlace de descarga por el webhook.
+              </p>
+              <p className="text-xs text-ink-faint">Bot en el servidor: {project.slackBot ? "configurado" : "falta SLACK_BOT_TOKEN"}.</p>
+              <div className="flex flex-wrap gap-2">
+                <input className="field min-w-0 flex-1 font-mono" placeholder="ID del canal: C01ABCDE2F3" value={channelId} onChange={(e) => setChannelId(e.target.value)} />
+                <button className="btn-primary" disabled={savingChannel} onClick={saveChannel}>Guardar canal</button>
+              </div>
+            </div>
+            )}
+            {slackConfigured && (
+              <div className="flex gap-2">
+                <button className="btn-ghost btn-sm" disabled={testingSlack} onClick={testSlack}>{testingSlack ? "Enviando…" : "Enviar mensaje de prueba"}</button>
+                <button className="btn-ghost btn-sm text-danger" disabled={savingSlack} onClick={() => saveSlack(null)}>Quitar webhook</button>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-ink-faint">Solo un líder puede configurar Slack. {slackConfigured ? "Está activo." : "Todavía no está configurado."}</p>
+        )}
+      </section>
+
       {isLead && (
-        <section className="space-y-3 border-2 border-danger bg-card p-5">
+        <section className="space-y-3 border border-danger bg-card p-5 rounded-lg overflow-hidden">
           <h2 className="font-display text-lg font-extrabold text-danger">Zona de peligro</h2>
           <p className="text-sm text-ink-soft">Eliminar el proyecto borra todos sus tickets, sprints, comentarios y adjuntos.</p>
           <button className="btn-danger" onClick={removeProject}>Eliminar proyecto</button>

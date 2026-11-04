@@ -17,10 +17,16 @@ export default async function EpicsPage({ params }: { params: Promise<{ id: stri
     getProjectOptions(id, project.key),
   ]);
   const children = await prisma.task.findMany({ where: { projectId: id, epicId: { in: epics.map((e) => e.id) } }, include: issueInclude });
-  const cards = children.map((c) => toIssueCard(c, project.key)).sort(compareByRank);
+  // Las tareas que cuelgan de una historia de la épica también cuentan para su progreso.
+  const storyEpic = new Map(children.filter((c) => c.issueType === "STORY" && c.epicId).map((c) => [c.id, c.epicId as string]));
+  const grandchildren = storyEpic.size
+    ? await prisma.task.findMany({ where: { projectId: id, parentId: { in: [...storyEpic.keys()] } }, include: issueInclude })
+    : [];
+  const cards = [...children, ...grandchildren].map((c) => toIssueCard(c, project.key)).sort(compareByRank);
+  const epicOf = (c: (typeof cards)[number]) => c.epic?.id ?? (c.parent ? storyEpic.get(c.parent.id) : undefined);
 
   const rows: EpicRow[] = epics.map((e) => {
-    const items = cards.filter((c) => c.epic?.id === e.id);
+    const items = cards.filter((c) => epicOf(c) === e.id);
     return {
       id: e.id,
       key: formatIssueKey(project.key, e.number),

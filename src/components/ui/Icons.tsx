@@ -105,7 +105,7 @@ export function TypeIcon({ type, size = 18 }: { type: IssueType; size?: number }
   return (
     <span
       title={meta.label}
-      className="inline-flex shrink-0 items-center justify-center border-2 border-ink text-[#150b22]"
+      className="inline-flex shrink-0 items-center justify-center text-white rounded-md"
       style={{ width: size, height: size, background: meta.color }}
     >
       <svg width={size * 0.62} height={size * 0.62} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth={type === "TASK" ? 3.2 : 1.4} strokeLinecap="square" aria-hidden="true">

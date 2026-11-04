@@ -131,7 +131,7 @@ export default function CommandPalette() {
       <button
         onClick={() => setOpen(true)}
         aria-label="Buscar"
-        className="flex items-center gap-2 border-2 border-line-strong bg-card px-2.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-moss hover:text-ink"
+        className="flex items-center gap-2 border border-line-strong bg-card px-2.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-moss hover:text-ink rounded-lg"
       >
         <SearchIcon size={14} />
         <span className="hidden sm:inline">Buscar</span>
@@ -141,21 +141,21 @@ export default function CommandPalette() {
       <AnimatePresence>
         {open && (
           <motion.div
-            className="fixed inset-0 z-[80] flex items-start justify-center bg-[#0b0614]/70 px-4 pt-[12vh]"
+            className="fixed inset-0 z-[80] flex items-start justify-center bg-[#1b1730]/40 px-4 pt-[12vh]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: 0.1 } }}
             onClick={() => setOpen(false)}
           >
             <motion.div
-              className="w-full max-w-xl border-2 border-ink bg-card"
-              initial={{ y: -16, scale: 0.97, boxShadow: "0 0 0 var(--moss)" }}
-              animate={{ y: 0, scale: 1, boxShadow: "8px 8px 0 var(--moss)" }}
+              className="w-full max-w-xl border border-line bg-card rounded-lg"
+              initial={{ y: -16, scale: 0.97, boxShadow: "0 0 0 rgba(27, 23, 48, 0)" }}
+              animate={{ y: 0, scale: 1, boxShadow: "0 12px 32px rgba(27, 23, 48, 0.16)" }}
               exit={{ y: -8, opacity: 0, transition: { duration: 0.1 } }}
               transition={{ type: "spring", stiffness: 460, damping: 32 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center gap-3 border-b-2 border-line px-4">
+              <div className="flex items-center gap-3 border-b border-line px-4">
                 <SearchIcon size={18} className="text-ink-faint" />
                 <input
                   ref={inputRef}

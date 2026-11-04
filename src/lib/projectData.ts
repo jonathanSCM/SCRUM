@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { issueInclude } from "@/lib/issues";
 import { toIssueCard, toSprintData } from "@/lib/issueView";
+import { parseStringList } from "@/lib/scrum/ready";
 import { compareByRank } from "@/lib/scrum/rank";
 import type { IssueCardData, ProjectOptions, SprintData } from "@/lib/types";
 
@@ -18,15 +19,17 @@ export async function getProjectOrNotFound(id: string) {
 }
 
 export async function getProjectOptions(projectId: string, projectKey: string | null): Promise<ProjectOptions> {
-  const [members, epics, sprints] = await Promise.all([
+  const [members, epics, sprints, proj] = await Promise.all([
     prisma.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.task.findMany({ where: { projectId, issueType: "EPIC" }, orderBy: { number: "asc" }, select: { id: true, number: true, title: true, epicColor: true } }),
     prisma.sprint.findMany({ where: { projectId, state: { in: ["PLANNED", "ACTIVE"] } }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, state: true } }),
+    prisma.project.findUnique({ where: { id: projectId }, select: { readyItems: true } }),
   ]);
   return {
     members,
     epics: epics.map((e) => ({ id: e.id, key: `${projectKey ?? "?"}-${e.number}`, title: e.title, color: e.epicColor })),
     sprints: sprints.map((s) => ({ id: s.id, name: s.name, state: s.state as ProjectOptions["sprints"][number]["state"] })),
+    readyItems: parseStringList(proj?.readyItems),
   };
 }
 

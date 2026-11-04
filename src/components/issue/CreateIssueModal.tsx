@@ -11,7 +11,7 @@ import type { ProjectOptions } from "@/lib/types";
 import { cn } from "@/lib/ui";
 import { useOpenIssue } from "./useOpenIssue";
 
-const EPIC_COLORS = ["#c084fc", "#2fe3a6", "#60a5fa", "#ffb020", "#fb7185", "#8b5cf6"];
+const EPIC_COLORS = ["#8b5cf6", "#14b88a", "#3b82f6", "#f59e0b", "#ef4444", "#a78bfa"];
 
 export default function CreateIssueModal({
   open,
@@ -107,8 +107,8 @@ export default function CreateIssueModal({
               type="button"
               onClick={() => setType(t)}
               className={cn(
-                "flex items-center gap-2 border-2 px-2.5 py-1.5 text-xs font-bold transition-colors",
-                type === t ? "border-moss bg-card-2 text-ink" : "border-line-strong text-ink-faint hover:text-ink"
+                "flex items-center gap-2 border px-2.5 py-1.5 text-xs font-bold transition-colors rounded-md",
+                type === t ? "border-rust bg-card-2 text-rust" : "border-line-strong text-ink-faint hover:text-ink"
               )}
             >
               <TypeIcon type={t} size={16} /> {ISSUE_TYPE_META[t].label}
@@ -131,7 +131,7 @@ export default function CreateIssueModal({
             <label className="mb-1 block text-xs font-semibold text-ink-soft">Color de la épica</label>
             <div className="flex gap-2">
               {EPIC_COLORS.map((c) => (
-                <button key={c} type="button" aria-label={c} onClick={() => setEpicColor(c)} className={cn("h-7 w-7 border-2", epicColor === c ? "border-ink shadow-hard-sm" : "border-transparent")} style={{ background: c }} />
+                <button key={c} type="button" aria-label={c} onClick={() => setEpicColor(c)} className={cn("h-7 w-7 border rounded-md", epicColor === c ? "border-line shadow-hard-sm" : "border-transparent")} style={{ background: c }} />
               ))}
             </div>
           </div>

@@ -57,6 +57,7 @@ export default function BacklogView({
   currentUserId,
   isLead,
   completedSprints,
+  pdfEnabled,
 }: {
   projectId: string;
   sprints: SprintData[];
@@ -65,6 +66,7 @@ export default function BacklogView({
   currentUserId: string;
   isLead: boolean;
   completedSprints: number;
+  pdfEnabled: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -205,6 +207,15 @@ export default function BacklogView({
     });
   }
 
+  const [sendingReport, setSendingReport] = useState<string | null>(null);
+  async function sendReport(s: SprintData) {
+    setSendingReport(s.id);
+    const res = await api<{ delivered: "file" | "link"; ai: boolean }>(`/api/sprints/${s.id}/briefing`, "POST", {});
+    setSendingReport(null);
+    if (!res.ok) return toast.error(res.error);
+    toast.success(res.data.delivered === "file" ? "PDF enviado al canal de Slack" : "Enlace del informe enviado a Slack");
+  }
+
   async function createSprint() {
     setCreatingSprint(true);
     const res = await api(`/api/projects/${projectId}/sprints`, "POST", {});
@@ -312,6 +323,12 @@ export default function BacklogView({
         )}
         <div className="ml-auto flex items-center gap-2">
           {completedSprints > 0 && <span className="hidden text-xs text-ink-faint sm:inline">{completedSprints} {completedSprints === 1 ? "sprint completado" : "sprints completados"} · ver en Reportes</span>}
+          <a className="btn-ghost btn-sm" href={`/api/projects/${projectId}/export`} download title="Descargar todos los tickets del proyecto en Excel">
+            Exportar Excel
+          </a>
+          <a className="btn-ghost btn-sm" href={`/api/projects/${projectId}/export?mine=1`} download title="Descargar solo mis tickets en Excel">
+            Mis tareas (Excel)
+          </a>
           <button className="btn-ghost btn-sm" disabled={creatingSprint} onClick={createSprint}>
             <PlusIcon size={14} /> Crear sprint
           </button>
@@ -331,8 +348,8 @@ export default function BacklogView({
             const isCollapsed = collapsed.has(s.id);
             const left = s.state === "ACTIVE" ? daysRemaining(s.endDate ? new Date(s.endDate) : null) : null;
             return (
-              <section key={s.id} className="border-2 border-ink bg-card">
-                <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-ink bg-card-2 px-3 py-2.5">
+              <section key={s.id} className="border border-line bg-card rounded-lg">
+                <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-card-2 px-3 py-2.5">
                   <button onClick={() => toggleCollapsed(s.id)} className="text-ink-soft hover:text-ink" aria-label={isCollapsed ? "Expandir" : "Contraer"} aria-expanded={!isCollapsed}>
                     <ChevronIcon open={!isCollapsed} size={16} />
                   </button>
@@ -358,17 +375,24 @@ export default function BacklogView({
                     ) : (
                       <button className="btn-mint btn-sm" onClick={() => setCompleteFor(s)}>Completar sprint</button>
                     )}
+                    {pdfEnabled && <a className="btn-ghost btn-sm" href={`/api/sprints/${s.id}/report`} target="_blank" rel="noreferrer" title="PDF del sprint con sugerencias (tarda unos segundos)">PDF</a>}
+                    {pdfEnabled && s.state === "ACTIVE" && (
+                      <button className="btn-ghost btn-sm" disabled={sendingReport === s.id} onClick={() => sendReport(s)} title="Genera el PDF y lo manda al Slack del proyecto">
+                        {sendingReport === s.id ? "Enviando…" : "Enviar a Slack"}
+                      </button>
+                    )}
                     <button className="btn-ghost btn-sm" onClick={() => setEditFor(s)}>Editar</button>
                     {isLead && s.state === "PLANNED" && (
                       <button className="btn-ghost btn-sm text-danger" onClick={() => deleteSprint(s)}>Eliminar</button>
                     )}
                   </span>
                 </header>
-                {s.goal && !isCollapsed && <p className="border-b-2 border-line-strong px-3 py-2 text-xs text-ink-soft"><b className="text-ink">Objetivo:</b> {s.goal}</p>}
+                {s.goal && !isCollapsed && <p className="border-b border-line-strong px-3 py-2 text-xs text-ink-soft"><b className="text-ink">Objetivo:</b> {s.goal}</p>}
                 <AnimatePresence initial={false}>
                   {!isCollapsed && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
                       <IssueList
+                        readyItems={options.readyItems}
                         container={s.id}
                         ids={ids}
                         byId={byId}
@@ -388,19 +412,20 @@ export default function BacklogView({
           })}
 
           {/* Backlog */}
-          <section className="border-2 border-ink bg-card">
-            <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-ink bg-card-2 px-3 py-2.5">
+          <section className="border border-line bg-card rounded-lg overflow-hidden">
+            <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-card-2 px-3 py-2.5">
               <button onClick={() => toggleCollapsed(BACKLOG)} className="text-ink-soft hover:text-ink" aria-label={collapsed.has(BACKLOG) ? "Expandir" : "Contraer"} aria-expanded={!collapsed.has(BACKLOG)}>
                 <ChevronIcon open={!collapsed.has(BACKLOG)} size={16} />
               </button>
               <h2 className="font-display text-base font-extrabold text-ink">Backlog</h2>
-              <span className="text-xs text-ink-faint">{summary[BACKLOG]?.count ?? 0} tickets</span>
+              <span className="text-xs text-ink-faint">{summary[BACKLOG]?.count ?? 0} {(summary[BACKLOG]?.count ?? 0) === 1 ? "ticket" : "tickets"}</span>
               <span className="ml-auto"><SummaryChips info={summary[BACKLOG]} /></span>
             </header>
             <AnimatePresence initial={false}>
               {!collapsed.has(BACKLOG) && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
                   <IssueList
+                        readyItems={options.readyItems}
                     container={BACKLOG}
                     ids={(lists[BACKLOG] ?? []).filter((id) => byId[id] && matches(byId[id]))}
                     byId={byId}
@@ -439,7 +464,7 @@ export default function BacklogView({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", stiffness: 380, damping: 30 }}
-            className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-fit max-w-[95vw] flex-wrap items-center gap-2 border-2 border-ink bg-card px-4 py-3 shadow-hard-purple"
+            className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-fit max-w-[95vw] flex-wrap items-center gap-2 border border-line bg-card px-4 py-3 shadow-hard-purple rounded-lg"
           >
             <span className="mr-1 text-sm font-bold text-ink">{selected.size} seleccionados</span>
             <select className="field-sm" value="" onChange={(e) => e.target.value && bulk({ sprintId: e.target.value === BACKLOG ? null : e.target.value })} aria-label="Mover a">
@@ -490,6 +515,12 @@ export default function BacklogView({
           sprint={startFor}
           issueCount={summary[startFor.id]?.count ?? 0}
           points={summary[startFor.id]?.points ?? 0}
+          isLead={isLead}
+          notReady={(lists[startFor.id] ?? [])
+            .map((id) => byId[id])
+            .filter(Boolean)
+            .map((i) => ({ key: i.key, title: i.title, missing: options.readyItems.filter((r) => !i.readyDone.includes(r)) }))
+            .filter((i) => i.missing.length > 0)}
         />
       )}
       {completeFor && (
@@ -518,11 +549,11 @@ function SummaryChips({ info }: { info?: { count: number; points: number; byStat
   return (
     <span className="flex items-center gap-1" aria-label="Resumen del sprint">
       {STATUSES.map((s) => (
-        <span key={s} title={STATUS_META[s].label} className="inline-flex h-[20px] min-w-[20px] items-center justify-center border-2 px-1 font-mono text-[10px] font-bold" style={{ borderColor: STATUS_META[s].color, color: STATUS_META[s].color }}>
+        <span key={s} title={STATUS_META[s].label} className="inline-flex h-[20px] min-w-[20px] items-center justify-center border px-1 font-mono text-[10px] font-bold rounded-md" style={{ borderColor: STATUS_META[s].color, color: STATUS_META[s].color }}>
           {info.byStatus[s]}
         </span>
       ))}
-      <span title="Story points totales" className="ml-1 inline-flex h-[20px] min-w-[20px] items-center justify-center border-2 border-ink bg-ink px-1 font-mono text-[10px] font-bold text-[#150b22]">
+      <span title="Story points totales" className="ml-1 inline-flex h-[20px] min-w-[20px] items-center justify-center border border-line bg-ink px-1 font-mono text-[10px] font-bold text-white rounded-md">
         {info.points}
       </span>
     </span>
@@ -539,8 +570,10 @@ function IssueList({
   onStatusChange,
   onOpen,
   emptyText,
+  readyItems,
 }: {
   container: string;
+  readyItems: string[];
   ids: string[];
   byId: Record<string, IssueCardData>;
   disabled: boolean;
@@ -563,10 +596,11 @@ function IssueList({
             onToggleSelect={onToggleSelect}
             onStatusChange={(s) => onStatusChange(byId[id], s)}
             onOpen={() => onOpen(byId[id])}
+            readyItems={readyItems}
           />
         ))}
       </SortableContext>
-      {ids.length === 0 && <p className="border-b-2 border-dashed border-line-strong px-3 py-3 text-center text-xs text-ink-faint">{emptyText}</p>}
+      {ids.length === 0 && <p className="border-b border-dashed border-line-strong px-3 py-3 text-center text-xs text-ink-faint">{emptyText}</p>}
     </div>
   );
 }
@@ -578,7 +612,9 @@ function SortableRow({
   onToggleSelect,
   onStatusChange,
   onOpen,
+  readyItems,
 }: {
+  readyItems: string[];
   issue: IssueCardData;
   disabled: boolean;
   selected: boolean;
@@ -595,6 +631,7 @@ function SortableRow({
         onToggleSelect={onToggleSelect}
         onStatusChange={onStatusChange}
         onOpen={onOpen}
+        readyItems={readyItems}
         handleProps={disabled ? undefined : { ...attributes, ...listeners }}
       />
     </div>

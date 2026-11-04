@@ -74,29 +74,29 @@ export default function MyWorkView({ items }: { items: Item[] }) {
               ))}
             </select>
           )}
-          <button onClick={() => setShowDone((v) => !v)} aria-pressed={showDone} className={cn("border-2 px-2.5 py-1 text-xs font-bold", showDone ? "border-moss bg-moss text-[#150b22]" : "border-line-strong text-ink-soft hover:text-ink")}>
+          <button onClick={() => setShowDone((v) => !v)} aria-pressed={showDone} className={cn("border px-2.5 py-1 text-xs font-bold rounded-md", showDone ? "border-rust bg-rust text-white" : "border-line-strong text-ink-soft hover:text-ink")}>
             Mostrar hechos
           </button>
         </div>
       </div>
 
       {visible.length === 0 ? (
-        <EmptyState title={items.length === 0 ? "No tenés tickets asignados" : "Todo al día 🎉"} hint={items.length === 0 ? "Cuando te asignen un ticket aparece acá, ordenado por fecha límite." : "No queda nada pendiente con estos filtros."} action={<Link href="/projects" className="btn-ghost btn-sm">Ver proyectos</Link>} />
+        <EmptyState title={items.length === 0 ? "No tenés tickets asignados" : "Todo al día"} hint={items.length === 0 ? "Cuando te asignen un ticket aparece acá, ordenado por fecha límite." : "No queda nada pendiente con estos filtros."} action={<Link href="/projects" className="btn-ghost btn-sm">Ver proyectos</Link>} />
       ) : (
         <div className="space-y-6">
           {BUCKETS.map((b) => {
             const group = visible.filter((i) => bucketOf(i.issue) === b.id);
             if (group.length === 0) return null;
             return (
-              <section key={b.id} className="border-2 border-ink bg-card">
-                <h2 className={cn("flex items-center gap-2 border-b-2 border-ink bg-card-2 px-3 py-2 text-xs font-extrabold uppercase tracking-wide", b.color)}>
+              <section key={b.id} className="border border-line bg-card rounded-lg">
+                <h2 className={cn("flex items-center gap-2 border-b border-line bg-card-2 px-3 py-2 text-xs font-extrabold uppercase tracking-wide", b.color)}>
                   {b.label} <span className="font-mono text-ink-faint">{group.length}</span>
                 </h2>
                 {group.map((i) => (
                   <div key={i.issue.id}>
                     <IssueRowView issue={{ ...i.issue, status: statusOf(i) }} onStatusChange={(s) => changeStatus(i, s)} onOpen={() => openIssue(i.issue.key)} />
-                    <div className="-mt-1 border-b-2 border-line-strong bg-card px-3 pb-1.5 pl-[3.6rem] text-[11px] text-ink-faint">
-                      <Link href={`/projects/${i.projectId}/board`} className="hover:text-moss">{i.projectName}</Link>
+                    <div className="-mt-1 border-b border-line-strong bg-card px-3 pb-1.5 pl-[3.6rem] text-[11px] text-ink-faint">
+                      <Link href={`/projects/${i.projectId}/board`} className="hover:text-moss-ink">{i.projectName}</Link>
                       {i.sprint ? ` · ${i.sprint}` : " · backlog"}
                     </div>
                   </div>

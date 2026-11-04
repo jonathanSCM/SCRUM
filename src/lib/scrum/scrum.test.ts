@@ -3,7 +3,16 @@ import { suggestProjectKey, normalizeProjectKey, isValidProjectKey, formatIssueK
 import { rankBetween, needsRebalance, rebalance, compareByRank, RANK_STEP } from "./rank";
 import { computeBurndown } from "./burndown";
 import { computeVelocity } from "./velocity";
-import { validateStart, snapshotOnStart, planCompletion, durationToEnd, daysRemaining } from "./sprintLifecycle";
+import { validateStart, snapshotOnStart, planCompletion, durationToEnd, daysRemaining, validateLeaveActiveSprint } from "./sprintLifecycle";
+import { parseStringList, missingReadyItems, ticketsNotReady } from "./ready";
+import { formatTelegramText, TELEGRAM_TOKEN_PATTERN, TELEGRAM_CHAT_PATTERN } from "../telegram";
+import { formatSlackText, SLACK_WEBHOOK_PATTERN } from "../slack";
+import { extractActionItems } from "./notes";
+import { parseInsights, buildPrompt } from "../gemini";
+import { renderSprintPdf } from "../sprintPdf";
+import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTicket, type SprintReportData } from "./sprintReport";
+import { isValidDateString, shiftDate, missingStandups, summarizeReview, localDateString } from "./ceremonies";
+import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from "./checklist";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
 describe("issueKey", () => {
@@ -220,5 +229,166 @@ describe("legacyMap", () => {
     expect(sprintStateFromDates(new Date("2026-03-08"), new Date("2026-03-15"), now)).toBe("ACTIVE");
     expect(sprintStateFromDates(new Date("2026-03-12"), new Date("2026-03-20"), now)).toBe("PLANNED");
     expect(sprintStateFromDates(null, null, now)).toBe("PLANNED");
+  });
+});
+
+describe("validateLeaveActiveSprint", () => {
+  const base = { currentSprintState: "ACTIVE", currentSprintId: "s1", nextSprintId: null as string | null };
+  it("bloquea a un miembro que saca un ticket de un sprint activo", () => {
+    expect(validateLeaveActiveSprint({ ...base, actorRole: "MEMBER" })).toMatch(/líder/);
+  });
+  it("permite al líder", () => {
+    expect(validateLeaveActiveSprint({ ...base, actorRole: "LEAD" })).toBeNull();
+  });
+  it("no afecta a sprints planificados ni a cambios que no sacan el ticket", () => {
+    expect(validateLeaveActiveSprint({ ...base, currentSprintState: "PLANNED", actorRole: "MEMBER" })).toBeNull();
+    expect(validateLeaveActiveSprint({ ...base, nextSprintId: "s1", actorRole: "MEMBER" })).toBeNull();
+  });
+});
+
+describe("ready (Definition of Ready)", () => {
+  const template = ["Estructura de datos", "Accesos"];
+  it("parsea listas y tolera basura", () => {
+    expect(parseStringList('["a","b"]')).toEqual(["a", "b"]);
+    expect(parseStringList("nope")).toEqual([]);
+    expect(parseStringList('[1,"x",""]')).toEqual(["x"]);
+  });
+  it("calcula lo que falta", () => {
+    expect(missingReadyItems(template, ["Accesos"])).toEqual(["Estructura de datos"]);
+    expect(missingReadyItems(template, ["Accesos", "Estructura de datos", "viejo"])).toEqual([]);
+  });
+  it("lista los tickets incompletos y no bloquea si no hay definición", () => {
+    const tasks = [
+      { key: "A-1", title: "uno", readyDone: ["Accesos", "Estructura de datos"] },
+      { key: "A-2", title: "dos", readyDone: [] },
+    ];
+    expect(ticketsNotReady(template, tasks)).toEqual([{ key: "A-2", title: "dos", missing: template }]);
+    expect(ticketsNotReady([], tasks)).toEqual([]);
+  });
+});
+
+describe("notificaciones Telegram / Slack", () => {
+  const msg = { title: "Hecho <b>", description: "**Ana** cerró «x» & más", url: "https://x.test/a", mentionUsername: "ana_dev", mentionSlackId: "U01ABCDE2F3" };
+  it("Telegram escapa HTML y convierte negritas", () => {
+    const text = formatTelegramText(msg);
+    expect(text).toContain("<b>Hecho &lt;b&gt;</b>");
+    expect(text).toContain("<b>Ana</b> cerró «x» &amp; más");
+    expect(text).toContain("@ana_dev");
+  });
+  it("Slack escapa y menciona por id", () => {
+    const text = formatSlackText(msg);
+    expect(text).toContain("*Ana*");
+    expect(text).toContain("&amp; más");
+    expect(text).toContain("<@U01ABCDE2F3>");
+  });
+  it("valida token, chat y webhook", () => {
+    expect(TELEGRAM_TOKEN_PATTERN.test("123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw")).toBe(true);
+    expect(TELEGRAM_TOKEN_PATTERN.test("basura")).toBe(false);
+    expect(TELEGRAM_CHAT_PATTERN.test("-1001234567890")).toBe(true);
+    expect(TELEGRAM_CHAT_PATTERN.test("@mi_canal")).toBe(true);
+    expect(SLACK_WEBHOOK_PATTERN.test("https://hooks.slack.com/services/T000/B000/XXXX")).toBe(true);
+    expect(SLACK_WEBHOOK_PATTERN.test("https://evil.test/services/T/B/X")).toBe(false);
+  });
+});
+
+describe("extractActionItems", () => {
+  it("saca viñetas, casillas y numeraciones; ignora lo marcado y los duplicados", () => {
+    const body = [
+      "Reunión con el cliente",
+      "- Pasar la estructura de datos",
+      "* [ ] Enviar cotización",
+      "- [x] Ya hecho",
+      "1. Configurar el bot",
+      "2) configurar el bot",
+      "texto suelto",
+      "• Revisar accesos",
+    ].join("\n");
+    expect(extractActionItems(body)).toEqual(["Pasar la estructura de datos", "Enviar cotización", "Configurar el bot", "Revisar accesos"]);
+  });
+  it("respeta el máximo", () => {
+    const body = Array.from({ length: 50 }, (_, i) => `- punto ${i}`).join("\n");
+    expect(extractActionItems(body, 5)).toHaveLength(5);
+  });
+});
+
+describe("informe del sprint", () => {
+  const t = (key: string, o: Partial<ReportTicket> = {}): ReportTicket => ({
+    key, type: "Tarea", title: `Ticket ${key}`, description: "", priority: "Media", priorityWeight: 2, points: 3, status: "Por hacer",
+    assignee: "Ana", epic: null, dueDate: null, readyMissing: [], ...o,
+  });
+  const data: SprintReportData = {
+    project: { name: "Proyecto ñandú", key: "PRO", description: "desc" },
+    sprint: { id: "s1", name: "Sprint 1", goal: "Salir a producción 🚀", startDate: "2026-11-02T00:00:00.000Z", endDate: "2026-11-15T23:59:59.000Z" },
+    tickets: [t("PRO-1", { priorityWeight: 4, priority: "Urgente" }), t("PRO-2", { points: null, assignee: null, readyMissing: ["Accesos"] }), t("PRO-10", { assignee: "Ana", points: 8 })],
+  };
+  it("ordena por prioridad y clave", () => {
+    expect(sortTickets(data.tickets).map((x) => x.key)).toEqual(["PRO-1", "PRO-2", "PRO-10"]);
+  });
+  it("resume y sugiere sin IA", () => {
+    const s = summarizeTickets(data.tickets);
+    expect(s).toMatchObject({ count: 3, points: 11, unestimated: 1, unassigned: 1, notReady: 1 });
+    expect(basicSuggestions(data.tickets).join(" ")).toMatch(/sin responsable/);
+  });
+  it("quita emojis para el PDF", () => {
+    expect(pdfSafe("Hola 🚀 ñandú «x»")).toBe("Hola  ñandú «x»");
+  });
+  it("parsea la respuesta de Gemini (con o sin ```json) y descarta claves inventadas", () => {
+    const keys = new Set(["PRO-1", "PRO-2"]);
+    const raw = '```json\n{"summary":"ok","suggestions":["a"],"risks":[],"suggestedOrder":["PRO-2","XX-9"],"ticketTips":[{"key":"PRO-1","tip":"hacelo"},{"key":"XX-9","tip":"no"}]}\n```';
+    const parsed = parseInsights(raw, keys);
+    expect(parsed?.suggestedOrder).toEqual(["PRO-2"]);
+    expect(parsed?.ticketTips).toEqual([{ key: "PRO-1", tip: "hacelo" }]);
+    expect(parseInsights("no es json", keys)).toBeNull();
+    expect(buildPrompt(data)).toContain("PRO-1");
+  });
+  it("genera un PDF válido, con y sin IA", async () => {
+    const withAi = await renderSprintPdf(data, { summary: "Resumen", suggestions: ["Una"], risks: ["Riesgo"], suggestedOrder: ["PRO-1"], ticketTips: [{ key: "PRO-1", tip: "tip" }] });
+    const without = await renderSprintPdf(data, null);
+    expect(withAi.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(without.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(withAi.length).toBeGreaterThan(2000);
+  });
+});
+
+describe("ceremonias", () => {
+  it("valida y desplaza fechas", () => {
+    expect(isValidDateString("2026-11-04")).toBe(true);
+    expect(isValidDateString("2026-02-31")).toBe(false);
+    expect(isValidDateString("04/11/2026")).toBe(false);
+    expect(shiftDate("2026-11-30", 1)).toBe("2026-12-01");
+    expect(shiftDate("2026-01-01", -1)).toBe("2025-12-31");
+    expect(localDateString(new Date(2026, 10, 4))).toBe("2026-11-04");
+  });
+  it("detecta quién falta en el daily", () => {
+    const members = [{ id: "a", name: "Ana" }, { id: "b", name: "Beto" }];
+    expect(missingStandups(members, ["a"])).toEqual(["Beto"]);
+  });
+  it("resume la review", () => {
+    const r = summarizeReview([
+      { key: "P-1", title: "a", status: "DONE", points: 3 },
+      { key: "P-2", title: "b", status: "IN_PROGRESS", points: 5 },
+      { key: "P-3", title: "c", status: "DONE", points: null },
+    ]);
+    expect(r).toMatchObject({ committed: 3, completed: 2, committedPoints: 8, completedPoints: 3 });
+    expect(r.notDone).toEqual([{ key: "P-2", title: "b", status: "IN_PROGRESS" }]);
+  });
+});
+
+describe("checklist y jerarquía", () => {
+  it("parsea el checklist y calcula el progreso", () => {
+    const items = parseChecklist('[{"id":"a","text":"x","done":true},{"id":"b","text":"y","done":false},{"bad":1}]');
+    expect(items).toHaveLength(2);
+    expect(checklistProgress(items)).toEqual({ done: 1, total: 2 });
+    expect(parseChecklist("nope")).toEqual([]);
+  });
+  it("solo tareas y bugs cuelgan de una historia", () => {
+    expect(canHaveParent("TASK")).toBe(true);
+    expect(canHaveParent("BUG")).toBe(true);
+    expect(canHaveParent("STORY")).toBe(false);
+    expect(canHaveParent("EPIC")).toBe(false);
+  });
+  it("progreso de una historia", () => {
+    expect(storyProgress([{ status: "DONE" }, { status: "TODO" }, { status: "DONE" }, { status: "DONE" }])).toEqual({ done: 3, total: 4, pct: 75 });
+    expect(storyProgress([])).toEqual({ done: 0, total: 0, pct: 0 });
   });
 });

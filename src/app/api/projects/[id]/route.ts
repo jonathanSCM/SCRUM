@@ -4,7 +4,8 @@ import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { parseBody, readJson, updateProjectSchema } from "@/lib/validation";
 import { logHistory } from "@/lib/history";
-import { notifyDiscord, resolveDiscordMention, DISCORD_COLOR } from "@/lib/discord";
+import { DISCORD_COLOR } from "@/lib/discord";
+import { notifyProject } from "@/lib/notify";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await apiUser();
@@ -26,6 +27,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.deployUrl !== undefined) data.deployUrl = body.deployUrl || null;
     if (body.stack !== undefined) data.stack = JSON.stringify(body.stack);
 
+    if (body.readyItems !== undefined) {
+      if (user.role !== "LEAD") return NextResponse.json({ error: "Solo un líder puede cambiar la Definition of Ready" }, { status: 403 });
+      data.readyItems = JSON.stringify([...new Set(body.readyItems)]);
+    }
+
     let newStatus: { id: string; name: string } | null = null;
     if (body.statusId !== undefined && body.statusId !== current.statusId) {
       newStatus = await prisma.statusOption.findUnique({ where: { id: body.statusId } });
@@ -44,16 +50,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (newStatus) {
       await logHistory({ projectId: id, field: "estado_proyecto", oldValue: current.status.name, newValue: newStatus.name, actor: user });
-      const mention = await resolveDiscordMention(updated.leadUserId);
-      await notifyDiscord(id, {
-        title: `📌 ${updated.name}`,
+      await notifyProject(id, {
+        title: `Proyecto ${updated.name}`,
         description: `El proyecto pasó de «${current.status.name}» a «${newStatus.name}»`,
         color: DISCORD_COLOR.status,
-        mentionUserId: mention,
+        mentionUserIds: [updated.leadUserId],
       });
     }
     if (newLead !== undefined) {
       await logHistory({ projectId: id, field: "encargado_proyecto", oldValue: current.lead?.name ?? null, newValue: newLead?.name ?? "Sin asignar", actor: user });
+    }
+    if (body.readyItems !== undefined && updated.readyItems !== current.readyItems) {
+      await logHistory({ projectId: id, field: "ready_proyecto", newValue: `${body.readyItems.length} ítems`, actor: user });
     }
     if (body.description !== undefined && body.description !== current.description) {
       await logHistory({ projectId: id, field: "descripcion_proyecto", newValue: "editada", actor: user });

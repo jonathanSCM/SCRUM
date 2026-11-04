@@ -61,3 +61,17 @@ export function daysRemaining(endDate: Date | null, now: Date = new Date()): num
   const ms = endDate.getTime() - now.getTime();
   return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
 }
+
+// Sacar un ticket de un sprint ACTIVO (al backlog o a otro sprint) cambia lo
+// que el equipo se comprometió a entregar: solo lo puede hacer un líder.
+export function validateLeaveActiveSprint(input: {
+  currentSprintState: string | null;
+  currentSprintId: string | null;
+  nextSprintId: string | null;
+  actorRole?: string;
+}): string | null {
+  if (input.currentSprintState !== "ACTIVE") return null;
+  if (input.currentSprintId === input.nextSprintId) return null;
+  if (input.actorRole === "LEAD") return null;
+  return "Solo un líder puede sacar tickets de un sprint activo";
+}

@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
 import { getProjectOrNotFound } from "@/lib/projectData";
+import { parseStringList } from "@/lib/scrum/ready";
+import { slackBotConfigured } from "@/lib/slack";
+import { sprintPdfEnabled } from "@/lib/features";
 import SettingsForm from "./SettingsForm";
 
 export default async function ProjectSettingsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,7 +35,16 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
         stack,
         statusId: project.statusId,
         leadUserId: project.leadUserId ?? "",
+        readyItems: parseStringList(project.readyItems),
         webhookConfigured: !!project.discordWebhookUrl,
+        slackChannelId: project.slackChannelId ?? "",
+        slackBot: slackBotConfigured(),
+        pdfEnabled: sprintPdfEnabled(),
+        slackConfigured: !!project.slackWebhookUrl,
+        slackHint: project.slackWebhookUrl ? project.slackWebhookUrl.slice(-6) : null,
+        telegramConfigured: !!project.telegramBotToken && !!project.telegramChatId,
+        telegramChatId: project.telegramChatId ?? "",
+        telegramHint: project.telegramBotToken ? project.telegramBotToken.slice(-4) : null,
         webhookHint: project.discordWebhookUrl ? project.discordWebhookUrl.slice(-6) : null,
       }}
     />
