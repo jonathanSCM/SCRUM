@@ -8,7 +8,7 @@ import { CHAT_EMOJIS, QUICK_REACTIONS, applyInsertedRefs, makeToken, snippetOf, 
 import Avatar from "@/components/ui/Avatar";
 import { PaperclipIcon } from "@/components/ui/Icons";
 import { useToast } from "@/components/ui/Toaster";
-import { isCommand, COMMAND_HELP } from "@/lib/scrum/chatCommands";
+import { isCommand, COMMAND_HELP, COMMAND_LIST, personaQuery } from "@/lib/scrum/chatCommands";
 import { useConfirm } from "@/components/ConfirmDialog";
 
 // Tipos que devuelve la API (ver src/lib/chatData.ts).
@@ -181,8 +181,25 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
     return [...index.projects.filter(projectMatch)].sort((a, b) => Number(byCode(b)) - Number(byCode(a))).slice(0, 12).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` }));
   }, [trigger, index, scopeId, scoped]);
 
+  // Autocompletado de comandos: "/" lista los comandos; en "/noti persona …" se sugieren nombres.
+  const cmdItems = useMemo<Array<{ key: string; label: string; hint: string; apply: (d: string) => string }>>(() => {
+    if (/^\/[a-z]*( [a-z]*)?$/i.test(draft)) {
+      return COMMAND_LIST.filter((c) => c.cmd.startsWith(draft.toLowerCase()) && (isLead || c.cmd === "/noti persona" || c.cmd === "/ayuda"))
+        .map((c) => ({ key: c.cmd, label: c.cmd, hint: c.hint, apply: () => c.insert }));
+    }
+    const pq = personaQuery(draft);
+    if (pq && index) {
+      const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const q = norm(pq.query);
+      return index.users.filter((u) => norm(u.label).includes(q)).slice(0, 8).map((u) => ({ key: u.id, label: u.label, hint: "", apply: (d: string) => `${d.slice(0, pq.start)}${u.label}` }));
+    }
+    return [];
+  }, [draft, index, isLead]);
+  const cmdOpen = !trigger && cmdItems.length > 0;
+
   function onChange(value: string, caret: number) {
     setDraft(value);
+    if (/^\/noti/i.test(value)) void loadIndex();
     const m = value.slice(0, caret).match(/(^|\s)([#@])([^\s#@]*)$/);
     if (m) {
       setTrigger({ char: m[2] as "#" | "@", query: m[3], start: caret - m[3].length - 1 });
@@ -367,6 +384,28 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
           void upload(Array.from(e.dataTransfer.files));
         }}
       >
+        {cmdOpen && (
+          <ul className="absolute bottom-full left-3 right-3 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-line-strong bg-surface shadow-hard-lg" role="listbox">
+            {cmdItems.map((c, i) => (
+              <li key={c.key} role="option" aria-selected={i === active}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setDraft(c.apply(draft));
+                    inputRef.current?.focus();
+                  }}
+                  onMouseEnter={() => setActive(i)}
+                  className={cn("flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm", i === active ? "bg-card-2" : "")}
+                >
+                  <span className="shrink-0 font-mono font-semibold text-rust">{c.label}</span>
+                  {c.hint && <span className="min-w-0 flex-1 truncate text-xs text-ink-faint">{c.hint}</span>}
+                </button>
+              </li>
+            ))}
+            {personaQuery(draft) && <li className="border-t border-line px-3 py-1 text-[11px] text-ink-faint">Coma para otra persona · dos puntos (:) y luego el mensaje</li>}
+          </ul>
+        )}
         {trigger && suggestions.length > 0 && (
           <ul className="absolute bottom-full left-3 right-3 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-line-strong bg-surface shadow-hard-lg" role="listbox">
             {scopeId && !projectId && scope && (
@@ -466,6 +505,23 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
                 }
               }}
               onKeyDown={(e) => {
+                // Escribiendo los nombres de /noti persona (aún sin ":"): Enter no envía, y si la lista no cargó, espera.
+                if (e.key === "Enter" && !e.shiftKey && personaQuery(draft) && (!index || cmdItems.length === 0)) {
+                  e.preventDefault();
+                  void loadIndex();
+                  return;
+                }
+                if (cmdOpen) {
+                  const n = cmdItems.length;
+                  if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => (a + 1) % n); return; }
+                  if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => (a - 1 + n) % n); return; }
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    setDraft(cmdItems[Math.min(active, n - 1)].apply(draft));
+                    setActive(0);
+                    return;
+                  }
+                }
                 if (trigger && suggestions.length > 0) {
                   if (e.key === "ArrowDown") {
                     e.preventDefault();

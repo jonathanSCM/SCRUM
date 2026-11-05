@@ -584,7 +584,7 @@ describe("secretBox", () => {
   });
 });
 
-import { parseCommand, matchNames, isCommand } from "./chatCommands";
+import { parseCommand, matchNames, isCommand, personaQuery } from "./chatCommands";
 
 describe("comandos del chat", () => {
   it("detecta comandos", () => {
@@ -608,6 +608,13 @@ describe("comandos del chat", () => {
     expect(parseCommand("/reunion mañana 10:30: revisión del sprint")).toEqual({ ok: true, command: { kind: "reunion", when: "mañana 10:30", topic: "revisión del sprint", level: "normal" } });
     expect(parseCommand("/reunion viernes: retro")).toEqual({ ok: true, command: { kind: "reunion", when: "viernes", topic: "retro", level: "normal" } });
     expect(parseCommand("/reunion sin tema").ok).toBe(false);
+  });
+  it("acepta el mensaje entre < > y sugiere nombres", () => {
+    expect(parseCommand("/noti persona Jonathan <Hola>")).toEqual({ ok: true, command: { kind: "persona", names: ["jonathan"], message: "Hola", level: "normal" } });
+    expect(personaQuery("/noti persona ana, lu")).toEqual({ query: "lu", start: 19 });
+    expect(personaQuery("/noti persona ")).toEqual({ query: "", start: 14 });
+    expect(personaQuery("/noti persona ana: hola")).toBeNull();
+    expect(personaQuery("/noti general x")).toBeNull();
   });
   it("niveles urgente y ayuda", () => {
     expect(parseCommand("/urgente se cayó el servidor")).toEqual({ ok: true, command: { kind: "general", message: "se cayó el servidor", level: "urgente" } });
