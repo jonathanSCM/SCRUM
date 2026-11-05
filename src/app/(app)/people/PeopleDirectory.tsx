@@ -44,6 +44,16 @@ export default function PeopleDirectory({ people: initial, workspaceName, curren
     router.refresh();
   }
 
+  async function changeRole(p: Person, next: Person["wsRole"]) {
+    const res = await fetch(`/api/workspaces/members/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: next }) });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return toast.error(body.error || "No se pudo cambiar el rol");
+    }
+    setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, wsRole: next } : x)));
+    router.refresh();
+  }
+
   async function removeUser(p: Person) {
     if (!(await confirm(`¿Borrar la cuenta de "${p.name}"?`, { confirmLabel: "Borrar", danger: true }))) return;
     const res = await fetch(`/api/users/${p.id}`, { method: "DELETE" });
@@ -109,6 +119,13 @@ export default function PeopleDirectory({ people: initial, workspaceName, curren
                 <p className="mt-1 font-mono text-[11px] text-ink-faint">{p.open} abiertos · {p.doneWeek} terminados esta semana</p>
               </div>
             </Link>
+            {isLead && p.id !== currentUserId && (
+              <select value={p.wsRole} onChange={(e) => changeRole(p, e.target.value as Person["wsRole"])} className="absolute bottom-2 right-2 rounded border border-line bg-card px-1 py-0.5 text-[11px] text-ink-soft" aria-label={`Rol de ${p.name}`}>
+                <option value="OWNER">Dueño</option>
+                <option value="ADMIN">Admin</option>
+                <option value="MEMBER">Miembro</option>
+              </select>
+            )}
             {isLead && p.id !== currentUserId && (
               <button onClick={() => removeUser(p)} className="absolute right-2 top-2 text-xs text-ink-faint hover:text-danger" aria-label={`Borrar la cuenta de ${p.name}`}>
                 Borrar

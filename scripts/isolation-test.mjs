@@ -257,6 +257,81 @@ async function main() {
   const bTasks = await prisma.task.count({ where: { projectId: B.project.id } });
   check("el proyecto de B no recibió tickets", bTasks === 1, `tiene ${bTasks}`);
 
+  console.log("6) Fase 2: equipos, roles e invitaciones");
+  const sha = (t) => createHash("sha256").update(t).digest("hex");
+  const mkInvite = async (workspaceId, email, extra = {}) => {
+    const token = `inv_${randomBytes(24).toString("hex")}`;
+    const inv = await prisma.invitation.create({ data: { email, tokenHash: sha(token), workspaceId, role: "MEMBER", expiresAt: new Date(Date.now() + 86400000), ...extra } });
+    return { token, inv };
+  };
+  // Cambiar de equipo activo
+  const sw1 = await cAMember.req("POST", "/api/workspaces/active", { workspaceId: B.ws.id });
+  check("cambiar a un equipo del que no soy miembro -> 404", sw1.status === 404, `dio ${sw1.status}`);
+  const sw2 = await cMulti.req("POST", "/api/workspaces/active", { workspaceId: B.ws.id });
+  check("cambiar a un equipo propio funciona", sw2.status === 200, `dio ${sw2.status}`);
+  await cMulti.req("POST", "/api/workspaces/active", { workspaceId: A.ws.id });
+  // Invitaciones: un líder de A no toca las de B
+  const invB = await mkInvite(B.ws.id, `nuevo-${stamp}@b.test`);
+  const i1 = await cAOwner.req("DELETE", `/api/workspaces/invitations/${invB.inv.id}`);
+  check("revocar una invitación de otro equipo -> 404", i1.status === 404, `dio ${i1.status}`);
+  const i2 = await cAOwner.req("POST", `/api/workspaces/invitations/${invB.inv.id}/resend`);
+  check("reenviar una invitación de otro equipo -> 404", i2.status === 404, `dio ${i2.status}`);
+  const i3 = await cAMember.req("POST", "/api/workspaces/invitations", { email: `x-${stamp}@z.test` });
+  check("un miembro no puede invitar", i3.status === 403, `dio ${i3.status}`);
+  const i4 = await cAOwner.req("GET", "/api/workspaces/invitations");
+  check("la lista de invitaciones de A no incluye las de B", i4.status === 200 && !JSON.stringify(i4.json).includes(`nuevo-${stamp}@b.test`));
+  const i5 = await cAOwner.req("POST", "/api/workspaces/invitations", { email: aMember.email });
+  check("invitar a quien ya es del equipo -> 400", i5.status === 400, `dio ${i5.status}`);
+  // Aceptar
+  const anon = new Client("anónimo");
+  const g1 = await anon.req("GET", `/api/invite/${invB.token}`);
+  check("info pública de invitación válida", g1.status === 200 && g1.json?.state === "ok");
+  const g2 = await anon.req("GET", `/api/invite/inv_noexiste`);
+  check("token inexistente -> 404", g2.status === 404);
+  const a1 = await cAOwner.req("POST", `/api/invite/${invB.token}/accept`, {});
+  check("aceptar con la cuenta equivocada -> 403", a1.status === 403, `dio ${a1.status}`);
+  const exp = await mkInvite(A.ws.id, `venc-${stamp}@a.test`, { expiresAt: new Date(Date.now() - 1000) });
+  const a2 = await anon.req("POST", `/api/invite/${exp.token}/accept`, { name: "V", password: "12345678" });
+  check("invitación vencida -> 410", a2.status === 410, `dio ${a2.status}`);
+  const rev = await mkInvite(A.ws.id, `rev-${stamp}@a.test`, { revokedAt: new Date() });
+  const a3 = await anon.req("POST", `/api/invite/${rev.token}/accept`, { name: "V", password: "12345678" });
+  check("invitación revocada -> 410", a3.status === 410, `dio ${a3.status}`);
+  const okInv = await mkInvite(A.ws.id, `nueva-${stamp}@a.test`);
+  const a4 = await anon.req("POST", `/api/invite/${okInv.token}/accept`, { name: "Nueva", password: "short" });
+  check("contraseña corta -> 400", a4.status === 400, `dio ${a4.status}`);
+  const a5 = await anon.req("POST", `/api/invite/${okInv.token}/accept`, { name: "Nueva", password: "12345678" });
+  check("aceptar creando cuenta -> 200", a5.status === 200, `dio ${a5.status}`);
+  const created = await prisma.user.findFirst({ where: { email: `nueva-${stamp}@a.test` } });
+  const m = created && (await prisma.membership.findFirst({ where: { userId: created.id, workspaceId: A.ws.id } }));
+  check("quedó como miembro de A, y de ningún otro equipo", !!m && m.role === "MEMBER" && (await prisma.membership.count({ where: { userId: created.id } })) === 1);
+  const a6 = await anon.req("POST", `/api/invite/${okInv.token}/accept`, { name: "Otra", password: "12345678" });
+  check("el mismo enlace no se puede usar dos veces", a6.status === 410, `dio ${a6.status}`);
+  const exist = await mkInvite(A.ws.id, bOwner.email);
+  const a7 = await anon.req("POST", `/api/invite/${exist.token}/accept`, { name: "x", password: "12345678" });
+  check("con cuenta existente y sin sesión: pide iniciar sesión (401)", a7.status === 401, `dio ${a7.status}`);
+  const a8 = await cBOwner.req("POST", `/api/invite/${exist.token}/accept`, {});
+  check("con sesión del email invitado se une", a8.status === 200, `dio ${a8.status}`);
+  check("Beto ahora es miembro de A y sigue siendo dueño de B", (await prisma.membership.count({ where: { userId: bOwner.id } })) === 2);
+  // Roles
+  const r1 = await cAMember.req("PATCH", `/api/workspaces/members/${aMember.id}`, { role: "OWNER" });
+  check("un miembro no se asciende a dueño", r1.status === 403, `dio ${r1.status}`);
+  const r2 = await cAOwner.req("PATCH", `/api/workspaces/members/${aOwner.id}`, { role: "MEMBER" });
+  check("el último dueño no puede bajarse el rol", r2.status >= 400 && r2.status < 500, `dio ${r2.status}`);
+  const r3 = await cAOwner.req("PATCH", `/api/workspaces/members/${aMember.id}`, { role: "ADMIN" });
+  check("el dueño asciende a admin", r3.status === 200, `dio ${r3.status}`);
+  const r4 = await cAOwner.req("PATCH", `/api/workspaces/members/${bOwner.id}`, { role: "MEMBER" });
+  check("cambiar rol a alguien de otro equipo no aplica", r4.status !== 200 || (await prisma.membership.findFirst({ where: { userId: bOwner.id, workspaceId: B.ws.id } })).role === "OWNER");
+  // Crear equipo y salir
+  const w1 = await cAMember.req("POST", "/api/workspaces", { name: `Equipo nuevo ${stamp}` });
+  check("crear un equipo propio -> 201", w1.status === 201, `dio ${w1.status}`);
+  const w1b = await prisma.membership.findFirst({ where: { userId: aMember.id, workspace: { name: `Equipo nuevo ${stamp}` } } });
+  check("quien lo crea es dueño", w1b?.role === "OWNER");
+  const lv1 = await cAOwner.req("POST", "/api/workspaces/leave");
+  check("el último dueño no puede salirse", lv1.status >= 400 && lv1.status < 500, `dio ${lv1.status}`);
+  const lv2 = await cMulti.req("POST", "/api/workspaces/leave");
+  check("un admin puede salirse", lv2.status === 200, `dio ${lv2.status}`);
+  check("Marta sigue en B", (await prisma.membership.count({ where: { userId: multi.id, workspaceId: B.ws.id } })) === 1);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

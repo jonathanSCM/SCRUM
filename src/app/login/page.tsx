@@ -37,7 +37,9 @@ export default function LoginPage() {
       setError("Email o contraseña incorrectos");
       return;
     }
-    router.push("/home");
+    // Vuelve a donde venía (p. ej. al enlace de invitación), solo a rutas internas.
+    const cb = new URLSearchParams(window.location.search).get("callbackUrl");
+    router.push(cb && cb.startsWith("/") && !cb.startsWith("//") ? cb : "/home");
     router.refresh();
   }
 

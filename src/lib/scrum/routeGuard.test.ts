@@ -12,11 +12,16 @@ const ROOT = join(__dirname, "../../app/api");
 // Rutas "solo identidad": no leen ni escriben datos de equipos.
 const IDENTITY_ONLY = [
   "auth/", // login, registro de la primera cuenta, recuperar contraseña
+  "invite/", // aceptar una invitación: se valida con el enlace secreto, sin sesión previa
   "push/", // suscripciones del navegador de la propia persona
   "tokens/", // su propio token IA
   "users/me/", // su propio perfil
   "users/[id]/image/", // imágenes: la ruta comprueba por dentro que se comparte equipo
 ];
+
+// Rutas exactas "solo identidad" de equipos: listar MIS equipos, crear uno propio y cambiar el equipo activo
+// (esta última comprueba la membresía por dentro). El resto de /workspaces/* sí declara su equipo.
+const IDENTITY_ONLY_EXACT = ["workspaces/", "workspaces/active/"];
 
 function routes(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -25,7 +30,7 @@ function routes(dir: string): string[] {
   });
 }
 
-const SCOPE = /apiUser\(\{[^)]*\b(workspace|project|issue|sprint|comment|attachment|note|retro|contact|projectMessage|chatMessage|chatFile|status)\b/;
+const SCOPE = /apiUser\(\{[^)]*\b(workspace|project|issue|sprint|comment|attachment|note|retro|contact|projectMessage|chatMessage|chatFile|status|invitation)\b/;
 
 describe("guardia de aislamiento entre equipos", () => {
   const files = routes(ROOT);
@@ -35,7 +40,7 @@ describe("guardia de aislamiento entre equipos", () => {
     const rel = relative(ROOT, file).replace(/\\/g, "/").replace(/route\.ts$/, "");
     it(`/api/${rel}`, () => {
       const src = readFileSync(file, "utf8");
-      if (IDENTITY_ONLY.some((p) => rel.startsWith(p))) return;
+      if (IDENTITY_ONLY.some((p) => rel.startsWith(p)) || IDENTITY_ONLY_EXACT.includes(rel)) return;
       const calls = src.match(/apiUser\(/g) ?? [];
       expect(calls.length, "debe autenticar con apiUser(...)").toBeGreaterThan(0);
       const scoped = src.match(new RegExp(SCOPE.source, "g")) ?? [];

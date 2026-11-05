@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireWorkspace } from "@/lib/session";
 import { getPeople } from "@/lib/profileData";
 import PeopleDirectory from "./PeopleDirectory";
+import TeamManage from "./TeamManage";
 
 export const metadata = { title: "Equipo" };
 
@@ -14,8 +15,9 @@ export default async function TeamPage() {
       <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Equipo</h1>
       <p className="mb-6 text-sm text-ink-soft">
         {workspace?.name}. Haz clic en alguien para ver en qué proyectos está activo y qué hizo esta semana.
-        {isLead && " Como líder también creas y borras cuentas: no hay invitación por email, se crea la cuenta con una contraseña temporal."}
+        {isLead && " Como líder invitas por email, cambias roles y, si hace falta, creas cuentas con contraseña temporal."}
       </p>
+      <div className="mb-6"><TeamManage workspaceName={workspace?.name ?? ""} isLead={isLead} /></div>
       <PeopleDirectory people={people} workspaceName={workspace?.name ?? ""} currentUserId={session.user.id} isLead={isLead} />
     </main>
   );

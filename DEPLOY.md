@@ -62,3 +62,13 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
   - Un token IA solo actúa dentro del equipo donde se creó.
   - Pruebas: `npm test` incluye un guardia que falla si una ruta nueva no declara su equipo, y `scripts/isolation-test.mjs` crea dos equipos reales y comprueba (78 comprobaciones) que ninguno ve ni toca nada del otro. Se corre con el servidor levantado: `DATABASE_URL=… NEXTAUTH_URL=http://localhost:3056 BASE_URL=http://localhost:3056 npx tsx scripts/isolation-test.mjs`. Ya se corrió contra PostgreSQL 16 (0 fallas); repetila contra PostgreSQL antes de abrir equipos a terceros. Después del primer arranque en producción, comprobá la migración con `psql "$DATABASE_URL" -f scripts/verify-workspaces.sql` (todo lo marcado "debe ser 0" tiene que dar 0).
   - Variable opcional: `OWNER_EMAIL` (email del dueño del equipo ProShop en la migración).
+
+## Multi-equipo, Fase 2 (equipos usables)
+
+- Selector de equipo en la barra superior (cookie `ws`), crear equipo (tope `MAX_OWNED_TEAMS`, por defecto 3), salir del equipo, renombrar.
+- Roles por equipo (Dueño / Admin / Miembro) editables desde Equipo; el último dueño no puede bajarse ni salir.
+- Invitaciones por email: enlace `/invite/<token>` de un solo uso, vence en 7 días, atado al email. Sin `RESEND_API_KEY` el enlace se muestra para copiarlo. Quien no tiene cuenta la crea al aceptar.
+- Abrir un proyecto de otro de tus equipos cambia el equipo activo solo.
+- Borrar un equipo NO está implementado a propósito (se hará con exportación previa).
+- `scripts/isolation-test.mjs` ahora tiene 106 comprobaciones; pasa en SQLite y PostgreSQL 16.
+- Nota: se usa cookie + selector en vez de URLs `/t/<slug>` (desvío respecto al plan, más simple y sin romper enlaces existentes).

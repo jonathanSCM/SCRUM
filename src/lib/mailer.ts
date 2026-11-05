@@ -48,3 +48,12 @@ export function resetPasswordEmailHtml(name: string, resetUrl: string): string {
      <p>Este link expira en 1 hora. Si no pediste esto, podés ignorar este correo -- tu contraseña actual sigue siendo válida.</p>`
   );
 }
+
+export function inviteEmailHtml(inviterName: string, workspaceName: string, roleLabel: string, url: string): string {
+  return emailShell(
+    `Te invitaron a ${workspaceName}`,
+    `<p><b>${inviterName}</b> te invitó a unirte al equipo <b>${workspaceName}</b> en SCRUM ProShop como <b>${roleLabel}</b>.</p>
+     ${buttonHtml(url, "Aceptar la invitación")}
+     <p>El enlace vence en 7 días y solo sirve para este correo. Si no esperabas esta invitación, podés ignorarla.</p>`
+  );
+}

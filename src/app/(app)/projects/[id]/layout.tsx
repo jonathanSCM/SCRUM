@@ -4,11 +4,15 @@ import { getProjectOrNotFound } from "@/lib/projectData";
 import { daysRemaining } from "@/lib/scrum/sprintLifecycle";
 import Avatar from "@/components/ui/Avatar";
 import ProjectTabs from "./ProjectTabs";
+import WorkspaceSync from "./WorkspaceSync";
+import { activeAccess } from "@/lib/workspace";
 
 export default async function ProjectLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getProjectOrNotFound(id);
   const activeSprint = await prisma.sprint.findFirst({ where: { projectId: id, state: "ACTIVE" }, select: { name: true, endDate: true } });
+  const active = await activeAccess(project.access.session.user.id);
+  const wrongTeam = project.workspaceId && active?.workspaceId !== project.workspaceId;
   const left = activeSprint ? daysRemaining(activeSprint.endDate) : null;
 
   return (
@@ -37,6 +41,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
           </a>
         )}
       </div>
+      {wrongTeam && project.workspaceId && <WorkspaceSync workspaceId={project.workspaceId} />}
       <ProjectTabs projectId={id} />
       <div className="pt-6">{children}</div>
     </div>

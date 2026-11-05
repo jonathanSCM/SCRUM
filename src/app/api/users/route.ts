@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 import { membersOf } from "@/lib/workspace";
+import { findUserByEmail } from "@/lib/users";
 import { parseBody, createUserSchema, readJson } from "@/lib/validation";
 
 // Personas del equipo activo.
@@ -28,14 +29,14 @@ export async function POST(req: Request) {
   const { name, email, password, role } = parsed.data;
 
   try {
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await findUserByEmail(email);
     if (existing) return NextResponse.json({ error: "Ya existe una cuenta con ese email" }, { status: 400 });
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
         name,
-        email,
+        email: email.toLowerCase(),
         passwordHash,
         role: role === "LEAD" ? "LEAD" : "MEMBER", // legacy: el rol real vive en la membresía
         memberships: { create: { workspaceId: auth.user.workspaceId!, role: role === "LEAD" ? "ADMIN" : "MEMBER" } },

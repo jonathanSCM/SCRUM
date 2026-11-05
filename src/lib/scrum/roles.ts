@@ -53,3 +53,47 @@ export function uniqueSlug(name: string, taken: Iterable<string>): string {
   }
   return `${base}-${Date.now().toString(36)}`;
 }
+
+// ---- Cambios de rol ----
+
+export type RoleChange = { ok: true } | { ok: false; reason: string };
+
+// ¿Puede `actor` pasar a `target` (que hoy tiene `current`) al rol `next`?
+//  - Miembros no cambian roles.
+//  - Solo un dueño nombra o quita dueños.
+//  - Un admin mueve entre Admin y Miembro a quien no es dueño.
+//  - Nunca se deja un equipo sin dueño.
+export function canChangeRole(actor: WsRole, current: WsRole, next: WsRole, ownerCount: number): RoleChange {
+  if (actor === "MEMBER") return { ok: false, reason: "Solo un dueño o un admin puede cambiar roles" };
+  if (current === next) return { ok: true };
+  if ((current === "OWNER" || next === "OWNER") && actor !== "OWNER") return { ok: false, reason: "Solo un dueño puede nombrar o quitar dueños" };
+  if (current === "OWNER" && !canRemoveOrDemote(ownerCount, current)) return { ok: false, reason: "El equipo no puede quedarse sin dueño: nombrá primero a otro" };
+  return { ok: true };
+}
+
+// ---- Invitaciones ----
+
+export const INVITE_TTL_DAYS = 7;
+export const INVITE_ROLES = ["ADMIN", "MEMBER"] as const;
+export type InviteRole = (typeof INVITE_ROLES)[number];
+
+export type InvitationState = "ok" | "expired" | "used" | "revoked";
+
+export function invitationState(inv: { expiresAt: Date; acceptedAt: Date | null; revokedAt: Date | null }, now: Date = new Date()): InvitationState {
+  if (inv.revokedAt) return "revoked";
+  if (inv.acceptedAt) return "used";
+  if (inv.expiresAt.getTime() <= now.getTime()) return "expired";
+  return "ok";
+}
+
+export const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+export function inviteExpiry(now: Date = new Date()): Date {
+  return new Date(now.getTime() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
+}
+
+// Tope de equipos propios por cuenta (configurable con MAX_OWNED_TEAMS; por defecto 3).
+export function maxOwnedTeams(raw: string | undefined): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 100 ? n : 3;
+}

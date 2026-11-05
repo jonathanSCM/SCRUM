@@ -50,6 +50,7 @@ model User {
   apiToken            ApiToken?
   images              UserImage[]
   memberships         Membership[]
+  invitationsSent     Invitation[]
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
 }
@@ -523,10 +524,11 @@ model Workspace {
   slug      String   @unique
   createdAt DateTime @default(now())
 
-  members  Membership[]
-  projects Project[]
-  statuses StatusOption[]
-  chat     ChatMessage[]
+  members     Membership[]
+  projects    Project[]
+  statuses    StatusOption[]
+  chat        ChatMessage[]
+  invitations Invitation[]
 }
 
 // Pertenencia de una cuenta a un equipo, con su rol allí: OWNER | ADMIN | MEMBER.
@@ -544,4 +546,25 @@ model Membership {
 
   @@unique([userId, workspaceId])
   @@index([workspaceId])
+}
+
+// Invitación a un equipo, ligada a un email. Solo se guarda el hash del enlace; vence y sirve una sola vez.
+model Invitation {
+  id         String    @id @default(cuid())
+  email      String
+  role       String    @default("MEMBER") // ADMIN | MEMBER
+  tokenHash  String    @unique
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  invitedById String?
+  invitedBy   User?   @relation(fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([email])
 }

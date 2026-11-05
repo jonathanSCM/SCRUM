@@ -14,7 +14,7 @@ import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTi
 import { isValidDateString, shiftDate, missingStandups, summarizeReview, localDateString } from "./ceremonies";
 import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from "./checklist";
 import { buildPushPayload } from "../push";
-import { toLegacyRole, roleBadge, normalizeRole, migratedRole, canRemoveOrDemote, slugify, uniqueSlug } from "./roles";
+import { canChangeRole, invitationState, inviteExpiry, normalizeEmail, maxOwnedTeams, toLegacyRole, roleBadge, normalizeRole, migratedRole, canRemoveOrDemote, slugify, uniqueSlug } from "./roles";
 import { weekWindow, compareLabel, mergeProjectActivity, WEEK_MS } from "./weekly";
 import { isAllowedForToken } from "../aiAccess";
 import { importSchema, countIssues, matchMember, issueKeyOf } from "./aiImport";
@@ -536,5 +536,37 @@ describe("roles por equipo", () => {
     expect(slugify("¡¡¡")).toBe("equipo");
     expect(uniqueSlug("ProShop", ["proshop"])).toBe("proshop-2");
     expect(uniqueSlug("ProShop", ["proshop", "proshop-2"])).toBe("proshop-3");
+  });
+});
+
+describe("cambios de rol e invitaciones", () => {
+  it("quién puede cambiar qué", () => {
+    expect(canChangeRole("MEMBER", "MEMBER", "ADMIN", 1).ok).toBe(false);
+    expect(canChangeRole("ADMIN", "MEMBER", "ADMIN", 1).ok).toBe(true);
+    expect(canChangeRole("ADMIN", "ADMIN", "MEMBER", 1).ok).toBe(true);
+    expect(canChangeRole("ADMIN", "MEMBER", "OWNER", 1).ok).toBe(false);
+    expect(canChangeRole("ADMIN", "OWNER", "ADMIN", 2).ok).toBe(false);
+    expect(canChangeRole("OWNER", "MEMBER", "OWNER", 1).ok).toBe(true);
+    expect(canChangeRole("OWNER", "OWNER", "ADMIN", 2).ok).toBe(true);
+  });
+  it("nunca deja el equipo sin dueño", () => {
+    const r = canChangeRole("OWNER", "OWNER", "MEMBER", 1);
+    expect(r.ok).toBe(false);
+  });
+  it("estado de una invitación", () => {
+    const now = new Date("2026-11-10T00:00:00Z");
+    const base = { expiresAt: new Date("2026-11-12T00:00:00Z"), acceptedAt: null, revokedAt: null };
+    expect(invitationState(base, now)).toBe("ok");
+    expect(invitationState({ ...base, expiresAt: new Date("2026-11-09T00:00:00Z") }, now)).toBe("expired");
+    expect(invitationState({ ...base, acceptedAt: now }, now)).toBe("used");
+    expect(invitationState({ ...base, revokedAt: now, acceptedAt: now }, now)).toBe("revoked");
+    expect(inviteExpiry(now).toISOString()).toBe("2026-11-17T00:00:00.000Z");
+  });
+  it("normaliza emails y el tope de equipos", () => {
+    expect(normalizeEmail("  Ana@Ejemplo.COM ")).toBe("ana@ejemplo.com");
+    expect(maxOwnedTeams(undefined)).toBe(3);
+    expect(maxOwnedTeams("5")).toBe(5);
+    expect(maxOwnedTeams("0")).toBe(3);
+    expect(maxOwnedTeams("abc")).toBe(3);
   });
 });
