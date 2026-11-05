@@ -101,7 +101,7 @@ function issueUrl(projectId: string, key: string) {
 
 export type CreateIssueInput = IssuePatch & { title: string };
 
-export async function createIssue(projectId: string, input: CreateIssueInput, actor: Actor): Promise<IssueWithRefs> {
+export async function createIssue(projectId: string, input: CreateIssueInput, actor: Actor, options: { silent?: boolean } = {}): Promise<IssueWithRefs> {
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, key: true, name: true, leadUserId: true } });
   if (!project || !project.key) throw new IssueError("Proyecto no encontrado", 404);
 
@@ -150,16 +150,19 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
   const key = formatIssueKey(project.key, created.number);
   await logHistory({ projectId, taskId: created.id, taskTitle: created.title, field: "ticket_creado", newValue: key, actor });
 
-  await notifyProject(projectId, {
-    title: `${key} creado en ${project.name}`,
-    description: `**${actor.name}** creó ${ISSUE_TYPE_META[issueType as IssueType].label.toLowerCase()} «${created.title}»${
-      created.assignee ? ` — asignado a ${created.assignee.name}` : ""
-    }`,
-    color: DISCORD_COLOR.created,
-    excludeUserId: actor.id,
-    mentionUserIds: [created.assigneeUserId],
-    url: issueUrl(projectId, key),
-  });
+  if (!options.silent) {
+    await notifyProject(projectId, {
+      title: `${key} creado en ${project.name}`,
+      description: `**${actor.name}** creó ${ISSUE_TYPE_META[issueType as IssueType].label.toLowerCase()} «${created.title}»${
+        created.assignee ? ` — asignado a ${created.assignee.name}` : ""
+      }`,
+      color: DISCORD_COLOR.created,
+      excludeUserId: actor.id,
+      mentionUserIds: [created.assigneeUserId],
+      url: issueUrl(projectId, key),
+    });
+
+  }
 
   return created;
 }

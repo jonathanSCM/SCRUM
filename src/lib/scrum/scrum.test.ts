@@ -14,6 +14,8 @@ import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTi
 import { isValidDateString, shiftDate, missingStandups, summarizeReview, localDateString } from "./ceremonies";
 import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from "./checklist";
 import { buildPushPayload } from "../push";
+import { isAllowedForToken } from "../aiAccess";
+import { importSchema, countIssues, matchMember, issueKeyOf } from "./aiImport";
 import { snippetOf, parseRefs, splitMessage, applyInsertedRefs, makeToken, isValidChatColor, plainText } from "./chat";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
@@ -436,5 +438,43 @@ describe("respuestas del chat", () => {
     expect(snippetOf("", true)).toBe("Archivo adjunto");
     expect(snippetOf(`mirá ${makeToken("issue", "abcdefgh12")}`, false)).toBe("mirá [ticket]");
     expect(snippetOf("x".repeat(300), false).length).toBe(110);
+  });
+});
+
+describe("token IA", () => {
+  it("permite solo lo acordado", () => {
+    const ok: Array<[string, string]> = [
+      ["GET", "/api/ai/projects"], ["GET", "/api/ai/projects/abc123"], ["GET", "/api/ai/users"], ["POST", "/api/ai/import"],
+      ["POST", "/api/projects"], ["PATCH", "/api/projects/abc123"], ["POST", "/api/projects/abc123/issues"], ["POST", "/api/projects/abc123/sprints"],
+      ["PATCH", "/api/issues/abc123"], ["POST", "/api/issues/abc123/comments"], ["POST", "/api/projects/abc123/notes"], ["GET", "/api/issues/by-key/SAI-2"],
+    ];
+    for (const [m, p] of ok) expect(isAllowedForToken(m, p), `${m} ${p}`).toBe(true);
+    const no: Array<[string, string]> = [
+      ["DELETE", "/api/projects/abc123"], ["DELETE", "/api/issues/abc123"], ["POST", "/api/sprints/abc123/start"], ["POST", "/api/sprints/abc123/complete"],
+      ["GET", "/api/users"], ["POST", "/api/users"], ["GET", "/api/tokens"], ["POST", "/api/tokens"], ["PATCH", "/api/projects/abc123/telegram"],
+      ["POST", "/api/projects/abc123/telegram"], ["POST", "/api/push/subscribe"], ["PATCH", "/api/users/me"], ["POST", "/api/statuses"], ["POST", "/api/projects/abc123/discord-webhook"],
+      ["GET", "/api/ai/projects/abc/extra"], ["POST", "/api/ai/projects"],
+    ];
+    for (const [m, p] of no) expect(isAllowedForToken(m, p), `${m} ${p}`).toBe(false);
+  });
+  it("valida y cuenta una importación", () => {
+    const input = importSchema.parse({
+      project: { name: "Demo" },
+      epics: [{ title: "E1", stories: [{ title: "S1", tasks: [{ title: "T1" }, { title: "T2", type: "BUG" }] }], tasks: [{ title: "T3" }] }],
+      stories: [{ title: "S2" }],
+      tasks: [{ title: "T4" }],
+    });
+    expect(countIssues(input)).toBe(1 + 1 + 2 + 1 + 1 + 1);
+    expect(importSchema.safeParse({ project: {} }).success).toBe(false);
+    expect(importSchema.safeParse({ project: { name: "x" }, tasks: [{ title: "t", priority: "ENORME" }] }).success).toBe(false);
+    expect(issueKeyOf("TASK", "  Hola ")).toBe("TASK:hola");
+  });
+  it("encuentra personas por email o nombre sin acentos", () => {
+    const m = [{ id: "1", name: "María Pérez", email: "maria@x.com" }, { id: "2", name: "Juan Gómez", email: "juan@x.com" }, { id: "3", name: "Juan López", email: "jl@x.com" }];
+    expect(matchMember(m, "MARIA@x.com")?.id).toBe("1");
+    expect(matchMember(m, "maria perez")?.id).toBe("1");
+    expect(matchMember(m, "Maria")?.id).toBe("1");
+    expect(matchMember(m, "Juan")).toBeNull(); // ambiguo
+    expect(matchMember(m, "Nadie")).toBeNull();
   });
 });

@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toaster";
 import { CHAT_COLORS } from "@/lib/scrum/chat";
 import Avatar from "@/components/ui/Avatar";
 import { PwaCard } from "@/components/PwaControls";
+import AiTokenCard from "@/components/AiTokenCard";
 
 export default function ProfileForm({ name: initialName, discordUserId: initialDiscord, telegramUsername: initialTelegram, slackUserId: initialSlack, chatColor: initialColor }: { name: string; discordUserId: string; telegramUsername: string; slackUserId: string; chatColor: string }) {
   const router = useRouter();
@@ -46,6 +47,8 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
   return (
     <div className="space-y-8">
       <PwaCard />
+
+      <AiTokenCard userName={initialName} />
 
       <form onSubmit={save} className="space-y-4 border border-line bg-card p-5 rounded-lg">
         <h2 className="font-display text-lg font-extrabold text-ink">Datos</h2>

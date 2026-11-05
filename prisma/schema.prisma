@@ -46,6 +46,8 @@ model User {
   pushSubscriptions   PushSubscription[]
   chatMessages        ChatMessage[]
   chatReactions       ChatReaction[]
+  apiToken            ApiToken?
+  apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
 }
 
@@ -453,4 +455,30 @@ model ChatDeletion {
   deletedAt DateTime @default(now())
 
   @@index([deletedAt])
+}
+
+// Token personal para que un asistente (Claude) use la API en nombre de la persona.
+// Solo se guarda el hash: el token se muestra una vez al crearlo. Hay uno por usuario.
+model ApiToken {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  prefix     String // primeros caracteres, solo para reconocerlo en pantalla
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Registro PRIVADO de lo que se hizo con el token (solo lo ve su dueño en Mi perfil;
+// no aparece en el historial de los proyectos).
+model ApiTokenLog {
+  id        String   @id @default(cuid())
+  route     String // "POST /api/projects/xyz/issues"
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

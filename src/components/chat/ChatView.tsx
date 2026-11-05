@@ -40,6 +40,9 @@ const CHIP_STYLE: Record<RefKind, string> = {
 };
 const KIND_LABEL: Record<RefKind, string> = { project: "Proyecto", issue: "Ticket", sprint: "Sprint", user: "Persona" };
 
+// En pantallas táctiles Enter hace salto de línea (se envía con el botón).
+const isTouch = () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
 const dayKey = (iso: string) => new Date(iso).toDateString();
 function dayLabel(iso: string): string {
@@ -53,7 +56,7 @@ function dayLabel(iso: string): string {
 
 // Chat general del equipo. Con projectId muestra solo los mensajes que mencionan
 // ese proyecto, y lo que se escribe queda mencionándolo.
-export default function ChatView({ initial, currentUserId, isLead, projectId }: { initial: ChatMessage[]; currentUserId: string; isLead: boolean; projectId?: string }) {
+export default function ChatView({ initial, currentUserId, isLead, projectId, fill }: { initial: ChatMessage[]; currentUserId: string; isLead: boolean; projectId?: string; fill?: boolean }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -214,6 +217,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     setDraft("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
     setPending([]);
     setReplyTo(null);
     inserted.current = [];
@@ -244,9 +248,15 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
   }
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-line-strong bg-card shadow-hard" style={{ height: "min(74vh, 700px)" }}>
+    <div
+      className={cn(
+        "flex flex-col overflow-hidden bg-card",
+        // En el celular, con "fill", el chat ocupa toda la pantalla bajo la barra (sin tarjeta ni márgenes).
+        fill ? "h-[calc(100dvh-7.5rem)] sm:h-[min(74vh,700px)] sm:rounded-xl sm:border sm:border-line-strong sm:shadow-hard" : "h-[70dvh] max-h-[700px] rounded-xl border border-line-strong shadow-hard"
+      )}
+    >
       {/* Mensajes: fondo suave para que las burbujas blancas se distingan */}
-      <ul className="flex-1 space-y-1 overflow-y-auto bg-chat-bg px-3 py-4 sm:px-5" aria-live="polite">
+      <ul className="flex-1 space-y-1 overflow-y-auto bg-chat-bg px-2 py-3 sm:px-5 sm:py-4" aria-live="polite">
         {messages.length === 0 && (
           <li className="mx-auto my-10 w-fit rounded-full bg-surface/80 px-4 py-1.5 text-sm text-ink-soft shadow-hard-sm">Todavía no hay mensajes. Escribí el primero.</li>
         )}
@@ -347,16 +357,42 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
           </div>
         )}
 
-        <div className="flex items-end gap-2">
-          <div className="relative flex-1">
+        <div className="flex items-end gap-1.5 sm:gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              void upload(Array.from(e.target.files ?? []));
+              e.target.value = "";
+            }}
+          />
+          <button type="button" className="btn-ghost shrink-0 !px-2.5 sm:!px-3" onClick={() => fileRef.current?.click()} aria-label="Adjuntar archivos" title="Adjuntar archivos (máx. 5 MB). También podés arrastrarlos o pegar una imagen.">
+            <PaperclipIcon size={16} />
+            <span className="hidden sm:inline">Adjuntar</span>
+          </button>
+          <button type="button" className="btn-ghost shrink-0 !px-2.5 sm:!px-3" onClick={() => setEmojiOpen((v) => !v)} aria-expanded={emojiOpen} aria-label="Emojis" title="Emojis">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M8 14s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01" />
+            </svg>
+            <span className="hidden sm:inline">Emoji</span>
+          </button>
+          <div className="relative min-w-0 flex-1">
             <textarea
               ref={inputRef}
-              rows={2}
-              className="field resize-none rounded-xl bg-paper-deep"
-              placeholder={projectId ? "Escribí un mensaje sobre este proyecto…" : "Escribí un mensaje…  # proyecto, ticket o sprint  ·  @ persona"}
+              rows={1}
+              className="field max-h-36 min-h-[2.5rem] resize-none rounded-xl bg-paper-deep py-2"
+              placeholder={projectId ? "Mensaje sobre el proyecto…" : "Escribí un mensaje…"}
               value={draft}
               maxLength={4000}
-              onChange={(e) => onChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
+              onChange={(e) => {
+                onChange(e.target.value, e.target.selectionStart ?? e.target.value.length);
+                // crece con el texto, hasta max-h
+                e.target.style.height = "auto";
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 144)}px`;
+              }}
               onPaste={(e) => {
                 const files = Array.from(e.clipboardData.files);
                 if (files.length) {
@@ -383,14 +419,14 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
                   }
                 }
                 if (e.key === "Escape") setTrigger(null);
-                else if (e.key === "Enter" && !e.shiftKey) {
+                else if (e.key === "Enter" && !e.shiftKey && !isTouch()) {
                   e.preventDefault();
                   void send();
                 }
               }}
             />
             {emojiOpen && (
-              <div className="absolute bottom-full right-0 z-20 mb-1 w-72 rounded-lg border border-line-strong bg-surface p-2 shadow-hard-lg">
+              <div className="absolute bottom-full right-0 z-20 mb-1 w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-line-strong bg-surface p-2 shadow-hard-lg">
                 <div className="grid max-h-48 grid-cols-8 gap-0.5 overflow-y-auto">
                   {CHAT_EMOJIS.map((em) => (
                     <button key={em} type="button" className="rounded p-1 text-lg hover:bg-card-2" onClick={() => insertEmoji(em)} aria-label={`Insertar ${em}`}>
@@ -401,27 +437,14 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
               </div>
             )}
           </div>
-          <input
-            ref={fileRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              void upload(Array.from(e.target.files ?? []));
-              e.target.value = "";
-            }}
-          />
-          <button type="button" className="btn-ghost btn-sm self-end" onClick={() => fileRef.current?.click()} title="Adjuntar archivos (máx. 5 MB). También podés arrastrarlos o pegar una imagen.">
-            <PaperclipIcon size={14} /> Adjuntar
-          </button>
-          <button type="button" className="btn-ghost btn-sm self-end" onClick={() => setEmojiOpen((v) => !v)} aria-expanded={emojiOpen} title="Emojis">
-            Emoji
-          </button>
-          <button type="button" className="btn-primary self-end" disabled={busy || uploading > 0 || (!draft.trim() && pending.length === 0)} onClick={() => void send()}>
-            Enviar
+          <button type="button" className="btn-primary shrink-0 !px-3" disabled={busy || uploading > 0 || (!draft.trim() && pending.length === 0)} onClick={() => void send()} aria-label="Enviar mensaje">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />
+            </svg>
+            <span className="hidden sm:inline">Enviar</span>
           </button>
         </div>
-        <p className="mt-1 text-[11px] text-ink-faint">Enter envía · Shift+Enter salto de línea</p>
+        <p className="mt-1 hidden text-[11px] text-ink-faint sm:block">Enter envía · Shift+Enter salto de línea</p>
       </div>
     </div>
   );
