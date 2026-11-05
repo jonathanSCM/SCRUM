@@ -1,11 +1,11 @@
 // Comandos del chat: /noti slack, /noti persona, /noti general y /reunion.
 //
-//   /noti slack <mensaje>                 al canal de Slack del equipo
-//   /noti persona ana, luis: <mensaje>    a una o varias personas (separadas por coma; el ":" separa el mensaje)
-//   /noti general <mensaje>               a todo el equipo
+//   /noti slack mensaje                 al canal de Slack del equipo
+//   /noti persona ana, luis: mensaje    a una o varias personas (separadas por coma; el ":" separa el mensaje)
+//   /noti general mensaje               a todo el equipo
 //   /reunion <cuándo>: <tema>             convocatoria a todo el equipo
 
-// Nivel del aviso: "normal", "ayuda" (ámbar) o "urgente" (rojo). Atajos: /urgente <mensaje> y /ayuda <mensaje>
+// Nivel del aviso: "normal", "ayuda" (ámbar) o "urgente" (rojo). Atajos: /urgente mensaje y /ayuda mensaje
 // (van a todo el equipo); o la marca !urgente / !ayuda después del comando: /noti !urgente general …
 export type Level = "normal" | "ayuda" | "urgente";
 
@@ -17,7 +17,7 @@ export type ChatCommand =
 
 export type ParsedCommand = { ok: true; command: ChatCommand } | { ok: false; error: string };
 
-export const COMMAND_HELP = "Comandos: /noti slack <mensaje> · /noti persona ana, luis: <mensaje> · /noti general <mensaje> · /reunion <cuándo>: <tema> · /urgente <mensaje> · /ayuda <mensaje> (agrega !urgente o !ayuda a cualquier comando)";
+export const COMMAND_HELP = "Comandos: /noti slack mensaje · /noti persona ana, luis: mensaje · /noti general mensaje · /reunion <cuándo>: <tema> · /urgente mensaje · /ayuda mensaje (agrega !urgente o !ayuda a cualquier comando)";
 
 export function isCommand(body: string): boolean {
   return /^\/(noti|reunion|urgente|ayuda)(\s|$)/i.test(body.trim());
@@ -29,7 +29,7 @@ export function parseCommand(raw: string): ParsedCommand {
   const quick = body.match(/^\/(urgente|ayuda)(?:\s+([\s\S]*))?$/i);
   if (quick) {
     const message = (quick[2] ?? "").trim();
-    if (!message) return { ok: false, error: `Falta el mensaje. Uso: /${quick[1].toLowerCase()} <mensaje>` };
+    if (!message) return { ok: false, error: `Falta el mensaje. Uso: /${quick[1].toLowerCase()} mensaje` };
     return { ok: true, command: { kind: "general", message: message.slice(0, 1000), level: quick[1].toLowerCase() as Level } };
   }
 
@@ -59,17 +59,19 @@ export function parseCommand(raw: string): ParsedCommand {
   const rest = (noti[2] ?? "").trim();
 
   if (sub === "slack" || sub === "general") {
-    if (!rest) return { ok: false, error: `Falta el mensaje. Uso: /noti ${sub} <mensaje>` };
+    if (!rest) return { ok: false, error: `Falta el mensaje. Uso: /noti ${sub} mensaje` };
     return { ok: true, command: { kind: sub, message: rest.slice(0, 1000), level } };
   }
   if (sub === "persona" || sub === "personas") {
-    const i = rest.indexOf(":");
-    const names = (i > 0 ? rest.slice(0, i) : "")
+    // Forma normal: "ana, luis: mensaje". También se acepta "ana mensaje" (el mensaje entre < >).
+    const angle = rest.indexOf(":") < 0 ? rest.match(/^([^<]*?)\s*<([\s\S]+)>\s*$/) : null;
+    const i = angle ? angle[1].length : rest.indexOf(":");
+    const names = (i > 0 ? (angle ? angle[1] : rest.slice(0, i)) : "")
       .split(",")
       .map((n) => n.trim().replace(/^@/, ""))
       .filter(Boolean);
-    const message = i > 0 ? rest.slice(i + 1).trim() : "";
-    if (names.length === 0 || !message) return { ok: false, error: "Uso: /noti persona ana, luis: <mensaje>" };
+    const message = angle ? angle[2].trim() : i > 0 ? rest.slice(i + 1).trim() : "";
+    if (names.length === 0 || !message) return { ok: false, error: "Uso: /noti persona ana, luis: mensaje" };
     return { ok: true, command: { kind: "persona", names: [...new Set(names.map((n) => n.toLowerCase()))].slice(0, 20), message: message.slice(0, 1000), level } };
   }
   return { ok: false, error: COMMAND_HELP };
@@ -94,4 +96,24 @@ export function matchNames(names: string[], members: NameMatch[]): { found: Name
     else ambiguous.push(wanted);
   }
   return { found, missing, ambiguous };
+}
+
+// Comandos que se ofrecen al escribir "/" en el chat.
+export const COMMAND_LIST: Array<{ cmd: string; insert: string; hint: string }> = [
+  { cmd: "/noti persona", insert: "/noti persona ", hint: "Avisa a una o varias personas: /noti persona ana, luis: mensaje" },
+  { cmd: "/noti general", insert: "/noti general ", hint: "Avisa a todo el equipo (líderes)" },
+  { cmd: "/noti slack", insert: "/noti slack ", hint: "Mensaje al canal de Slack del equipo (líderes)" },
+  { cmd: "/reunion", insert: "/reunion ", hint: "Convoca: /reunion mañana 10:30: tema (líderes)" },
+  { cmd: "/urgente", insert: "/urgente ", hint: "Aviso urgente a todo el equipo, en rojo (líderes)" },
+  { cmd: "/ayuda", insert: "/ayuda ", hint: "Pide ayuda al equipo, en ámbar" },
+];
+
+// Si el borrador es "/noti persona ana, lu", devuelve lo que se está escribiendo (para sugerir nombres).
+export function personaQuery(draft: string): { query: string; start: number } | null {
+  const m = draft.match(/^(\/noti\s+(?:!\w+\s+)?personas?\s+)([^:<]*)$/i);
+  if (!m) return null;
+  const segment = m[2].slice(m[2].lastIndexOf(",") + 1);
+  const lead = segment.length - segment.trimStart().length;
+  const start = m[1].length + m[2].lastIndexOf(",") + 1 + lead;
+  return { query: segment.trim().replace(/^@/, ""), start };
 }
