@@ -212,7 +212,15 @@ Hecho en la rama `claude/pensive-goldberg-pnp76p` (aún sin unir a `main`):
 - [x] Token IA acotado a su equipo.
 - [x] Guardia en `npm test` y suite `scripts/isolation-test.mjs` (78 comprobaciones; se verificó que detecta fugas rompiendo el aislamiento a propósito: 15 fallas).
 
-Pendiente de la Fase 1 antes de unir a `main`:
-- [ ] Correr la suite de aislamiento contra PostgreSQL (aquí solo hubo SQLite).
-- [ ] Probar la migración sobre una copia de la base de producción.
-- [ ] Limitación conocida hasta la Fase 2: el equipo activo sale de una cookie y, si no hay, del equipo más antiguo de la persona. Con un solo equipo en producción es transparente. En la Fase 2 pasa a la dirección web (`/t/<slug>/…`) con selector de equipo.
+Pruebas contra PostgreSQL 16 (el motor de producción), hechas el 2026-11-05:
+- [x] **Suite de aislamiento sobre PostgreSQL**: 78 comprobaciones, 0 fallas (con esquema nuevo vacío y también sobre la base migrada).
+- [x] **Actualización simulada de producción**: base PostgreSQL con el **esquema antiguo** y datos realistas (4 cuentas, 3 proyectos, 45 tickets, comentarios, adjuntos, notas, chat con referencias, archivo, reacción, token, foto…), actualizada con `prisma db push --accept-data-loss` + `prisma/seed.ts`, igual que el arranque del contenedor:
+  - Único aviso de Prisma: se agrega la restricción única `(workspaceId, key)`. No se perdió ningún dato.
+  - **Ninguna fila perdida** (solo suben los 3 mensajes del chat por proyecto antiguo, copiados al chat general).
+  - Todo quedó con equipo: proyectos, estados, chat, archivos, lápidas y tokens (0 filas sin equipo).
+  - Equipo ProShop creado; `jon` (el líder más antiguo) = **Dueño**, otro líder = Admin, miembros = Miembros; 0 cuentas sin equipo; contraseñas intactas.
+  - Segunda ejecución del seed: sin cambios (idempotente).
+  - Iniciar sesión con las cuentas antiguas y recorrer inicio, equipo, chat, backlog, tablero, ajustes y perfil: todo 200, sin errores 5xx.
+- [x] `scripts/verify-workspaces.sql`: comprobaciones para correr sobre la base real después del primer arranque.
+
+Todavía no se pudo probar (no hay acceso a la base de producción): la migración sobre **la copia real** de producción. Antes de unir a `main`: backup de Postgres, desplegar, correr `scripts/verify-workspaces.sql` y revisar que el dueño sea la persona correcta (si no, definir `OWNER_EMAIL` antes del primer arranque).
