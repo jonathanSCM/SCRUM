@@ -175,7 +175,10 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
     // Atajo: escribir la clave de un ticket (SAI-12) lo busca directo, sin pasar por el proyecto.
     if (/^[a-z][a-z0-9]*-\d*$/i.test(q)) return index.issues.filter(match).slice(0, 8).map(issueS);
     // Nivel 1: solo proyectos.
-    return index.projects.filter(match).slice(0, 12).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` }));
+    // Se busca por nombre o por código (SAI); el código exacto va primero.
+    const byCode = (i: IndexItem) => i.sub.toLowerCase() === q;
+    const projectMatch = (i: IndexItem) => match(i) || (!!q && i.sub.toLowerCase().startsWith(q));
+    return [...index.projects.filter(projectMatch)].sort((a, b) => Number(byCode(b)) - Number(byCode(a))).slice(0, 12).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` }));
   }, [trigger, index, scopeId, scoped]);
 
   function onChange(value: string, caret: number) {

@@ -100,3 +100,19 @@ export const CHAT_EMOJIS = [
   "❓", "❗", "📌", "📎", "📅", "⏰", "🐛", "🛠️", "💻", "📱", "🔒", "🔑", "📊", "📈", "📝", "📄",
   "☕", "🍕", "🎯", "🏁", "🧠", "🤖", "👨‍💻", "👩‍💻",
 ];
+
+// Menciones escritas a mano con el código del proyecto o del ticket: "#SAI" o "#SAI-12".
+// Devuelve dónde están (ignorando lo que ya es una mención [[...]]) para que el servidor las convierta.
+export type KeyMention = { start: number; end: number; key: string; number: number | null };
+
+export function findKeyMentions(body: string): KeyMention[] {
+  const out: KeyMention[] = [];
+  const skip: Array<[number, number]> = [];
+  for (const m of body.matchAll(/\[\[[^\]]*\]\]/g)) skip.push([m.index!, m.index! + m[0].length]);
+  for (const m of body.matchAll(/(^|\s)#([A-Za-z][A-Za-z0-9]{1,4})(?:-(\d{1,6}))?(?![A-Za-z0-9-])/g)) {
+    const start = m.index! + m[1].length;
+    if (skip.some(([a, b]) => start >= a && start < b)) continue;
+    out.push({ start, end: m.index! + m[0].length, key: m[2].toUpperCase(), number: m[3] ? Number(m[3]) : null });
+  }
+  return out;
+}

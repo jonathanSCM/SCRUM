@@ -4,7 +4,7 @@ import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 import { chatMessageSchema, parseBody, readJson } from "@/lib/validation";
 import { loadMessages, messageInclude, resolveRefs, toDTOs } from "@/lib/chatData";
-import { parseRefs, plainText } from "@/lib/scrum/chat";
+import { findKeyMentions, makeToken, parseRefs, plainText } from "@/lib/scrum/chat";
 import { sendPush } from "@/lib/push";
 import { channelFilter, ensureChannels } from "@/lib/chatChannels";
 
@@ -42,13 +42,32 @@ export async function POST(req: Request) {
   if ("error" in auth) return auth.error;
   const parsed = parseBody(chatMessageSchema, await readJson(req));
   if ("error" in parsed) return parsed.error;
-  const { body, fileIds = [], replyToId = null } = parsed.data;
+  const { fileIds = [], replyToId = null } = parsed.data;
+  let body = parsed.data.body;
   if (!body && fileIds.length === 0) return NextResponse.json({ error: "Escribí un mensaje o adjuntá un archivo" }, { status: 400 });
 
   try {
     // Solo se conservan las referencias que existen; cada una guarda su proyecto para poder filtrar.
-    const wanted = parseRefs(body);
     const workspaceId = auth.user.workspaceId!;
+
+    // "#SAI" o "#SAI-12" escritos a mano se convierten en mención del proyecto o ticket de ese código (si existe en el equipo).
+    const keyed = findKeyMentions(body);
+    if (keyed.length) {
+      const projects = await prisma.project.findMany({ where: { workspaceId, key: { in: [...new Set(keyed.map((k) => k.key))] } }, select: { id: true, key: true } });
+      const byKey = new Map(projects.map((p) => [p.key!.toUpperCase(), p.id]));
+      const wantedIssues = keyed.filter((k) => k.number !== null && byKey.has(k.key));
+      const issues = wantedIssues.length
+        ? await prisma.task.findMany({ where: { OR: wantedIssues.map((k) => ({ projectId: byKey.get(k.key)!, number: k.number! })) }, select: { id: true, number: true, projectId: true } })
+        : [];
+      for (const k of [...keyed].reverse()) {
+        const projectId = byKey.get(k.key);
+        if (!projectId) continue;
+        const token = k.number === null ? makeToken("project", projectId) : (() => { const t = issues.find((i) => i.projectId === projectId && i.number === k.number); return t ? makeToken("issue", t.id) : null; })();
+        if (token) body = body.slice(0, k.start) + token + body.slice(k.end);
+      }
+    }
+
+    const wanted = parseRefs(body);
     const resolved = await resolveRefs(wanted.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id })), workspaceId);
     const found = wanted.filter((r) => resolved.has(`${r.kind.toUpperCase()}:${r.id}`));
 

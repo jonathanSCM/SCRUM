@@ -626,3 +626,18 @@ describe("comandos del chat", () => {
     expect(matchNames(["ANA PEREZ"], m).found).toEqual([m[0]]);
   });
 });
+
+import { findKeyMentions } from "./chat";
+
+describe("menciones por código", () => {
+  it("encuentra #SAI y #SAI-12, ignora lo que ya es mención o va pegado", () => {
+    expect(findKeyMentions("mira #sai y #SAI-12 ok")).toEqual([
+      { start: 5, end: 9, key: "SAI", number: null },
+      { start: 12, end: 19, key: "SAI", number: 12 },
+    ]);
+    expect(findKeyMentions("[[project:abc]] #SAI")).toHaveLength(1);
+    expect(findKeyMentions("correo a#SAI")).toEqual([]);
+    expect(findKeyMentions("#SAI-")).toEqual([]);
+    expect(findKeyMentions("#TOOLONGKEY")).toEqual([]);
+  });
+});

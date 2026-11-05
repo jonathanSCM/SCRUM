@@ -424,6 +424,17 @@ async function main() {
   const l7 = await cPlain.req("GET", `/api/chat/messages?channel=${gen.id}`);
   check("al borrar un canal sus mensajes pasan a General", dl.status === 200 && l7.json.messages.some((m) => m.body === "hola soporte"));
 
+  console.log("10) Menciones por código (#SAI, #SAI-1)");
+  const km = await cPlain.req("POST", "/api/chat/messages", { body: "ver #SAI y #SAI-1 y #NOEXISTE" });
+  check("mensaje con códigos se crea", km.status === 201, `dio ${km.status}`);
+  const refs = await prisma.chatRef.findMany({ where: { messageId: km.json.id } });
+  check("#SAI apunta al proyecto de SU equipo (B también usa SAI)", refs.some((r) => r.kind === "PROJECT" && r.targetId === A.project.id) && !refs.some((r) => r.targetId === B.project.id));
+  check("#SAI-1 apunta al ticket de su equipo", refs.some((r) => r.kind === "ISSUE" && r.targetId === A.task.id) && !refs.some((r) => r.targetId === B.task.id));
+  check("un código que no existe queda como texto", km.json.body.includes("#NOEXISTE"));
+  const kb = await cBOwner.req("POST", "/api/chat/messages", { body: "ver #SAI" });
+  const refsB = await prisma.chatRef.findMany({ where: { messageId: kb.json.id } });
+  check("en B, #SAI apunta al proyecto de B", refsB.some((r) => r.targetId === B.project.id) && !refsB.some((r) => r.targetId === A.project.id));
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);
