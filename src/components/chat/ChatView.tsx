@@ -1,0 +1,548 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "@/lib/client";
+import { cn, formatBytes, formatDateTime, timeAgo } from "@/lib/ui";
+import { CHAT_EMOJIS, QUICK_REACTIONS, applyInsertedRefs, makeToken, snippetOf, splitMessage, type RefKind } from "@/lib/scrum/chat";
+import Avatar from "@/components/ui/Avatar";
+import { PaperclipIcon } from "@/components/ui/Icons";
+import { useToast } from "@/components/ui/Toaster";
+import { useConfirm } from "@/components/ConfirmDialog";
+
+// Tipos que devuelve la API (ver src/lib/chatData.ts).
+type ResolvedRef = { kind: RefKind; id: string; label: string; sub: string | null; href: string | null; missing: boolean };
+export type ChatMessage = {
+  id: string;
+  body: string;
+  createdAt: string;
+  author: { id: string; name: string; color: string | null } | null;
+  refs: ResolvedRef[];
+  files: Array<{ id: string; filename: string; mimeType: string; size: number }>;
+  updatedAt: string;
+  deleted: boolean;
+  replyTo: { id: string; author: string | null; snippet: string; deleted: boolean } | null;
+  reactions: Array<{ emoji: string; count: number; users: string[]; userIds: string[] }>;
+};
+type IndexItem = { id: string; label: string; sub: string };
+type ChatIndex = { projects: IndexItem[]; issues: IndexItem[]; sprints: IndexItem[]; users: IndexItem[] };
+type Suggestion = IndexItem & { kind: RefKind; short: string };
+type Pending = { id: string; filename: string; mimeType: string; size: number };
+
+const POLL_MS = 2000;
+const IMAGE_RE = /^image\/(png|jpe?g|gif|webp)$/;
+
+const CHIP_STYLE: Record<RefKind, string> = {
+  project: "border-rust/40 bg-card-2 text-rust",
+  issue: "border-moss bg-card-2 text-moss-ink",
+  sprint: "border-blue bg-card-2 text-blue",
+  user: "border-line-strong bg-paper-deep text-ink-soft",
+};
+const KIND_LABEL: Record<RefKind, string> = { project: "Proyecto", issue: "Ticket", sprint: "Sprint", user: "Persona" };
+
+// Chat general del equipo. Con projectId muestra solo los mensajes que mencionan
+// ese proyecto, y lo que se escribe queda mencionándolo.
+export default function ChatView({ initial, currentUserId, isLead, projectId }: { initial: ChatMessage[]; currentUserId: string; isLead: boolean; projectId?: string }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>(initial);
+  const [draft, setDraft] = useState("");
+  const [pending, setPending] = useState<Pending[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [index, setIndex] = useState<ChatIndex | null>(null);
+  const [trigger, setTrigger] = useState<{ char: "#" | "@"; query: string; start: number } | null>(null);
+  const [active, setActive] = useState(0);
+  const inserted = useRef<Array<{ text: string; token: string }>>([]);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const lastRef = useRef<string | null>(initial.length ? initial.reduce((max, m) => (m.updatedAt > max ? m.updatedAt : max), initial[0].updatedAt) : null);
+
+  const projectParam = projectId ? `project=${projectId}` : "";
+
+  const merge = useCallback((incoming: ChatMessage[]) => {
+    if (incoming.length === 0) return;
+    // Los mensajes que ya estaban se reemplazan (reacciones, borrados); los nuevos se agregan al final.
+    setMessages((prev) => {
+      const byId = new Map(incoming.map((m) => [m.id, m]));
+      const known = new Set(prev.map((m) => m.id));
+      const merged = prev.map((m) => byId.get(m.id) ?? m);
+      const fresh = incoming.filter((m) => !known.has(m.id));
+      return fresh.length ? [...merged, ...fresh] : merged;
+    });
+    const newest = incoming.reduce((max, m) => (m.updatedAt > max ? m.updatedAt : max), incoming[0].updatedAt);
+    if (!lastRef.current || newest > lastRef.current) lastRef.current = newest;
+  }, []);
+
+  // Mensajes nuevos cada 2 s (solo con la pestaña visible y sin apilar consultas).
+  useEffect(() => {
+    let running = false;
+    async function poll() {
+      if (document.visibilityState !== "visible" || running) return;
+      running = true;
+      try {
+        const qs = [lastRef.current ? `after=${encodeURIComponent(lastRef.current)}` : "", projectParam].filter(Boolean).join("&");
+        const res = await api<ChatMessage[]>(`/api/chat/messages${qs ? `?${qs}` : ""}`);
+        if (res.ok) merge(res.data);
+      } finally {
+        running = false;
+      }
+    }
+    const timer = setInterval(poll, POLL_MS);
+    const onVisible = () => void poll();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [merge, projectParam]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
+
+  // El índice para # y @ se pide la primera vez que se necesita.
+  const loadIndex = useCallback(async () => {
+    if (index) return;
+    const res = await api<ChatIndex>("/api/chat/index");
+    if (res.ok) setIndex(res.data);
+  }, [index]);
+
+  const suggestions = useMemo<Suggestion[]>(() => {
+    if (!trigger || !index) return [];
+    const q = trigger.query.toLowerCase();
+    const match = (i: IndexItem) => !q || i.label.toLowerCase().includes(q);
+    if (trigger.char === "@") return index.users.filter(match).slice(0, 8).map((u) => ({ ...u, kind: "user" as const, short: `@${u.label}` }));
+    return [
+      ...index.projects.filter(match).slice(0, 4).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` })),
+      ...index.issues.filter(match).slice(0, 5).map((i) => ({ ...i, kind: "issue" as const, short: `#${i.label.split(" ")[0]}` })),
+      ...index.sprints.filter(match).slice(0, 3).map((s) => ({ ...s, kind: "sprint" as const, short: `#${s.label}` })),
+    ].slice(0, 9);
+  }, [trigger, index]);
+
+  function onChange(value: string, caret: number) {
+    setDraft(value);
+    const m = value.slice(0, caret).match(/(^|\s)([#@])([^\s#@]*)$/);
+    if (m) {
+      setTrigger({ char: m[2] as "#" | "@", query: m[3], start: caret - m[3].length - 1 });
+      setActive(0);
+      void loadIndex();
+    } else {
+      setTrigger(null);
+    }
+  }
+
+  function pick(s: Suggestion) {
+    if (!trigger || !inputRef.current) return;
+    const caret = inputRef.current.selectionStart ?? draft.length;
+    const before = draft.slice(0, trigger.start);
+    const after = draft.slice(caret);
+    inserted.current.push({ text: s.short, token: makeToken(s.kind, s.id) });
+    const next = `${before}${s.short} ${after}`;
+    setDraft(next);
+    setTrigger(null);
+    const pos = before.length + s.short.length + 1;
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(pos, pos);
+    });
+  }
+
+  function insertEmoji(emoji: string) {
+    const el = inputRef.current;
+    const start = el?.selectionStart ?? draft.length;
+    const end = el?.selectionEnd ?? draft.length;
+    setDraft(draft.slice(0, start) + emoji + draft.slice(end));
+    setEmojiOpen(false);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  }
+
+  async function upload(files: File[]) {
+    for (const file of files) {
+      setUploading((n) => n + 1);
+      const form = new FormData();
+      form.append("file", file, file.name || "imagen.png");
+      try {
+        const res = await fetch("/api/chat/files", { method: "POST", body: form });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) toast.error(json?.error ?? "No se pudo subir el archivo");
+        else setPending((p) => [...p, json as Pending]);
+      } catch {
+        toast.error("No hay conexión con el servidor");
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+  }
+
+  async function send() {
+    if (busy || uploading > 0) return;
+    let body = applyInsertedRefs(draft.trim(), inserted.current);
+    if (projectId && !body.includes(`[[project:${projectId}]]`)) body = `${makeToken("project", projectId)} ${body}`.trim();
+    if (!draft.trim() && pending.length === 0) return;
+    setBusy(true);
+    const res = await api<ChatMessage>("/api/chat/messages", "POST", { body, fileIds: pending.map((f) => f.id), replyToId: replyTo?.id ?? null });
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error);
+    setDraft("");
+    setPending([]);
+    setReplyTo(null);
+    inserted.current = [];
+    setTrigger(null);
+    merge([res.data]);
+  }
+
+  async function remove(m: ChatMessage) {
+    const ok = await confirm("¿Eliminar este mensaje para todos? Va a quedar como “Mensaje eliminado”.", { confirmLabel: "Eliminar", danger: true });
+    if (!ok) return;
+    const res = await api(`/api/chat/messages/${m.id}`, "DELETE");
+    if (!res.ok) return toast.error(res.error);
+    setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, body: "", files: [], reactions: [], refs: [], deleted: true } : x)));
+    if (replyTo?.id === m.id) setReplyTo(null);
+  }
+
+  async function react(m: ChatMessage, emoji: string) {
+    const res = await api<ChatMessage>(`/api/chat/messages/${m.id}/reactions`, "POST", { emoji });
+    if (!res.ok) return toast.error(res.error);
+    merge([res.data]);
+  }
+
+  function jumpTo(id: string) {
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) return toast.info("Ese mensaje es más antiguo y no está cargado");
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    setHighlight(id);
+    setTimeout(() => setHighlight(null), 1600);
+  }
+
+  return (
+    <div className="flex flex-col rounded-lg border border-line bg-card" style={{ height: "min(72vh, 680px)" }}>
+      <ul className="flex-1 space-y-3 overflow-y-auto p-4" aria-live="polite">
+        {messages.length === 0 && <li className="py-10 text-center text-sm text-ink-faint">Todavía no hay mensajes. Escribí el primero.</li>}
+        {messages.map((m) => (
+          <MessageRow
+            key={m.id}
+            m={m}
+            canDelete={m.author?.id === currentUserId || isLead}
+            mine={m.author?.id === currentUserId}
+            currentUserId={currentUserId}
+            highlighted={highlight === m.id}
+            onDelete={() => remove(m)}
+            onReply={() => {
+              setReplyTo(m);
+              inputRef.current?.focus();
+            }}
+            onReact={(emoji) => void react(m, emoji)}
+            onJump={jumpTo}
+          />
+        ))}
+        <div ref={endRef} />
+      </ul>
+
+      <div
+        className={cn("relative border-t border-line p-3 transition-colors", dragging && "bg-card-2")}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          void upload(Array.from(e.dataTransfer.files));
+        }}
+      >
+        {trigger && suggestions.length > 0 && (
+          <ul className="absolute bottom-full left-3 right-3 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-line bg-card shadow-hard-lg" role="listbox">
+            {suggestions.map((s, i) => (
+              <li key={`${s.kind}:${s.id}`} role="option" aria-selected={i === active}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pick(s);
+                  }}
+                  onMouseEnter={() => setActive(i)}
+                  className={cn("flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm", i === active ? "bg-card-2" : "")}
+                >
+                  <span className={cn("shrink-0 rounded-full border px-1.5 text-[10px] font-bold uppercase", CHIP_STYLE[s.kind])}>{KIND_LABEL[s.kind]}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink">{s.label}</span>
+                  {s.sub && <span className="shrink-0 text-xs text-ink-faint">{s.sub}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {trigger && index && suggestions.length === 0 && (
+          <p className="absolute bottom-full left-3 mb-1 rounded-md border border-line bg-card px-3 py-1.5 text-xs text-ink-faint shadow-hard">Sin resultados para “{trigger.query}”.</p>
+        )}
+
+        {replyTo && (
+          <div className="mb-2 flex items-start gap-2 rounded-md border-l-4 border-rust bg-card-2 px-3 py-1.5 text-xs">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-rust">Respondiendo a {replyTo.author?.name ?? "Usuario eliminado"}</p>
+              <p className="truncate text-ink-soft">{snippetOf(replyTo.body, replyTo.files.length > 0) || "Mensaje"}</p>
+            </div>
+            <button type="button" className="text-ink-faint hover:text-ink" aria-label="Cancelar respuesta" onClick={() => setReplyTo(null)}>×</button>
+          </div>
+        )}
+
+        {(pending.length > 0 || uploading > 0) && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {pending.map((f) => (
+              <span key={f.id} className="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md border border-line-strong bg-paper-deep px-2 py-1 text-xs text-ink">
+                <PaperclipIcon size={12} />
+                <span className="truncate">{f.filename}</span>
+                <span className="text-ink-faint">{formatBytes(f.size)}</span>
+                <button type="button" className="text-ink-faint hover:text-danger" aria-label={`Quitar ${f.filename}`} onClick={() => setPending((p) => p.filter((x) => x.id !== f.id))}>
+                  ×
+                </button>
+              </span>
+            ))}
+            {uploading > 0 && <span className="text-xs text-ink-faint">Subiendo…</span>}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <div className="relative flex-1">
+            <textarea
+              ref={inputRef}
+              rows={2}
+              className="field resize-none"
+              placeholder={projectId ? "Escribí un mensaje sobre este proyecto…" : "Escribí un mensaje… (# proyecto, ticket o sprint · @ persona)"}
+              value={draft}
+              maxLength={4000}
+              onChange={(e) => onChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData.files);
+                if (files.length) {
+                  e.preventDefault();
+                  void upload(files);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (trigger && suggestions.length > 0) {
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setActive((a) => (a + 1) % suggestions.length);
+                    return;
+                  }
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setActive((a) => (a - 1 + suggestions.length) % suggestions.length);
+                    return;
+                  }
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    pick(suggestions[active]);
+                    return;
+                  }
+                }
+                if (e.key === "Escape") setTrigger(null);
+                else if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+            />
+            {emojiOpen && (
+              <div className="absolute bottom-full right-0 z-20 mb-1 w-72 rounded-lg border border-line bg-card p-2 shadow-hard-lg">
+                <div className="grid max-h-48 grid-cols-8 gap-0.5 overflow-y-auto">
+                  {CHAT_EMOJIS.map((em) => (
+                    <button key={em} type="button" className="rounded p-1 text-lg hover:bg-card-2" onClick={() => insertEmoji(em)} aria-label={`Insertar ${em}`}>
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              void upload(Array.from(e.target.files ?? []));
+              e.target.value = "";
+            }}
+          />
+          <button type="button" className="btn-ghost btn-sm self-end" onClick={() => fileRef.current?.click()} title="Adjuntar archivos (máx. 5 MB). También podés arrastrarlos o pegar una imagen.">
+            <PaperclipIcon size={14} /> Adjuntar
+          </button>
+          <button type="button" className="btn-ghost btn-sm self-end" onClick={() => setEmojiOpen((v) => !v)} aria-expanded={emojiOpen} title="Emojis">
+            Emoji
+          </button>
+          <button type="button" className="btn-primary self-end" disabled={busy || uploading > 0 || (!draft.trim() && pending.length === 0)} onClick={() => void send()}>
+            Enviar
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-ink-faint">Enter envía · Shift+Enter salto de línea</p>
+      </div>
+    </div>
+  );
+}
+
+function MessageRow({
+  m,
+  canDelete,
+  mine,
+  currentUserId,
+  highlighted,
+  onDelete,
+  onReply,
+  onReact,
+  onJump,
+}: {
+  m: ChatMessage;
+  canDelete: boolean;
+  mine: boolean;
+  currentUserId: string;
+  highlighted: boolean;
+  onDelete: () => void;
+  onReply: () => void;
+  onReact: (emoji: string) => void;
+  onJump: (id: string) => void;
+}) {
+  const [picker, setPicker] = useState(false);
+  const refByKey = new Map(m.refs.map((r) => [`${r.kind}:${r.id}`, r]));
+  const color = m.author?.color ?? null;
+  const actionCls = "text-ink-faint hover:text-ink";
+
+  return (
+    <li id={`msg-${m.id}`} className={cn("group flex gap-3 rounded-lg transition-colors", highlighted && "bg-card-2")}>
+      <Avatar name={m.author?.name} size={30} color={color} />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs">
+          <span className="font-bold" style={{ color: color ?? "var(--ink)" }}>{m.author?.name ?? "Usuario eliminado"}</span>{" "}
+          <span className="text-ink-faint" title={formatDateTime(m.createdAt)}>{timeAgo(m.createdAt)}</span>
+        </p>
+        <div
+          className={cn("mt-0.5 rounded-lg border-l-4 bg-paper-deep px-3 py-1.5 text-sm text-ink", mine && "bg-card-2")}
+          style={{ borderLeftColor: color ?? "var(--line-strong)" }}
+        >
+          {m.replyTo && (
+            <button
+              type="button"
+              onClick={() => onJump(m.replyTo!.id)}
+              className="mb-1.5 block w-full rounded-md border-l-4 border-line-strong bg-card px-2 py-1 text-left text-xs hover:border-rust"
+            >
+              <span className="block font-semibold text-ink-soft">{m.replyTo.author ?? "Usuario eliminado"}</span>
+              <span className={cn("block truncate", m.replyTo.deleted ? "italic text-ink-faint" : "text-ink-faint")}>{m.replyTo.deleted ? "Mensaje eliminado" : m.replyTo.snippet}</span>
+            </button>
+          )}
+          {m.deleted ? (
+            <p className="italic text-ink-faint">Mensaje eliminado</p>
+          ) : (
+            <>
+              {m.body && (
+                <p className="whitespace-pre-wrap break-words">
+                  {splitMessage(m.body).map((seg, i) => {
+                    if (seg.type === "text") return <span key={i}>{seg.text}</span>;
+                    if (seg.type === "link")
+                      return (
+                        <a key={i} href={seg.href} target="_blank" rel="noopener noreferrer nofollow" className="text-rust underline hover:text-rust-dark">
+                          {seg.text}
+                        </a>
+                      );
+                    return <RefChip key={i} kind={seg.kind} r={refByKey.get(`${seg.kind}:${seg.id}`)} />;
+                  })}
+                </p>
+              )}
+              {m.files.length > 0 && (
+                <div className={cn("flex flex-wrap items-start gap-2", m.body && "mt-2")}>
+                  {m.files.map((f) =>
+                    IMAGE_RE.test(f.mimeType) ? (
+                      <a key={f.id} href={`/api/chat/files/${f.id}`} target="_blank" rel="noopener noreferrer" title={f.filename}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={`/api/chat/files/${f.id}`} alt={f.filename} className="max-h-56 max-w-full rounded-md border border-line" loading="lazy" />
+                      </a>
+                    ) : (
+                      <a key={f.id} href={`/api/chat/files/${f.id}`} download={f.filename} className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-md border border-line-strong bg-card px-2 py-1 text-xs text-ink hover:border-rust">
+                        <PaperclipIcon size={12} />
+                        <span className="truncate">{f.filename}</span>
+                        <span className="text-ink-faint">{formatBytes(f.size)}</span>
+                      </a>
+                    )
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {!m.deleted && m.reactions.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {m.reactions.map((r) => {
+              const iReacted = r.userIds.includes(currentUserId);
+              return (
+                <button
+                  key={r.emoji}
+                  type="button"
+                  onClick={() => onReact(r.emoji)}
+                  title={r.users.join(", ")}
+                  className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-px text-xs", iReacted ? "border-rust bg-card-2 text-rust" : "border-line-strong bg-paper text-ink-soft hover:border-rust")}
+                >
+                  <span>{r.emoji}</span>
+                  <span className="font-semibold">{r.count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {!m.deleted && (
+          <div className="relative mt-0.5 flex items-center gap-3 text-[11px] opacity-100 sm:opacity-0 sm:transition-opacity sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+            <button type="button" className={actionCls} onClick={onReply}>Responder</button>
+            <button type="button" className={actionCls} onClick={() => setPicker((v) => !v)} aria-expanded={picker}>Reaccionar</button>
+            {canDelete && <button type="button" className="text-ink-faint hover:text-danger" onClick={onDelete}>Eliminar</button>}
+            {picker && (
+              <div className="absolute bottom-full left-0 z-20 mb-1 flex gap-0.5 rounded-full border border-line bg-card px-2 py-1 shadow-hard-lg">
+                {QUICK_REACTIONS.map((em) => (
+                  <button
+                    key={em}
+                    type="button"
+                    className="rounded-full px-1 text-lg hover:bg-card-2"
+                    onClick={() => {
+                      setPicker(false);
+                      onReact(em);
+                    }}
+                    aria-label={`Reaccionar con ${em}`}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function RefChip({ kind, r }: { kind: RefKind; r: ResolvedRef | undefined }) {
+  const label = r?.label ?? "(eliminado)";
+  const cls = cn("mx-0.5 inline-flex max-w-[18rem] items-center gap-1 rounded-full border px-2 py-px align-baseline text-xs font-semibold", r?.missing ? "border-line-strong bg-paper-deep text-ink-faint line-through" : CHIP_STYLE[kind]);
+  const title = `${KIND_LABEL[kind]}${r?.sub ? ` · ${r.sub}` : ""}`;
+  if (!r || r.missing || !r.href) {
+    return (
+      <span className={cls} title={title}>
+        <span className="truncate">{label}</span>
+      </span>
+    );
+  }
+  return (
+    <Link href={r.href} className={cn(cls, "hover:brightness-95")} title={title}>
+      <span className="truncate">{label}</span>
+    </Link>
+  );
+}

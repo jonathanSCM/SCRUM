@@ -51,3 +51,4 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
   - `VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY`: se generan una sola vez con `npx web-push generate-vapid-keys`.
   - `VAPID_SUBJECT` (opcional): `mailto:tu@correo` de contacto.
   - Agrega la tabla `PushSubscription` (aditiva).
+- **Chat general**: el chat ahora es uno solo para todo el equipo (menú "Chat"), con menciones `#` (proyecto, ticket, sprint) y `@` (persona, que recibe aviso push), archivos de hasta 5 MB, emojis, enlaces y color propio por persona (Mi perfil). La pestaña "Chat" de cada proyecto muestra los mensajes que lo mencionan. Al arrancar, `prisma/seed.ts` copia una sola vez los mensajes del chat por proyecto anterior al chat general. Los archivos se guardan en la base de datos (`src/lib/fileStore.ts` es el único lugar a cambiar si más adelante pasan a un almacenamiento S3: MinIO en Coolify, Cloudflare R2 o Backblaze B2).

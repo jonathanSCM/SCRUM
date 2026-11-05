@@ -4,13 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
 import { useToast } from "@/components/ui/Toaster";
+import { CHAT_COLORS } from "@/lib/scrum/chat";
+import Avatar from "@/components/ui/Avatar";
 import { PwaCard } from "@/components/PwaControls";
 
-export default function ProfileForm({ name: initialName, discordUserId: initialDiscord, telegramUsername: initialTelegram, slackUserId: initialSlack }: { name: string; discordUserId: string; telegramUsername: string; slackUserId: string }) {
+export default function ProfileForm({ name: initialName, discordUserId: initialDiscord, telegramUsername: initialTelegram, slackUserId: initialSlack, chatColor: initialColor }: { name: string; discordUserId: string; telegramUsername: string; slackUserId: string; chatColor: string }) {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState(initialName);
   const [discord, setDiscord] = useState(initialDiscord);
+  const [chatColor, setChatColor] = useState(initialColor);
   const [slack, setSlack] = useState(initialSlack);
   const [telegram, setTelegram] = useState(initialTelegram);
   const [saving, setSaving] = useState(false);
@@ -22,7 +25,7 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const res = await api("/api/users/me", "PATCH", { name, discordUserId: discord.trim(), telegramUsername: telegram.trim(), slackUserId: slack.trim() });
+    const res = await api("/api/users/me", "PATCH", { name, discordUserId: discord.trim(), telegramUsername: telegram.trim(), slackUserId: slack.trim(), chatColor });
     setSaving(false);
     if (!res.ok) return toast.error(res.error);
     toast.success("Perfil guardado");
@@ -49,6 +52,28 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
         <div>
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Nombre</label>
           <input className="field" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-ink-soft">Mi color en el chat</label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Avatar name={name || "?"} size={32} color={chatColor || null} />
+            {CHAT_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-label={`Color ${c}`}
+                aria-pressed={chatColor === c}
+                onClick={() => setChatColor(c)}
+                className={`h-7 w-7 rounded-full border-2 ${chatColor === c ? "border-ink" : "border-transparent"}`}
+                style={{ background: c }}
+              />
+            ))}
+            <input type="color" aria-label="Otro color" className="h-7 w-9 cursor-pointer rounded-md border border-line bg-paper p-0" value={chatColor || "#6d28d9"} onChange={(e) => setChatColor(e.target.value)} />
+            {chatColor && (
+              <button type="button" className="text-xs text-ink-faint hover:text-ink" onClick={() => setChatColor("")}>Quitar</button>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-ink-faint">Tu nombre, tu avatar y el borde de tus mensajes usan este color.</p>
         </div>
         <div>
           <label className="mb-1 block text-xs font-semibold text-ink-soft">ID de usuario de Discord</label>

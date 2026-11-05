@@ -58,6 +58,11 @@ export const updateProfileSchema = z.object({
     .transform((v) => v.replace(/^@/, ""))
     .refine((v) => v === "" || TELEGRAM_USERNAME_PATTERN.test(v), "Usuario de Telegram inválido (5 a 32 letras, números o _)")
     .nullish(),
+  chatColor: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || /^#[0-9a-fA-F]{6}$/.test(v), "Color inválido (#RRGGBB)")
+    .nullish(),
   discordUserId: z
     .string()
     .trim()
@@ -259,3 +264,11 @@ export const contactSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 export const updateContactSchema = contactSchema.partial();
+
+export const chatMessageSchema = z.object({
+  body: z.string().trim().max(4000),
+  fileIds: z.array(z.string().min(1).max(40)).max(5).optional(),
+  replyToId: z.string().min(1).max(40).nullish(),
+});
+
+export const chatReactionSchema = z.object({ emoji: z.string().min(1).max(16) });

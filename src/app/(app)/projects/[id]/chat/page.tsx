@@ -1,20 +1,20 @@
-import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
 import { getProjectOrNotFound } from "@/lib/projectData";
-import ChatView, { type ChatMessage } from "./ChatView";
+import { loadMessages } from "@/lib/chatData";
+import ChatView from "@/components/chat/ChatView";
 
-export default async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
+// El chat del proyecto es el chat general filtrado: solo los mensajes que mencionan este proyecto.
+export default async function ProjectChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireSession();
-  await getProjectOrNotFound(id);
-
-  const rows = await prisma.projectMessage.findMany({
-    where: { projectId: id },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    include: { author: { select: { id: true, name: true } } },
-  });
-  const initial: ChatMessage[] = rows.reverse().map((m) => ({ id: m.id, body: m.body, createdAt: m.createdAt.toISOString(), author: m.author }));
-
-  return <ChatView projectId={id} initial={initial} currentUserId={session.user.id} isLead={session.user.role === "LEAD"} />;
+  const project = await getProjectOrNotFound(id);
+  const initial = await loadMessages({ projectId: id });
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-ink-soft">
+        Mensajes del <a href="/chat" className="font-semibold text-rust hover:underline">chat general</a> que mencionan a <b>{project.name}</b>. Lo que escribas acá también aparece allá, con el proyecto mencionado.
+      </p>
+      <ChatView initial={initial} currentUserId={session.user.id} isLead={session.user.role === "LEAD"} projectId={id} />
+    </div>
+  );
 }
