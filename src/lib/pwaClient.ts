@@ -54,6 +54,9 @@ export async function subscribeToPush(publicKey: string): Promise<{ ok: true } |
     if (!res.ok) return { ok: false, error: "El servidor no pudo guardar la suscripción." };
     return { ok: true };
   } catch {
+    // Brave bloquea el servicio push de Google por defecto: hay que activarlo en sus ajustes.
+    const brave = typeof navigator !== "undefined" && "brave" in navigator;
+    if (brave) return { ok: false, error: "Brave bloquea las notificaciones push por defecto. Abre brave://settings/privacy, activa \"Usar servicios de Google para mensajería push\", reinicia Brave y vuelve a intentarlo." };
     // Pasa si el navegador no puede contactar su servicio push (sin internet, bloqueado por la red o por el navegador).
     return { ok: false, error: "El navegador no pudo suscribirse al servicio de notificaciones. Revisá tu conexión e intentá de nuevo." };
   }
