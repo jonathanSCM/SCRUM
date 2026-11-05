@@ -7,7 +7,7 @@ import { moveIssueSchema, parseBody, readJson } from "@/lib/validation";
 // Drag & drop del backlog y del tablero: mueve un ticket a otro sprint / otra
 // columna y/o a otra posición (entre prevId y nextId).
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireSession } from "@/lib/session";
+import { requireWorkspace } from "@/lib/session";
+import { sharedWorkspaces } from "@/lib/workspace";
+import { roleBadge } from "@/lib/scrum/roles";
+import { prisma } from "@/lib/prisma";
 import { getProfile } from "@/lib/profileData";
 import { compareLabel } from "@/lib/scrum/weekly";
 import { STATUS_META, type IssueStatus } from "@/lib/scrum/constants";
@@ -11,14 +14,19 @@ type Tile = { label: string; value: number; previous: number; hint?: string };
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const p = await getProfile(id);
-  return { title: p ? p.user.name : "Perfil" };
+  const u = await prisma.user.findUnique({ where: { id }, select: { name: true } });
+  return { title: u?.name ?? "Perfil" };
 }
 
 export default async function PublicProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await requireSession();
-  const profile = await getProfile(id);
+  const ws = await requireWorkspace();
+  const session = ws.session;
+  // Solo se ve a personas con las que se comparte equipo. Se muestra el equipo activo si la persona es parte de él; si no, el primero que comparten.
+  const shared = await sharedWorkspaces(session.user.id, id);
+  if (shared.length === 0) notFound();
+  const workspaceId = shared.some((s) => s.workspaceId === ws.workspaceId) ? ws.workspaceId : shared[0].workspaceId;
+  const profile = await getProfile(id, workspaceId);
   if (!profile) notFound();
   const { user, week } = profile;
   const mine = session.user.id === user.id;
@@ -48,13 +56,18 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         <div className="min-w-0 flex-1 pb-1 sm:pt-14">
           <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">{user.name}</h1>
           <p className="text-sm text-ink-soft">
-            <span className="lozenge mr-2 align-middle text-ink-soft">{user.role === "LEAD" ? "Líder" : "Miembro"}</span>
+            {shared.map((w) => (
+              <span key={w.workspaceId} className={`lozenge mr-2 align-middle ${w.role === "OWNER" ? "text-rust" : "text-ink-soft"}`}>{roleBadge(w.role, w.workspaceName)}</span>
+            ))}
             {user.tagline}
           </p>
           <p className="text-xs text-ink-faint">En el equipo desde {formatDate(user.memberSince, { day: "numeric", month: "long", year: "numeric" })}</p>
         </div>
         {mine && (
-          <Link href="/settings/profile" className="btn-ghost btn-sm mb-1 self-start sm:self-auto">Editar mi perfil</Link>
+          <div className="mb-1 flex gap-2 self-start sm:self-auto">
+            <Link href="/settings/profile" className="btn-ghost btn-sm">Editar mi perfil</Link>
+            <Link href="/settings" className="btn-ghost btn-sm">Ajustes</Link>
+          </div>
         )}
       </div>
 

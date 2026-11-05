@@ -88,8 +88,10 @@ async function validateRefs(
     if (!parent || parent.projectId !== projectId || parent.issueType !== "STORY") throw new IssueError("Esa historia no existe en el proyecto");
   }
   if (refs.assigneeUserId) {
-    const user = await prisma.user.findUnique({ where: { id: refs.assigneeUserId }, select: { id: true } });
-    if (!user) throw new IssueError("Ese usuario no existe");
+    // El responsable tiene que ser miembro del equipo del proyecto (no cualquier cuenta del sistema).
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } });
+    const member = project?.workspaceId ? await prisma.membership.findUnique({ where: { userId_workspaceId: { userId: refs.assigneeUserId, workspaceId: project.workspaceId } }, select: { id: true } }) : null;
+    if (!member) throw new IssueError("Esa persona no es parte del equipo");
   }
 }
 
@@ -445,10 +447,11 @@ export async function deleteIssue(issueId: string, actor: Actor): Promise<void> 
 
 // ---- Buscar por clave ----
 
-export async function findIssueByKey(key: string) {
+// La clave ("SAI-2") solo es única dentro de un equipo: se busca en el equipo indicado.
+export async function findIssueByKey(key: string, workspaceId: string) {
   const parsed = parseIssueKey(key);
   if (!parsed) return null;
-  const project = await prisma.project.findUnique({ where: { key: parsed.projectKey }, select: { id: true } });
+  const project = await prisma.project.findUnique({ where: { workspaceId_key: { workspaceId, key: parsed.projectKey } }, select: { id: true } });
   if (!project) return null;
   return prisma.task.findUnique({ where: { projectId_number: { projectId: project.id, number: parsed.number } }, include: issueInclude });
 }

@@ -1,16 +1,17 @@
 import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/session";
+import { requireWorkspace } from "@/lib/session";
 import ProjectsView, { type ProjectCardData } from "./ProjectsView";
 
 export default async function ProjectsPage() {
-  await requireSession();
+  const { workspaceId } = await requireWorkspace();
   const [projects, statuses, taskCounts] = await Promise.all([
     prisma.project.findMany({
+      where: { workspaceId },
       orderBy: { name: "asc" },
       include: { lead: { select: { name: true } }, sprints: { where: { state: "ACTIVE" }, select: { name: true, endDate: true }, take: 1 } },
     }),
-    prisma.statusOption.findMany({ orderBy: { order: "asc" } }),
-    prisma.task.groupBy({ by: ["projectId", "status"], where: { issueType: { not: "EPIC" } }, _count: { _all: true } }),
+    prisma.statusOption.findMany({ where: { workspaceId }, orderBy: { order: "asc" } }),
+    prisma.task.groupBy({ by: ["projectId", "status"], where: { issueType: { not: "EPIC" }, project: { workspaceId } }, _count: { _all: true } }),
   ]);
 
   const counts = new Map<string, { done: number; total: number }>();

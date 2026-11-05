@@ -6,8 +6,6 @@ import { api } from "@/lib/client";
 import { useToast } from "@/components/ui/Toaster";
 import { CHAT_COLORS } from "@/lib/scrum/chat";
 import Avatar from "@/components/ui/Avatar";
-import { PwaCard } from "@/components/PwaControls";
-import AiTokenCard from "@/components/AiTokenCard";
 import ProfileImages from "@/components/ProfileImages";
 
 export default function ProfileForm({ name: initialName, discordUserId: initialDiscord, telegramUsername: initialTelegram, slackUserId: initialSlack, chatColor: initialColor, userId, tagline: initialTagline, hasAvatar, hasBanner }: { name: string; discordUserId: string; telegramUsername: string; slackUserId: string; chatColor: string; userId: string; tagline: string; hasAvatar: boolean; hasBanner: boolean }) {
@@ -21,9 +19,6 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
   const [telegram, setTelegram] = useState(initialTelegram);
   const [saving, setSaving] = useState(false);
 
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [changing, setChanging] = useState(false);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -35,23 +30,8 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
     router.refresh();
   }
 
-  async function changePassword(e: React.FormEvent) {
-    e.preventDefault();
-    setChanging(true);
-    const res = await api("/api/users/me/password", "POST", { currentPassword, newPassword });
-    setChanging(false);
-    if (!res.ok) return toast.error(res.error);
-    toast.success("Contraseña actualizada");
-    setCurrentPassword("");
-    setNewPassword("");
-  }
-
   return (
     <div className="space-y-8">
-      <PwaCard />
-
-      <AiTokenCard userName={initialName} />
-
       <form onSubmit={save} className="space-y-4 border border-line bg-card p-5 rounded-lg">
         <h2 className="font-display text-lg font-extrabold text-ink">Datos</h2>
         <ProfileImages userId={userId} name={name} chatColor={chatColor} hasAvatar={hasAvatar} hasBanner={hasBanner} />
@@ -108,20 +88,6 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
         </div>
       </form>
 
-      <form onSubmit={changePassword} className="space-y-4 border border-line bg-card p-5 rounded-lg">
-        <h2 className="font-display text-lg font-extrabold text-ink">Cambiar contraseña</h2>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-ink-soft">Contraseña actual</label>
-          <input className="field" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-ink-soft">Contraseña nueva (mínimo 8 caracteres)</label>
-          <input className="field" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-        </div>
-        <div className="flex justify-end">
-          <button className="btn-primary" disabled={changing || !currentPassword || newPassword.length < 8}>{changing ? "Cambiando…" : "Cambiar contraseña"}</button>
-        </div>
-      </form>
     </div>
   );
 }

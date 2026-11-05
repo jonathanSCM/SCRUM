@@ -18,6 +18,8 @@ export type ResolvedRef = {
 export type ChatMessageDTO = {
   id: string;
   body: string;
+  level: "AYUDA" | "URGENTE" | null;
+  channel: string | null; // nombre del canal (solo se usa en la pestaña de avisos del equipo)
   createdAt: string;
   author: { id: string; name: string; color: string | null } | null;
   refs: ResolvedRef[];
@@ -28,6 +30,7 @@ export type ChatMessageDTO = {
 };
 
 const messageInclude = {
+  channel: { select: { name: true } },
   author: { select: { id: true, name: true, chatColor: true } },
   refs: true,
   files: { select: { id: true, filename: true, mimeType: true, size: true } },
@@ -35,13 +38,13 @@ const messageInclude = {
   replyTo: { select: { id: true, body: true, deletedAt: true, author: { select: { name: true } }, _count: { select: { files: true } } } },
 } as const;
 
-export async function resolveRefs(refs: Array<{ kind: string; targetId: string }>): Promise<Map<string, ResolvedRef>> {
+export async function resolveRefs(refs: Array<{ kind: string; targetId: string }>, workspaceId: string): Promise<Map<string, ResolvedRef>> {
   const ids = (kind: string) => [...new Set(refs.filter((r) => r.kind === kind).map((r) => r.targetId))];
   const [projects, issues, sprints, users] = await Promise.all([
-    prisma.project.findMany({ where: { id: { in: ids("PROJECT") } }, select: { id: true, name: true, key: true } }),
-    prisma.task.findMany({ where: { id: { in: ids("ISSUE") } }, select: { id: true, number: true, title: true, status: true, projectId: true, project: { select: { key: true } } } }),
-    prisma.sprint.findMany({ where: { id: { in: ids("SPRINT") } }, select: { id: true, name: true, state: true, projectId: true, project: { select: { name: true } } } }),
-    prisma.user.findMany({ where: { id: { in: ids("USER") } }, select: { id: true, name: true } }),
+    prisma.project.findMany({ where: { id: { in: ids("PROJECT") }, workspaceId }, select: { id: true, name: true, key: true } }),
+    prisma.task.findMany({ where: { id: { in: ids("ISSUE") }, project: { workspaceId } }, select: { id: true, number: true, title: true, status: true, projectId: true, project: { select: { key: true } } } }),
+    prisma.sprint.findMany({ where: { id: { in: ids("SPRINT") }, project: { workspaceId } }, select: { id: true, name: true, state: true, projectId: true, project: { select: { name: true } } } }),
+    prisma.user.findMany({ where: { id: { in: ids("USER") }, memberships: { some: { workspaceId } } }, select: { id: true, name: true } }),
   ]);
 
   const out = new Map<string, ResolvedRef>();
@@ -57,8 +60,8 @@ export async function resolveRefs(refs: Array<{ kind: string; targetId: string }
 
 type Row = Awaited<ReturnType<typeof prisma.chatMessage.findMany<{ include: typeof messageInclude }>>>[number];
 
-export async function toDTOs(rows: Row[]): Promise<ChatMessageDTO[]> {
-  const resolved = await resolveRefs(rows.flatMap((r) => r.refs.map((x) => ({ kind: x.kind, targetId: x.targetId }))));
+export async function toDTOs(rows: Row[], workspaceId: string): Promise<ChatMessageDTO[]> {
+  const resolved = await resolveRefs(rows.flatMap((r) => r.refs.map((x) => ({ kind: x.kind, targetId: x.targetId }))), workspaceId);
   return rows.map((r) => {
     // Las marcas del texto (no las filas) mandan el orden; las filas sirven para filtrar.
     const refs = parseRefs(r.body).map((p): ResolvedRef => {
@@ -76,6 +79,8 @@ export async function toDTOs(rows: Row[]): Promise<ChatMessageDTO[]> {
     return {
       id: r.id,
       body: r.body,
+      channel: r.channel?.name ?? null,
+      level: r.level === "URGENTE" || r.level === "AYUDA" ? r.level : null,
       updatedAt: r.updatedAt.toISOString(),
       replyTo: r.replyTo && !r.replyTo.deletedAt ? { id: r.replyTo.id, author: r.replyTo.author?.name ?? null, snippet: snippetOf(r.replyTo.body, r.replyTo._count.files > 0) } : null,
       reactions: [...grouped.values()],
@@ -88,15 +93,22 @@ export async function toDTOs(rows: Row[]): Promise<ChatMessageDTO[]> {
 }
 
 // Últimos mensajes (cronológico). after: solo los más nuevos. projectId: solo los que mencionan ese proyecto.
-export async function loadMessages(opts: { after?: Date | null; projectId?: string | null; limit?: number } = {}): Promise<ChatMessageDTO[]> {
-  const projectFilter = { deletedAt: null, ...(opts.projectId ? { refs: { some: { projectId: opts.projectId } } } : {}) };
+// channel: filtro de un canal (ver channelFilter). announce: solo los avisos por comando de todos los canales.
+export async function loadMessages(opts: { workspaceId: string; after?: Date | null; projectId?: string | null; limit?: number; channel?: object | null; announce?: boolean }): Promise<ChatMessageDTO[]> {
+  const projectFilter = {
+    workspaceId: opts.workspaceId,
+    deletedAt: null,
+    ...(opts.projectId ? { refs: { some: { projectId: opts.projectId } } } : {}),
+    ...(opts.channel ? opts.channel : {}),
+    ...(opts.announce ? { announce: true } : {}),
+  };
   // Con "after" se devuelve lo que cambió desde entonces (mensajes nuevos, reacciones, borrados).
   if (opts.after) {
     const changed = await prisma.chatMessage.findMany({ where: { updatedAt: { gt: opts.after }, ...projectFilter }, orderBy: { updatedAt: "asc" }, take: 200, include: messageInclude });
-    return toDTOs(changed);
+    return toDTOs(changed, opts.workspaceId);
   }
   const rows = await prisma.chatMessage.findMany({ where: projectFilter, orderBy: { createdAt: "desc" }, take: opts.limit ?? 100, include: messageInclude });
-  return toDTOs(rows.reverse());
+  return toDTOs(rows.reverse(), opts.workspaceId);
 }
 
 export { messageInclude };

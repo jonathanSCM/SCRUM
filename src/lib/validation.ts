@@ -270,6 +270,7 @@ export const chatMessageSchema = z.object({
   body: z.string().trim().max(4000),
   fileIds: z.array(z.string().min(1).max(40)).max(5).optional(),
   replyToId: z.string().min(1).max(40).nullish(),
+  channelId: z.string().min(1).max(40).nullish(),
 });
 
 export const chatReactionSchema = z.object({ emoji: z.string().min(1).max(16) });

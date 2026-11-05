@@ -9,7 +9,7 @@ export const maxDuration = 90;
 
 // Reenvía el informe del sprint al Slack del proyecto.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ sprint: (await params).id });
   if ("error" in auth) return auth.error;
   if (!sprintPdfEnabled()) return notFound("El informe PDF del sprint está desactivado (SPRINT_PDF_ENABLED)");
   const { id } = await params;

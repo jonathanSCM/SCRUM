@@ -6,7 +6,7 @@ import { logHistory } from "@/lib/history";
 import { MAX_ATTACHMENT_BYTES } from "@/lib/scrum/constants";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ issue: (await params).id });
   if ("error" in auth) return auth.error;
   const { user } = auth;
   const { id } = await params;

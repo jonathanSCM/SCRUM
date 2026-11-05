@@ -1,40 +1,50 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import bcrypt from "bcryptjs";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { parseBody, createUserSchema } from "@/lib/validation";
+import { apiUser } from "@/lib/session";
+import { errorResponse } from "@/lib/api";
+import { membersOf } from "@/lib/workspace";
+import { findUserByEmail } from "@/lib/users";
+import { parseBody, createUserSchema, readJson } from "@/lib/validation";
 
+// Personas del equipo activo.
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-
-  const users = await prisma.user.findMany({
-    select: { id: true, name: true, email: true, role: true, createdAt: true },
-    orderBy: { name: "asc" },
-  });
-  return NextResponse.json(users);
+  const auth = await apiUser({ workspace: true });
+  if ("error" in auth) return auth.error;
+  try {
+    return NextResponse.json(await membersOf(auth.user.workspaceId!));
+  } catch (e) {
+    return errorResponse(e);
+  }
 }
 
-// Solo un LEAD puede crear cuentas, y las crea directo: la contraseña temporal
-// se devuelve una sola vez para que el LEAD se la pase a la persona.
+// Solo un líder (dueño o admin) del equipo crea cuentas, y las crea directo: la contraseña
+// temporal se devuelve una sola vez. La cuenta nace como miembro de ESTE equipo.
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  if (session.user.role !== "LEAD") return NextResponse.json({ error: "Solo un líder puede crear cuentas" }, { status: 403 });
+  const auth = await apiUser({ workspace: true, lead: true });
+  if ("error" in auth) return auth.error;
 
-  const parsed = parseBody(createUserSchema, await req.json());
+  const parsed = parseBody(createUserSchema, await readJson(req));
   if ("error" in parsed) return parsed.error;
   const { name, email, password, role } = parsed.data;
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return NextResponse.json({ error: "Ya existe un usuario con ese email" }, { status: 400 });
+  try {
+    const existing = await findUserByEmail(email);
+    if (existing) return NextResponse.json({ error: "Ya existe una cuenta con ese email" }, { status: 400 });
 
-  const passwordHash = await bcrypt.hash(password, 10);
-  const user = await prisma.user.create({
-    data: { name, email, passwordHash, role: role === "LEAD" ? "LEAD" : "MEMBER" },
-    select: { id: true, name: true, email: true, role: true },
-  });
-
-  return NextResponse.json(user, { status: 201 });
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email: email.toLowerCase(),
+        passwordHash,
+        role: role === "LEAD" ? "LEAD" : "MEMBER", // legacy: el rol real vive en la membresía
+        memberships: { create: { workspaceId: auth.user.workspaceId!, role: role === "LEAD" ? "ADMIN" : "MEMBER" } },
+      },
+      select: { id: true, name: true, email: true, role: true },
+    });
+    return NextResponse.json(user, { status: 201 });
+  } catch (e) {
+    return errorResponse(e);
+  }
 }

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Avatar, { notifyAvatarChanged } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toaster";
+import ImageCropper from "@/components/ImageCropper";
 
 // Foto de perfil y banner. El servidor recorta al centro y reduce la imagen, así que
 // se puede subir la foto tal cual sale de la cámara (JPG, PNG, WebP o GIF, hasta 10 MB).
@@ -16,9 +17,12 @@ export default function ProfileImages({ userId, name, chatColor, hasAvatar, hasB
   const [busy, setBusy] = useState<"avatar" | "banner" | null>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
   const bannerInput = useRef<HTMLInputElement>(null);
+  // Foto elegida que se está encuadrando antes de subirla.
+  const [cropping, setCropping] = useState<{ kind: "avatar" | "banner"; file: File } | null>(null);
 
   async function upload(kind: "avatar" | "banner", file: File | undefined) {
     if (!file) return;
+    setCropping(null);
     setBusy(kind);
     const form = new FormData();
     form.append("kind", kind);
@@ -43,6 +47,13 @@ export default function ProfileImages({ userId, name, chatColor, hasAvatar, hasB
     }
   }
 
+  // Los GIF se suben tal cual (para no perder la animación); el resto se encuadra primero.
+  function pick(kind: "avatar" | "banner", file: File | undefined) {
+    if (!file) return;
+    if (file.type === "image/gif") void upload(kind, file);
+    else setCropping({ kind, file });
+  }
+
   async function remove(kind: "avatar" | "banner") {
     setBusy(kind);
     const res = await fetch(`/api/users/me/image?kind=${kind}`, { method: "DELETE" }).catch(() => null);
@@ -58,6 +69,16 @@ export default function ProfileImages({ userId, name, chatColor, hasAvatar, hasB
 
   return (
     <div className="space-y-4">
+      {cropping && (
+        <ImageCropper
+          file={cropping.file}
+          aspect={cropping.kind === "avatar" ? 1 : 3}
+          circle={cropping.kind === "avatar"}
+          outputWidth={cropping.kind === "avatar" ? 512 : 1200}
+          onCancel={() => setCropping(null)}
+          onDone={(blob) => void upload(cropping.kind, new File([blob], "imagen.jpg", { type: "image/jpeg" }))}
+        />
+      )}
       <div>
         <label className="mb-1 block text-xs font-semibold text-ink-soft">Banner</label>
         <div className="relative h-28 overflow-hidden rounded-lg border border-line bg-rust sm:h-32">
@@ -67,11 +88,11 @@ export default function ProfileImages({ userId, name, chatColor, hasAvatar, hasB
           )}
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
-          <input ref={bannerInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => { void upload("banner", e.target.files?.[0]); e.target.value = ""; }} />
+          <input ref={bannerInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => { pick("banner", e.target.files?.[0]); e.target.value = ""; }} />
           <button type="button" className="btn-ghost btn-sm" disabled={busy !== null} onClick={() => bannerInput.current?.click()}>{busy === "banner" ? "Subiendo…" : banner ? "Cambiar banner" : "Subir banner"}</button>
           {banner && <button type="button" className="btn-ghost btn-sm text-danger" disabled={busy !== null} onClick={() => remove("banner")}>Quitar</button>}
         </div>
-        <p className="mt-1 text-xs text-ink-faint">Se recorta a un formato ancho (3:1). Sin banner se ve un color liso de la marca.</p>
+        <p className="mt-1 text-xs text-ink-faint">Eliges la zona que se ve (formato ancho 3:1). Sin banner se ve un color liso de la marca.</p>
       </div>
 
       <div className="flex items-center gap-4">
@@ -79,11 +100,11 @@ export default function ProfileImages({ userId, name, chatColor, hasAvatar, hasB
         <div>
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Foto de perfil</label>
           <div className="flex flex-wrap gap-2">
-            <input ref={avatarInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => { void upload("avatar", e.target.files?.[0]); e.target.value = ""; }} />
+            <input ref={avatarInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => { pick("avatar", e.target.files?.[0]); e.target.value = ""; }} />
             <button type="button" className="btn-ghost btn-sm" disabled={busy !== null} onClick={() => avatarInput.current?.click()}>{busy === "avatar" ? "Subiendo…" : avatar ? "Cambiar foto" : "Subir foto"}</button>
             {avatar && <button type="button" className="btn-ghost btn-sm text-danger" disabled={busy !== null} onClick={() => remove("avatar")}>Quitar</button>}
           </div>
-          <p className="mt-1 text-xs text-ink-faint">Se recorta en círculo, centrada. Sin foto se ven tus iniciales con tu color.</p>
+          <p className="mt-1 text-xs text-ink-faint">Eliges qué zona se ve, en círculo. Sin foto se ven tus iniciales con tu color.</p>
         </div>
       </div>
     </div>

@@ -15,7 +15,7 @@ async function loadForWrite(id: string, user: { id: string; role: string }) {
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ comment: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
@@ -37,7 +37,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ comment: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

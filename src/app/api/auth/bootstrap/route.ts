@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { parseBody, createUserSchema } from "@/lib/validation";
+import { createWorkspace } from "@/lib/workspaceAdmin";
 
 export async function GET() {
   const count = await prisma.user.count();
@@ -31,6 +32,9 @@ export async function POST(req: Request) {
     data: { name, email, passwordHash, role: "LEAD" },
     select: { id: true, name: true, email: true, role: true },
   });
+
+  // La primera cuenta es la dueña de su primer equipo.
+  await createWorkspace("Mi equipo", user.id);
 
   return NextResponse.json(user, { status: 201 });
 }

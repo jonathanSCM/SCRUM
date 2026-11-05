@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import { membersOf } from "@/lib/workspace";
 import { requireSession } from "@/lib/session";
 import { getProjectOrNotFound } from "@/lib/projectData";
 import { parseStringList } from "@/lib/scrum/ready";
-import { slackBotConfigured } from "@/lib/slack";
+import { slackBotTokenFor } from "@/lib/teamIntegrations";
 import { sprintPdfEnabled } from "@/lib/features";
 import SettingsForm from "./SettingsForm";
 
@@ -11,8 +12,8 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
   const session = await requireSession();
   const project = await getProjectOrNotFound(id);
   const [statuses, users] = await Promise.all([
-    prisma.statusOption.findMany({ orderBy: { order: "asc" } }),
-    prisma.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.statusOption.findMany({ where: { workspaceId: project.access.workspaceId }, orderBy: { order: "asc" } }),
+    membersOf(project.access.workspaceId).then((m) => m.map(({ id, name }) => ({ id, name }))),
   ]);
 
   let stack: string[] = [];
@@ -23,7 +24,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
 
   return (
     <SettingsForm
-      isLead={session.user.role === "LEAD"}
+      isLead={project.access.isLead}
       statuses={statuses.map((s) => ({ id: s.id, name: s.name }))}
       users={users}
       project={{
@@ -38,7 +39,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
         readyItems: parseStringList(project.readyItems),
         webhookConfigured: !!project.discordWebhookUrl,
         slackChannelId: project.slackChannelId ?? "",
-        slackBot: slackBotConfigured(),
+        slackBot: !!(await slackBotTokenFor(project.access.workspaceId)),
         pdfEnabled: sprintPdfEnabled(),
         slackConfigured: !!project.slackWebhookUrl,
         slackHint: project.slackWebhookUrl ? project.slackWebhookUrl.slice(-6) : null,

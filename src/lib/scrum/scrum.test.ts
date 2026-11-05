@@ -14,6 +14,7 @@ import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTi
 import { isValidDateString, shiftDate, missingStandups, summarizeReview, localDateString } from "./ceremonies";
 import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from "./checklist";
 import { buildPushPayload } from "../push";
+import { canChangeRole, invitationState, inviteExpiry, normalizeEmail, maxOwnedTeams, toLegacyRole, roleBadge, normalizeRole, migratedRole, canRemoveOrDemote, slugify, uniqueSlug } from "./roles";
 import { weekWindow, compareLabel, mergeProjectActivity, WEEK_MS } from "./weekly";
 import { isAllowedForToken } from "../aiAccess";
 import { importSchema, countIssues, matchMember, issueKeyOf } from "./aiImport";
@@ -501,5 +502,142 @@ describe("perfil público: resumen semanal", () => {
     expect(rows.map((r) => r.projectId)).toEqual(["b", "a", "c"]);
     expect(rows[0]).toMatchObject({ projectId: "b", open: 1, completed: 3 });
     expect(mergeProjectActivity([new Map([["x", 0]])], ["open"])).toEqual([]);
+  });
+});
+
+describe("roles por equipo", () => {
+  it("mapea al rol que usa el resto de la app", () => {
+    expect(toLegacyRole("OWNER")).toBe("LEAD");
+    expect(toLegacyRole("ADMIN")).toBe("LEAD");
+    expect(toLegacyRole("MEMBER")).toBe("MEMBER");
+  });
+  it("arma la marca de rol", () => {
+    expect(roleBadge("OWNER", "ProShop")).toBe("DUEÑO DE ProShop");
+    expect(roleBadge("ADMIN", "Acme")).toBe("ADMIN DE Acme");
+    expect(roleBadge("MEMBER", "Acme")).toBe("MIEMBRO DE Acme");
+  });
+  it("ante un rol raro, el de menos permisos", () => {
+    expect(normalizeRole("OWNER")).toBe("OWNER");
+    expect(normalizeRole("superadmin")).toBe("MEMBER");
+    expect(normalizeRole(null)).toBe("MEMBER");
+  });
+  it("migra los roles antiguos", () => {
+    expect(migratedRole("LEAD", true)).toBe("OWNER");
+    expect(migratedRole("LEAD", false)).toBe("ADMIN");
+    expect(migratedRole("MEMBER", false)).toBe("MEMBER");
+  });
+  it("no deja un equipo sin dueño", () => {
+    expect(canRemoveOrDemote(1, "OWNER")).toBe(false);
+    expect(canRemoveOrDemote(2, "OWNER")).toBe(true);
+    expect(canRemoveOrDemote(1, "ADMIN")).toBe(true);
+  });
+  it("genera slugs únicos", () => {
+    expect(slugify("Mi Equipo Ñandú!")).toBe("mi-equipo-nandu");
+    expect(slugify("¡¡¡")).toBe("equipo");
+    expect(uniqueSlug("ProShop", ["proshop"])).toBe("proshop-2");
+    expect(uniqueSlug("ProShop", ["proshop", "proshop-2"])).toBe("proshop-3");
+  });
+});
+
+describe("cambios de rol e invitaciones", () => {
+  it("quién puede cambiar qué", () => {
+    expect(canChangeRole("MEMBER", "MEMBER", "ADMIN", 1).ok).toBe(false);
+    expect(canChangeRole("ADMIN", "MEMBER", "ADMIN", 1).ok).toBe(true);
+    expect(canChangeRole("ADMIN", "ADMIN", "MEMBER", 1).ok).toBe(true);
+    expect(canChangeRole("ADMIN", "MEMBER", "OWNER", 1).ok).toBe(false);
+    expect(canChangeRole("ADMIN", "OWNER", "ADMIN", 2).ok).toBe(false);
+    expect(canChangeRole("OWNER", "MEMBER", "OWNER", 1).ok).toBe(true);
+    expect(canChangeRole("OWNER", "OWNER", "ADMIN", 2).ok).toBe(true);
+  });
+  it("nunca deja el equipo sin dueño", () => {
+    const r = canChangeRole("OWNER", "OWNER", "MEMBER", 1);
+    expect(r.ok).toBe(false);
+  });
+  it("estado de una invitación", () => {
+    const now = new Date("2026-11-10T00:00:00Z");
+    const base = { expiresAt: new Date("2026-11-12T00:00:00Z"), acceptedAt: null, revokedAt: null };
+    expect(invitationState(base, now)).toBe("ok");
+    expect(invitationState({ ...base, expiresAt: new Date("2026-11-09T00:00:00Z") }, now)).toBe("expired");
+    expect(invitationState({ ...base, acceptedAt: now }, now)).toBe("used");
+    expect(invitationState({ ...base, revokedAt: now, acceptedAt: now }, now)).toBe("revoked");
+    expect(inviteExpiry(now).toISOString()).toBe("2026-11-17T00:00:00.000Z");
+  });
+  it("normaliza emails y el tope de equipos", () => {
+    expect(normalizeEmail("  Ana@Ejemplo.COM ")).toBe("ana@ejemplo.com");
+    expect(maxOwnedTeams(undefined)).toBe(3);
+    expect(maxOwnedTeams("5")).toBe(5);
+    expect(maxOwnedTeams("0")).toBe(3);
+    expect(maxOwnedTeams("abc")).toBe(3);
+  });
+});
+
+describe("secretBox", () => {
+  it("cifra y descifra, y no deja la clave en claro", async () => {
+    process.env.SECRETS_KEY = "prueba";
+    const { encryptSecret, decryptSecret } = await import("../secretBox");
+    const blob = encryptSecret("AIzaSy-clave-secreta");
+    expect(blob).not.toContain("clave-secreta");
+    expect(decryptSecret(blob)).toBe("AIzaSy-clave-secreta");
+    expect(encryptSecret("x")).not.toBe(encryptSecret("x"));
+    expect(decryptSecret(blob.slice(0, -3) + "AAA")).toBeNull();
+    expect(decryptSecret(null)).toBeNull();
+  });
+});
+
+import { parseCommand, matchNames, isCommand } from "./chatCommands";
+
+describe("comandos del chat", () => {
+  it("detecta comandos", () => {
+    expect(isCommand("/noti general hola")).toBe(true);
+    expect(isCommand("  /reunion mañana: x")).toBe(true);
+    expect(isCommand("hola /noti")).toBe(false);
+    expect(isCommand("/notificar")).toBe(false);
+  });
+  it("noti general y slack", () => {
+    expect(parseCommand("/noti general Hay deploy")).toEqual({ ok: true, command: { kind: "general", message: "Hay deploy", level: "normal" } });
+    expect(parseCommand("/noti slack  hola ")).toEqual({ ok: true, command: { kind: "slack", message: "hola", level: "normal" } });
+    expect(parseCommand("/noti general").ok).toBe(false);
+    expect(parseCommand("/noti nada hola").ok).toBe(false);
+  });
+  it("noti persona con varias personas separadas por coma", () => {
+    expect(parseCommand("/noti persona Ana, @luis ,ana: revisen el PR: urgente")).toEqual({ ok: true, command: { kind: "persona", names: ["ana", "luis"], message: "revisen el PR: urgente", level: "normal" } });
+    expect(parseCommand("/noti persona ana revisa").ok).toBe(false);
+    expect(parseCommand("/noti persona : hola").ok).toBe(false);
+  });
+  it("reunion con hora", () => {
+    expect(parseCommand("/reunion mañana 10:30: revisión del sprint")).toEqual({ ok: true, command: { kind: "reunion", when: "mañana 10:30", topic: "revisión del sprint", level: "normal" } });
+    expect(parseCommand("/reunion viernes: retro")).toEqual({ ok: true, command: { kind: "reunion", when: "viernes", topic: "retro", level: "normal" } });
+    expect(parseCommand("/reunion sin tema").ok).toBe(false);
+  });
+  it("niveles urgente y ayuda", () => {
+    expect(parseCommand("/urgente se cayó el servidor")).toEqual({ ok: true, command: { kind: "general", message: "se cayó el servidor", level: "urgente" } });
+    expect(parseCommand("/ayuda necesito ayuda para configurar esto")).toEqual({ ok: true, command: { kind: "general", message: "necesito ayuda para configurar esto", level: "ayuda" } });
+    expect(parseCommand("/urgente").ok).toBe(false);
+    expect(parseCommand("/noti !urgente general deploy roto")).toEqual({ ok: true, command: { kind: "general", message: "deploy roto", level: "urgente" } });
+    expect(parseCommand("/reunion !urgente ahora: incidente")).toEqual({ ok: true, command: { kind: "reunion", when: "ahora", topic: "incidente", level: "urgente" } });
+    expect(parseCommand("/noti !ayuda persona ana: ¿me ayudas?")).toEqual({ ok: true, command: { kind: "persona", names: ["ana"], message: "¿me ayudas?", level: "ayuda" } });
+    expect(isCommand("/urgente x")).toBe(true);
+  });
+  it("busca personas por nombre", () => {
+    const m = [{ id: "1", name: "Ana Pérez" }, { id: "2", name: "Luis Gómez" }, { id: "3", name: "Luisa Ríos" }];
+    expect(matchNames(["ana", "luis"], m)).toEqual({ found: [m[0], m[1]], missing: [], ambiguous: [] });
+    expect(matchNames(["perez"], m).missing).toEqual(["perez"]);
+    expect(matchNames(["lui"], m).ambiguous).toEqual(["lui"]);
+    expect(matchNames(["ANA PEREZ"], m).found).toEqual([m[0]]);
+  });
+});
+
+import { findKeyMentions } from "./chat";
+
+describe("menciones por código", () => {
+  it("encuentra #SAI y #SAI-12, ignora lo que ya es mención o va pegado", () => {
+    expect(findKeyMentions("mira #sai y #SAI-12 ok")).toEqual([
+      { start: 5, end: 9, key: "SAI", number: null },
+      { start: 12, end: 19, key: "SAI", number: 12 },
+    ]);
+    expect(findKeyMentions("[[project:abc]] #SAI")).toHaveLength(1);
+    expect(findKeyMentions("correo a#SAI")).toEqual([]);
+    expect(findKeyMentions("#SAI-")).toEqual([]);
+    expect(findKeyMentions("#TOOLONGKEY")).toEqual([]);
   });
 });

@@ -8,7 +8,7 @@ import { DISCORD_COLOR } from "@/lib/discord";
 import { notifyProject } from "@/lib/notify";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ project: (await params).id });
   if ("error" in auth) return auth.error;
   const { user } = auth;
   const { id } = await params;
@@ -34,14 +34,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     let newStatus: { id: string; name: string } | null = null;
     if (body.statusId !== undefined && body.statusId !== current.statusId) {
-      newStatus = await prisma.statusOption.findUnique({ where: { id: body.statusId } });
+      newStatus = await prisma.statusOption.findFirst({ where: { id: body.statusId, workspaceId: current.workspaceId } });
       if (!newStatus) return NextResponse.json({ error: "Ese estado no existe" }, { status: 400 });
       data.statusId = body.statusId;
     }
 
     let newLead: { id: string; name: string } | null | undefined;
     if (body.leadUserId !== undefined && body.leadUserId !== current.leadUserId) {
-      newLead = body.leadUserId ? await prisma.user.findUnique({ where: { id: body.leadUserId }, select: { id: true, name: true } }) : null;
+      newLead = body.leadUserId && current.workspaceId ? (await prisma.membership.findUnique({ where: { userId_workspaceId: { userId: body.leadUserId, workspaceId: current.workspaceId } }, select: { user: { select: { id: true, name: true } } } }))?.user ?? null : null;
       if (body.leadUserId && !newLead) return NextResponse.json({ error: "Ese usuario no existe" }, { status: 400 });
       data.leadUserId = body.leadUserId;
     }
@@ -74,7 +74,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser({ lead: true });
+  const auth = await apiUser({ lead: true, project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

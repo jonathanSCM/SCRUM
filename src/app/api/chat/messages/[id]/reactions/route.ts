@@ -10,7 +10,7 @@ const ALLOWED = new Set([...QUICK_REACTIONS, ...CHAT_EMOJIS]);
 
 // Pone o quita MI reacción con ese emoji. Devuelve el mensaje actualizado.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ chatMessage: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
   const parsed = parseBody(chatReactionSchema, await readJson(req));
@@ -27,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     else await prisma.chatReaction.create({ data: { messageId: id, userId: auth.user.id, emoji } });
     // Mueve updatedAt para que los demás vean el cambio en su próximo refresco.
     const updated = await prisma.chatMessage.update({ where: { id }, data: { updatedAt: new Date() }, include: messageInclude });
-    const [dto] = await toDTOs([updated]);
+    const [dto] = await toDTOs([updated], auth.user.workspaceId!);
     return NextResponse.json(dto);
   } catch (e) {
     return errorResponse(e);

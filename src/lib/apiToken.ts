@@ -13,7 +13,7 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export type TokenOwner = { id: string; name: string; email: string; role: "LEAD" | "MEMBER" };
+export type TokenOwner = { id: string; name: string; email: string; workspaceId: string | null };
 
 const TOUCH_EVERY_MS = 60_000;
 const KEEP_LOGS = 200;
@@ -24,7 +24,7 @@ export async function resolveApiToken(token: string, route: string | null): Prom
   if (!token.startsWith(TOKEN_PREFIX) || token.length > 200) return null;
   const row = await prisma.apiToken.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: { select: { id: true, name: true, email: true, role: true } } },
+    include: { user: { select: { id: true, name: true, email: true } } },
   });
   if (!row) return null;
 
@@ -44,5 +44,11 @@ export async function resolveApiToken(token: string, route: string | null): Prom
       })
       .catch(() => {});
   }
-  return { id: row.user.id, name: row.user.name, email: row.user.email, role: row.user.role === "LEAD" ? "LEAD" : "MEMBER" };
+  // El token solo actúa en su equipo; si es uno antiguo sin equipo, en el más antiguo de su dueño.
+  let workspaceId = row.workspaceId;
+  if (!workspaceId) {
+    const first = await prisma.membership.findFirst({ where: { userId: row.userId }, orderBy: { createdAt: "asc" }, select: { workspaceId: true } });
+    workspaceId = first?.workspaceId ?? null;
+  }
+  return { id: row.user.id, name: row.user.name, email: row.user.email, workspaceId };
 }

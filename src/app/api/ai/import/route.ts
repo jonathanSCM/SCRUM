@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { membersOf } from "@/lib/workspace";
 import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 import { parseBody, readJson } from "@/lib/validation";
@@ -16,7 +17,7 @@ export const maxDuration = 120;
 // Es idempotente: lo que ya existe con el mismo tipo y título no se vuelve a crear.
 // Todo queda a nombre de la persona dueña del token, sin ninguna marca adicional.
 export async function POST(req: Request) {
-  const auth = await apiUser();
+  const auth = await apiUser({ workspace: true });
   if ("error" in auth) return auth.error;
   const { user } = auth;
 
@@ -32,12 +33,13 @@ export async function POST(req: Request) {
     const warnings: string[] = [];
 
     // ---- Proyecto: existente (por id) o nuevo / ya existente por nombre ----
-    let project = input.project.id ? await prisma.project.findUnique({ where: { id: input.project.id } }) : null;
+    const workspaceId = user.workspaceId!;
+    let project = input.project.id ? await prisma.project.findFirst({ where: { id: input.project.id, workspaceId } }) : null;
     if (input.project.id && !project) return NextResponse.json({ error: "Ese project.id no existe" }, { status: 404 });
     let projectCreated = false;
     if (!project) {
       const name = input.project.name!;
-      const all = await prisma.project.findMany({ select: { id: true, name: true, key: true } });
+      const all = await prisma.project.findMany({ where: { workspaceId }, select: { id: true, name: true, key: true } });
       const sameName = all.find((p) => p.name.trim().toLowerCase() === name.trim().toLowerCase());
       if (sameName) {
         project = await prisma.project.findUnique({ where: { id: sameName.id } });
@@ -48,10 +50,10 @@ export async function POST(req: Request) {
           warnings.push(`La clave "${input.project.key}" no es válida o ya está en uso: se eligió otra.`);
           key = "";
         }
-        const firstStatus = await prisma.statusOption.findFirst({ orderBy: { order: "asc" } });
+        const firstStatus = await prisma.statusOption.findFirst({ where: { workspaceId }, orderBy: { order: "asc" } });
         if (!firstStatus) return NextResponse.json({ error: "No hay estados de proyecto configurados" }, { status: 400 });
         project = await prisma.project.create({
-          data: { name, key: key || suggestProjectKey(name, taken), description: input.project.description ?? "", statusId: firstStatus.id, leadUserId: user.id },
+          data: { name, key: key || suggestProjectKey(name, taken), description: input.project.description ?? "", statusId: firstStatus.id, leadUserId: user.id, workspaceId },
         });
         projectCreated = true;
         await logHistory({ projectId: project.id, field: "proyecto_creado", newValue: project.name, actor: user });
@@ -75,7 +77,7 @@ export async function POST(req: Request) {
     if (Object.keys(patch).length) await prisma.project.update({ where: { id: projectId }, data: patch });
 
     // ---- Tickets ----
-    const members = await prisma.user.findMany({ select: { id: true, name: true, email: true } });
+    const members = await membersOf(workspaceId);
     const existing = new Map((await prisma.task.findMany({ where: { projectId }, select: { id: true, issueType: true, title: true } })).map((t) => [issueKeyOf(t.issueType, t.title), t.id]));
     const created = { epics: [] as string[], stories: [] as string[], tasks: [] as string[] };
     const skipped: string[] = [];

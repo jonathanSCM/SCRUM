@@ -1,22 +1,24 @@
-import { requireSession } from "@/lib/session";
+import { prisma } from "@/lib/prisma";
+import { requireWorkspace } from "@/lib/session";
 import { getPeople } from "@/lib/profileData";
 import PeopleDirectory from "./PeopleDirectory";
+import TeamManage from "./TeamManage";
 
 export const metadata = { title: "Equipo" };
 
-// Equipo: todas las personas con su perfil. Un líder, además, crea y borra cuentas desde acá.
+// Equipo: las personas del equipo activo con su perfil. Un líder, además, crea y borra cuentas desde acá.
 export default async function TeamPage() {
-  const session = await requireSession();
-  const isLead = session.user.role === "LEAD";
-  const people = await getPeople({ withEmail: isLead });
+  const { session, workspaceId, isLead } = await requireWorkspace();
+  const [people, workspace] = await Promise.all([getPeople(workspaceId, { withEmail: isLead }), prisma.workspace.findUnique({ where: { id: workspaceId }, select: { name: true } })]);
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-8 sm:px-6">
       <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Equipo</h1>
       <p className="mb-6 text-sm text-ink-soft">
-        Haz clic en alguien para ver en qué proyectos está activo y qué hizo esta semana.
-        {isLead && " Como líder también creas y borras cuentas: no hay invitación por email, se crea la cuenta con una contraseña temporal."}
+        {workspace?.name}. Haz clic en alguien para ver en qué proyectos está activo y qué hizo esta semana.
+        {isLead && " Como líder invitas por email, cambias roles y, si hace falta, creas cuentas con contraseña temporal."}
       </p>
-      <PeopleDirectory people={people} currentUserId={session.user.id} isLead={isLead} />
+      <div className="mb-6"><TeamManage workspaceName={workspace?.name ?? ""} isLead={isLead} /></div>
+      <PeopleDirectory people={people} workspaceName={workspace?.name ?? ""} currentUserId={session.user.id} isLead={isLead} />
     </main>
   );
 }

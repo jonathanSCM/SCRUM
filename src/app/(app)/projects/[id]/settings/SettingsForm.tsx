@@ -357,10 +357,10 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
               <p className="text-sm font-semibold text-ink">PDF al iniciar cada sprint</p>
               <p className="text-xs text-ink-soft">
                 Al iniciar un sprint se genera un PDF con todos sus tickets y sugerencias de Gemini y se manda a Slack. Para <b>adjuntar el PDF</b> hace falta
-                un bot de Slack (permisos <span className="font-mono">files:write</span>) agregado al canal, con su token en la variable <span className="font-mono">SLACK_BOT_TOKEN</span> del servidor, y acá el <b>ID del canal</b>.
+                un bot de Slack (permisos <span className="font-mono">files:write</span>) agregado al canal, cuyo token se guarda en <b>Integraciones</b> del equipo (menú de tu cuenta), y acá el <b>ID del canal</b>.
                 Sin eso se manda un mensaje con el enlace de descarga por el webhook.
               </p>
-              <p className="text-xs text-ink-faint">Bot en el servidor: {project.slackBot ? "configurado" : "falta SLACK_BOT_TOKEN"}.</p>
+              <p className="text-xs text-ink-faint">Bot del equipo: {project.slackBot ? "configurado" : "falta cargar el token en Integraciones"}.</p>
               <div className="flex flex-wrap gap-2">
                 <input className="field min-w-0 flex-1 font-mono" placeholder="ID del canal: C01ABCDE2F3" value={channelId} onChange={(e) => setChannelId(e.target.value)} />
                 <button className="btn-primary" disabled={savingChannel} onClick={saveChannel}>Guardar canal</button>

@@ -9,7 +9,7 @@ const include = { author: { select: { id: true, name: true } } };
 // Últimos mensajes del chat del proyecto (orden cronológico). ?after=<ISO>
 // devuelve solo los más nuevos, para el refresco periódico.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
   const after = new URL(req.url).searchParams.get("after");
@@ -29,7 +29,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

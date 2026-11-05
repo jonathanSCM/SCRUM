@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 import { generateToken, hashToken } from "@/lib/apiToken";
+import { activeAccess } from "@/lib/workspace";
 
 // Gestión del token IA de la propia persona (solo con sesión de navegador).
 export async function GET() {
@@ -24,10 +25,13 @@ export async function POST() {
   const auth = await apiUser();
   if ("error" in auth) return auth.error;
   try {
+    // El token actúa solo dentro del equipo que está activo al crearlo.
+    const access = await activeAccess(auth.user.id);
+    if (!access) return NextResponse.json({ error: "No pertenecés a ningún equipo" }, { status: 400 });
     const token = generateToken();
     await prisma.$transaction([
       prisma.apiToken.deleteMany({ where: { userId: auth.user.id } }),
-      prisma.apiToken.create({ data: { userId: auth.user.id, tokenHash: hashToken(token), prefix: token.slice(0, 10) } }),
+      prisma.apiToken.create({ data: { userId: auth.user.id, tokenHash: hashToken(token), prefix: token.slice(0, 10), workspaceId: access.workspaceId } }),
     ]);
     return NextResponse.json({ token, prefix: token.slice(0, 10) }, { status: 201 });
   } catch (e) {

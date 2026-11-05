@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Avatar from "@/components/ui/Avatar";
+import { roleBadge } from "@/lib/scrum/roles";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/ui/Toaster";
 
-type Person = { id: string; name: string; role: string; tagline: string | null; chatColor: string | null; open: number; doneWeek: number; email: string | null };
+type Person = { id: string; name: string; wsRole: "OWNER" | "ADMIN" | "MEMBER"; tagline: string | null; chatColor: string | null; open: number; doneWeek: number; email: string | null };
 
-export default function PeopleDirectory({ people: initial, currentUserId, isLead }: { people: Person[]; currentUserId: string; isLead: boolean }) {
+export default function PeopleDirectory({ people: initial, workspaceName, currentUserId, isLead }: { people: Person[]; workspaceName: string; currentUserId: string; isLead: boolean }) {
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
@@ -40,6 +41,16 @@ export default function PeopleDirectory({ people: initial, currentUserId, isLead
     setEmail("");
     setRole("MEMBER");
     setShowForm(false);
+    router.refresh();
+  }
+
+  async function changeRole(p: Person, next: Person["wsRole"]) {
+    const res = await fetch(`/api/workspaces/members/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: next }) });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return toast.error(body.error || "No se pudo cambiar el rol");
+    }
+    setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, wsRole: next } : x)));
     router.refresh();
   }
 
@@ -102,11 +113,19 @@ export default function PeopleDirectory({ people: initial, currentUserId, isLead
                   {p.name}
                   {p.id === currentUserId && <span className="ml-1.5 text-xs font-medium text-ink-faint">(vos)</span>}
                 </p>
-                <p className="truncate text-xs text-ink-soft">{p.tagline || (p.role === "LEAD" ? "Líder" : "Miembro")}</p>
-                {isLead && p.email && <p className="truncate font-mono text-[11px] text-ink-faint">{p.email}{p.tagline ? ` · ${p.role === "LEAD" ? "Líder" : "Miembro"}` : ""}</p>}
+                <p className="truncate text-xs text-ink-soft">{p.tagline}</p>
+                <p className="mt-0.5"><span className={`lozenge ${p.wsRole === "OWNER" ? "text-rust" : "text-ink-soft"}`}>{roleBadge(p.wsRole, workspaceName)}</span></p>
+                {isLead && p.email && <p className="truncate font-mono text-[11px] text-ink-faint">{p.email}</p>}
                 <p className="mt-1 font-mono text-[11px] text-ink-faint">{p.open} abiertos · {p.doneWeek} terminados esta semana</p>
               </div>
             </Link>
+            {isLead && p.id !== currentUserId && (
+              <select value={p.wsRole} onChange={(e) => changeRole(p, e.target.value as Person["wsRole"])} className="absolute bottom-2 right-2 rounded border border-line bg-card px-1 py-0.5 text-[11px] text-ink-soft" aria-label={`Rol de ${p.name}`}>
+                <option value="OWNER">Dueño</option>
+                <option value="ADMIN">Admin</option>
+                <option value="MEMBER">Miembro</option>
+              </select>
+            )}
             {isLead && p.id !== currentUserId && (
               <button onClick={() => removeUser(p)} className="absolute right-2 top-2 text-xs text-ink-faint hover:text-danger" aria-label={`Borrar la cuenta de ${p.name}`}>
                 Borrar

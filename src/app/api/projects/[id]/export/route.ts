@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 // Exporta los tickets del proyecto a Excel (.xlsx).
 // Filtros opcionales: ?mine=1 (solo los míos), ?sprint=<id>|backlog, ?status=<TODO|...>.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
   const url = new URL(req.url);

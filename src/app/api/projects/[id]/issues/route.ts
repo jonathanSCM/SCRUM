@@ -5,7 +5,7 @@ import { createIssue } from "@/lib/issues";
 import { createIssueSchema, parseBody, readJson } from "@/lib/validation";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

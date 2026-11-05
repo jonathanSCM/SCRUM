@@ -6,7 +6,7 @@ import { parseBody, readJson, updateSprintSchema } from "@/lib/validation";
 import { logHistory } from "@/lib/history";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ sprint: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 // Borrar un sprint (solo líder). Sus tickets vuelven al backlog. Un sprint
 // activo hay que completarlo primero.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser({ lead: true });
+  const auth = await apiUser({ lead: true, sprint: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

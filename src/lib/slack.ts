@@ -59,16 +59,14 @@ export async function resolveSlackMention(...userIds: Array<string | null | unde
 
 // ---- Subir un archivo (PDF) al canal ----
 // Un Incoming Webhook no puede subir archivos: hace falta un bot con permisos
-// files:write (+ chat:write) agregado al canal. Token en SLACK_BOT_TOKEN.
+// files:write (+ chat:write) agregado al canal. Token del bot guardado por equipo.
 export const SLACK_CHANNEL_ID_PATTERN = /^[CG][A-Z0-9]{8,12}$/;
 
-export function slackBotConfigured(): boolean {
-  return !!process.env.SLACK_BOT_TOKEN;
-}
+export const SLACK_BOT_TOKEN_PATTERN = /^xoxb-[A-Za-z0-9-]{20,}$/;
 
-export async function uploadFileToSlack(opts: { channelId: string; filename: string; content: Buffer; title: string; comment?: string }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const token = process.env.SLACK_BOT_TOKEN;
-  if (!token) return { ok: false, error: "Falta SLACK_BOT_TOKEN" };
+export async function uploadFileToSlack(opts: { token: string | null; channelId: string; filename: string; content: Buffer; title: string; comment?: string }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const token = opts.token;
+  if (!token) return { ok: false, error: "Falta el token del bot de Slack del equipo" };
   const auth = { Authorization: `Bearer ${token}` };
   try {
     const step1 = await fetch("https://slack.com/api/files.getUploadURLExternal", {

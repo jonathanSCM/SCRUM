@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
+import { membersOf } from "@/lib/workspace";
 
-// Las personas del equipo son los usuarios de esta app.
+// Las personas del equipo activo.
 export async function GET() {
-  const auth = await apiUser();
+  const auth = await apiUser({ workspace: true });
   if ("error" in auth) return auth.error;
-
-  const users = await prisma.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } });
-  return NextResponse.json(users);
+  const members = await membersOf(auth.user.workspaceId!);
+  return NextResponse.json(members.map((m) => ({ id: m.id, name: m.name, role: m.wsRole })));
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { membersOf } from "@/lib/workspace";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { parseBody, readJson, standupSchema } from "@/lib/validation";
@@ -9,7 +10,7 @@ const entryInclude = { user: { select: { id: true, name: true } } };
 
 // Daily de un día: ?date=YYYY-MM-DD. Devuelve las entradas y quién falta.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
   const date = new URL(req.url).searchParams.get("date") ?? "";
@@ -18,7 +19,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   try {
     const [entries, users] = await Promise.all([
       prisma.standupEntry.findMany({ where: { projectId: id, date }, include: entryInclude, orderBy: { createdAt: "asc" } }),
-      prisma.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+      membersOf(auth.user.workspaceId!).then((m) => m.map(({ id, name }) => ({ id, name }))),
     ]);
     return NextResponse.json({ entries, members: users });
   } catch (e) {
@@ -28,7 +29,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 // Guarda (o actualiza) MI daily del día.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

@@ -8,6 +8,7 @@ import { CHAT_EMOJIS, QUICK_REACTIONS, applyInsertedRefs, makeToken, snippetOf, 
 import Avatar from "@/components/ui/Avatar";
 import { PaperclipIcon } from "@/components/ui/Icons";
 import { useToast } from "@/components/ui/Toaster";
+import { isCommand, COMMAND_HELP } from "@/lib/scrum/chatCommands";
 import { useConfirm } from "@/components/ConfirmDialog";
 
 // Tipos que devuelve la API (ver src/lib/chatData.ts).
@@ -15,6 +16,8 @@ type ResolvedRef = { kind: RefKind; id: string; label: string; sub: string | nul
 export type ChatMessage = {
   id: string;
   body: string;
+  level?: "AYUDA" | "URGENTE" | null;
+  channel?: string | null;
   createdAt: string;
   updatedAt: string;
   author: { id: string; name: string; color: string | null } | null;
@@ -56,7 +59,7 @@ function dayLabel(iso: string): string {
 
 // Chat general del equipo. Con projectId muestra solo los mensajes que mencionan
 // ese proyecto, y lo que se escribe queda mencionándolo.
-export default function ChatView({ initial, currentUserId, isLead, projectId, fill }: { initial: ChatMessage[]; currentUserId: string; isLead: boolean; projectId?: string; fill?: boolean }) {
+export default function ChatView({ initial, currentUserId, isLead, projectId, fill, channelId, announceOnly }: { initial: ChatMessage[]; currentUserId: string; isLead: boolean; projectId?: string; fill?: boolean; channelId?: string; announceOnly?: boolean }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -71,13 +74,18 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
   const [index, setIndex] = useState<ChatIndex | null>(null);
   const [trigger, setTrigger] = useState<{ char: "#" | "@"; query: string; start: number } | null>(null);
   const [active, setActive] = useState(0);
+  // Segundo nivel de #: tras elegir un proyecto se listan solo sus sprints y tickets.
+  const [scope, setScope] = useState<{ id: string; label: string; start: number } | null>(null);
+  const [scoped, setScoped] = useState<Record<string, { sprints: IndexItem[]; issues: IndexItem[] }>>({});
   const inserted = useRef<Array<{ text: string; token: string }>>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const lastRef = useRef<string | null>(initial.length ? initial.reduce((max, m) => (m.updatedAt > max ? m.updatedAt : max), initial[0].updatedAt) : null);
 
-  const projectParam = projectId ? `project=${projectId}` : "";
+  // Qué se sincroniza: el chat de un proyecto, un canal, o los avisos del equipo (solo lectura).
+  const projectParam = announceOnly ? "announce=1" : [projectId ? `project=${projectId}` : "", channelId ? `channel=${channelId}` : ""].filter(Boolean).join("&");
+  const readOnly = !!announceOnly;
 
   // Quita mensajes borrados y suelta la cita de las respuestas que los mencionaban.
   const removeLocally = useCallback((ids: string[]) => {
@@ -138,17 +146,40 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
     if (res.ok) setIndex(res.data);
   }, [index]);
 
+  const loadScope = useCallback(
+    async (id: string) => {
+      if (scoped[id]) return;
+      const res = await api<{ sprints: IndexItem[]; issues: IndexItem[] }>(`/api/chat/index?project=${encodeURIComponent(id)}`);
+      if (res.ok) setScoped((prev) => ({ ...prev, [id]: res.data }));
+    },
+    [scoped]
+  );
+
+  // Proyecto dentro del que se busca: el del chat del proyecto, o el que se acaba de elegir con #.
+  const scopeId = projectId ?? (scope && trigger && trigger.start === scope.start ? scope.id : null);
+  const scopeLoading = !!trigger && trigger.char === "#" && !!scopeId && !scoped[scopeId];
+
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!trigger || !index) return [];
     const q = trigger.query.toLowerCase();
     const match = (i: IndexItem) => !q || i.label.toLowerCase().includes(q);
     if (trigger.char === "@") return index.users.filter(match).slice(0, 8).map((u) => ({ ...u, kind: "user" as const, short: `@${u.label}` }));
-    return [
-      ...index.projects.filter(match).slice(0, 4).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` })),
-      ...index.issues.filter(match).slice(0, 5).map((i) => ({ ...i, kind: "issue" as const, short: `#${i.label.split(" ")[0]}` })),
-      ...index.sprints.filter(match).slice(0, 3).map((s) => ({ ...s, kind: "sprint" as const, short: `#${s.label}` })),
-    ].slice(0, 9);
-  }, [trigger, index]);
+    const issueS = (i: IndexItem) => ({ ...i, kind: "issue" as const, short: `#${i.label.split(" ")[0]}` });
+    const sprintS = (s: IndexItem) => ({ ...s, kind: "sprint" as const, short: `#${s.label}` });
+    // Nivel 2: dentro de un proyecto.
+    if (scopeId) {
+      const data = scoped[scopeId];
+      if (!data) return [];
+      return [...data.sprints.filter(match).slice(0, 6).map(sprintS), ...data.issues.filter(match).slice(0, 8).map(issueS)];
+    }
+    // Atajo: escribir la clave de un ticket (SAI-12) lo busca directo, sin pasar por el proyecto.
+    if (/^[a-z][a-z0-9]*-\d*$/i.test(q)) return index.issues.filter(match).slice(0, 8).map(issueS);
+    // Nivel 1: solo proyectos.
+    // Se busca por nombre o por código (SAI); el código exacto va primero.
+    const byCode = (i: IndexItem) => i.sub.toLowerCase() === q;
+    const projectMatch = (i: IndexItem) => match(i) || (!!q && i.sub.toLowerCase().startsWith(q));
+    return [...index.projects.filter(projectMatch)].sort((a, b) => Number(byCode(b)) - Number(byCode(a))).slice(0, 12).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` }));
+  }, [trigger, index, scopeId, scoped]);
 
   function onChange(value: string, caret: number) {
     setDraft(value);
@@ -157,8 +188,10 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
       setTrigger({ char: m[2] as "#" | "@", query: m[3], start: caret - m[3].length - 1 });
       setActive(0);
       void loadIndex();
+      if (projectId && m[2] === "#") void loadScope(projectId);
     } else {
       setTrigger(null);
+      setScope(null);
     }
   }
 
@@ -168,8 +201,23 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
     const before = draft.slice(0, trigger.start);
     const after = draft.slice(caret);
     inserted.current.push({ text: s.short, token: makeToken(s.kind, s.id) });
+    // Elegir un proyecto abre el segundo nivel: se deja un "#" nuevo para elegir su sprint o ticket.
+    if (s.kind === "project" && !projectId && trigger.char === "#") {
+      setDraft(`${before}${s.short} #${after}`);
+      const at = before.length + s.short.length + 1;
+      setScope({ id: s.id, label: s.label, start: at });
+      setTrigger({ char: "#", query: "", start: at });
+      setActive(0);
+      void loadScope(s.id);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        inputRef.current?.setSelectionRange(at + 1, at + 1);
+      });
+      return;
+    }
     setDraft(`${before}${s.short} ${after}`);
     setTrigger(null);
+    setScope(null);
     const pos = before.length + s.short.length + 1;
     requestAnimationFrame(() => {
       inputRef.current?.focus();
@@ -210,10 +258,21 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
   async function send() {
     if (busy || uploading > 0) return;
     if (!draft.trim() && pending.length === 0) return;
+    // Comandos (/noti …, /reunion …): no se publican como mensaje, se ejecutan.
+    if (isCommand(draft)) {
+      setBusy(true);
+      const cr = await api<{ summary: string }>("/api/chat/command", "POST", { body: draft.trim() });
+      setBusy(false);
+      if (!cr.ok) return toast.error(cr.error);
+      toast.success(cr.data.summary);
+      setDraft("");
+      if (inputRef.current) inputRef.current.style.height = "auto";
+      return;
+    }
     let body = applyInsertedRefs(draft.trim(), inserted.current);
     if (projectId && !body.includes(`[[project:${projectId}]]`)) body = `${makeToken("project", projectId)} ${body}`.trim();
     setBusy(true);
-    const res = await api<ChatMessage>("/api/chat/messages", "POST", { body, fileIds: pending.map((f) => f.id), replyToId: replyTo?.id ?? null });
+    const res = await api<ChatMessage>("/api/chat/messages", "POST", { body, fileIds: pending.map((f) => f.id), replyToId: replyTo?.id ?? null, channelId: channelId ?? null });
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     setDraft("");
@@ -278,6 +337,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
                 mine={m.author?.id === currentUserId}
                 currentUserId={currentUserId}
                 highlighted={highlight === m.id}
+                showChannel={!!announceOnly}
                 onDelete={() => void remove(m)}
                 onReply={() => {
                   setReplyTo(m);
@@ -293,6 +353,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
       </ul>
 
       {/* Escribir */}
+      {!readOnly && (
       <div
         className={cn("relative border-t border-line-strong bg-surface p-3 transition-colors", dragging && "bg-card-2")}
         onDragOver={(e) => {
@@ -308,6 +369,9 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
       >
         {trigger && suggestions.length > 0 && (
           <ul className="absolute bottom-full left-3 right-3 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-line-strong bg-surface shadow-hard-lg" role="listbox">
+            {scopeId && !projectId && scope && (
+              <li className="border-b border-line px-3 py-1 text-[11px] text-ink-faint">Dentro de <b className="text-ink-soft">{scope.label}</b> · sprints y tickets · Esc deja solo el proyecto</li>
+            )}
             {suggestions.map((s, i) => (
               <li key={`${s.kind}:${s.id}`} role="option" aria-selected={i === active}>
                 <button
@@ -328,7 +392,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
           </ul>
         )}
         {trigger && index && suggestions.length === 0 && (
-          <p className="absolute bottom-full left-3 mb-1 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-faint shadow-hard">Sin resultados para “{trigger.query}”.</p>
+          <p className="absolute bottom-full left-3 mb-1 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-faint shadow-hard">{scopeLoading ? "Cargando…" : `Sin resultados para “${trigger.query}”.`}</p>
         )}
 
         {replyTo && (
@@ -384,7 +448,8 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
               ref={inputRef}
               rows={1}
               className="field max-h-36 min-h-[2.5rem] resize-none rounded-xl bg-paper-deep py-2"
-              placeholder={projectId ? "Mensaje sobre el proyecto…" : "Escribí un mensaje…"}
+              placeholder={projectId ? "Mensaje sobre el proyecto…" : "Escribí un mensaje… (o /noti, /reunion)"}
+              title={COMMAND_HELP}
               value={draft}
               maxLength={4000}
               onChange={(e) => {
@@ -418,7 +483,14 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
                     return;
                   }
                 }
-                if (e.key === "Escape") setTrigger(null);
+                if (e.key === "Escape") {
+                  // En el segundo nivel, Esc quita el "#" sobrante y deja solo el proyecto.
+                  if (trigger && scope && trigger.start === scope.start && !trigger.query) {
+                    setDraft((d) => d.slice(0, trigger.start) + d.slice(trigger.start + 1));
+                  }
+                  setTrigger(null);
+                  setScope(null);
+                }
                 else if (e.key === "Enter" && !e.shiftKey && !isTouch()) {
                   e.preventDefault();
                   void send();
@@ -446,6 +518,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
         </div>
         <p className="mt-1 hidden text-[11px] text-ink-faint sm:block">Enter envía · Shift+Enter salto de línea</p>
       </div>
+      )}
     </div>
   );
 }
@@ -457,6 +530,7 @@ function MessageRow({
   mine,
   currentUserId,
   highlighted,
+  showChannel,
   onDelete,
   onReply,
   onReact,
@@ -468,6 +542,7 @@ function MessageRow({
   mine: boolean;
   currentUserId: string;
   highlighted: boolean;
+  showChannel: boolean;
   onDelete: () => void;
   onReply: () => void;
   onReact: (emoji: string) => void;
@@ -487,7 +562,7 @@ function MessageRow({
         <div
           className={cn(
             "min-w-0 max-w-full rounded-2xl px-3 py-1.5 text-sm text-ink shadow-hard-sm",
-            mine ? "rounded-br-md bg-bubble-mine" : "rounded-bl-md border border-line bg-surface"
+            m.level === "URGENTE" ? "rounded-bl-md border-2 border-danger bg-danger-bg" : m.level === "AYUDA" ? "rounded-bl-md border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30" : mine ? "rounded-br-md bg-bubble-mine" : "rounded-bl-md border border-line bg-surface"
           )}
         >
           {!mine && !grouped && (
@@ -508,6 +583,8 @@ function MessageRow({
             </button>
           )}
 
+          {showChannel && m.channel && <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-faint">{m.channel}</p>}
+          {m.level && <p className={cn("mb-0.5 text-[10px] font-extrabold uppercase tracking-wide", m.level === "URGENTE" ? "text-danger" : "text-amber-600")}>{m.level === "URGENTE" ? "Urgente" : "Pide ayuda"}</p>}
           {m.body && (
             <p className="whitespace-pre-wrap break-words">
               {splitMessage(m.body).map((seg, i) => {

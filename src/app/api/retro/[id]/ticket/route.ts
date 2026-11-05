@@ -8,7 +8,7 @@ import { logHistory } from "@/lib/history";
 
 // Convierte un acuerdo de la retro en una tarea del backlog.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ retro: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

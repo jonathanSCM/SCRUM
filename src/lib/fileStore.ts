@@ -7,9 +7,9 @@ import { prisma } from "@/lib/prisma";
 
 export type StoredFile = { filename: string; mimeType: string; size: number; data: Uint8Array };
 
-export async function putChatFile(input: StoredFile & { uploadedById: string }): Promise<string> {
+export async function putChatFile(input: StoredFile & { uploadedById: string; workspaceId: string }): Promise<string> {
   const row = await prisma.chatFile.create({
-    data: { filename: input.filename, mimeType: input.mimeType, size: input.size, data: input.data as Uint8Array<ArrayBuffer>, uploadedById: input.uploadedById },
+    data: { filename: input.filename, mimeType: input.mimeType, size: input.size, data: input.data as Uint8Array<ArrayBuffer>, uploadedById: input.uploadedById, workspaceId: input.workspaceId },
     select: { id: true },
   });
   return row.id;

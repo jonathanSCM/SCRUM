@@ -56,3 +56,32 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - **Token IA (cargar proyectos con Claude)**: en **Mi perfil → Token IA** cada persona genera un token (se muestra una sola vez; en la base solo se guarda su hash) y copia un prompt listo para pegarle a su asistente. Con el token, Claude puede leer proyectos y cargar proyectos, épicas, historias, tareas, notas, sprints (sin iniciarlos) y comentarios, todo **a nombre de la persona dueña** y con sus mismos permisos; el endpoint `POST /api/ai/import` carga un proyecto completo de una vez y es idempotente. Lo que NO puede hacer: borrar, administrar personas o estados, iniciar/completar sprints ni tocar integraciones. La lista cerrada vive en `src/lib/aiAccess.ts` y la aplica `src/middleware.ts`. Solo el dueño ve su registro de uso (no aparece en los proyectos). Modelos nuevos aditivos: `ApiToken` y `ApiTokenLog`.
 - **Chat en el celular**: ocupa toda la pantalla bajo la barra, con botones de iconos y Enter como salto de línea (se envía con el botón).
 - **Fotos de perfil y perfil público**: en **Mi perfil** cada persona sube foto y banner (JPG/PNG/WebP/GIF, hasta 10 MB) y una frase. El servidor las lee como imagen real, las recorta al centro, las reduce y las guarda como WebP sin metadatos (SVG y archivos falsos se rechazan); viven en la base de datos (`UserImage`). La foto se ve en la barra, el chat, los tickets, notas, ceremonias y Equipo. **Equipo** (menú; reúne la lista de personas y la gestión de cuentas, y `/settings/team` redirige ahí) lista al equipo y, solo para un líder, permite crear y borrar cuentas; `/people/<id>` muestra el perfil: proyectos activos, en qué trabaja ahora y el resumen de los últimos 7 días contra los 7 anteriores (tickets terminados y creados, comentarios, notas y dailys). Solo para personas con sesión iniciada; el resumen **no incluye el chat**. Usa la librería `sharp` (ya es dependencia directa). Modelo nuevo aditivo: `UserImage`; columna `User.tagline`.
+- **Multi-equipo, Fase 1 (cimientos)**: la app ahora organiza todo en **equipos** (`Workspace`) con **membresías** por persona y rol por equipo (Dueño, Admin, Miembro). En el primer arranque, `prisma/workspace-migrate.ts` (dentro del seed) crea el equipo **ProShop**, mete a todas las cuentas (la cuenta de `OWNER_EMAIL`, o si no está definida el líder más antiguo, queda como **Dueño**; los demás líderes pasan a Admin y los miembros siguen siendo Miembros) y asigna a ese equipo todos los proyectos, estados, chat y tokens existentes. Es idempotente. **Haz backup de Postgres antes de este despliegue**: se agregan tablas y columnas (todas aditivas) y se cambia la clave única de proyecto de global a por-equipo (`@@unique([workspaceId, key])`).
+  - Cada ruta de la API y cada página comprueba que la persona sea miembro del equipo del recurso; si no, responde "no encontrado". La capa vive en `src/lib/session.ts` y `src/lib/workspace.ts`.
+  - El rol "Líder/Miembro" ahora se calcula **por equipo** (dueño y admin cuentan como líder). Las pantallas muestran la marca de rol: `DUEÑO DE ProShop`, `ADMIN DE …`, `MIEMBRO DE …`.
+  - Un token IA solo actúa dentro del equipo donde se creó.
+  - Pruebas: `npm test` incluye un guardia que falla si una ruta nueva no declara su equipo, y `scripts/isolation-test.mjs` crea dos equipos reales y comprueba (78 comprobaciones) que ninguno ve ni toca nada del otro. Se corre con el servidor levantado: `DATABASE_URL=… NEXTAUTH_URL=http://localhost:3056 BASE_URL=http://localhost:3056 npx tsx scripts/isolation-test.mjs`. Ya se corrió contra PostgreSQL 16 (0 fallas); repetila contra PostgreSQL antes de abrir equipos a terceros. Después del primer arranque en producción, comprobá la migración con `psql "$DATABASE_URL" -f scripts/verify-workspaces.sql` (todo lo marcado "debe ser 0" tiene que dar 0).
+  - Variable opcional: `OWNER_EMAIL` (email del dueño del equipo ProShop en la migración).
+
+## Multi-equipo, Fase 2 (equipos usables)
+
+- Selector de equipo en la barra superior (cookie `ws`), crear equipo (tope `MAX_OWNED_TEAMS`, por defecto 3), salir del equipo, renombrar.
+- Roles por equipo (Dueño / Admin / Miembro) editables desde Equipo; el último dueño no puede bajarse ni salir.
+- Invitaciones por email: enlace `/invite/<token>` de un solo uso, vence en 7 días, atado al email. Sin `RESEND_API_KEY` el enlace se muestra para copiarlo. Quien no tiene cuenta la crea al aceptar.
+- Abrir un proyecto de otro de tus equipos cambia el equipo activo solo.
+- Borrar un equipo NO está implementado a propósito (se hará con exportación previa).
+- `scripts/isolation-test.mjs` ahora tiene 106 comprobaciones; pasa en SQLite y PostgreSQL 16.
+- Nota: se usa cookie + selector en vez de URLs `/t/<slug>` (desvío respecto al plan, más simple y sin romper enlaces existentes).
+
+## Multi-equipo, Fase 3 (integraciones por equipo)
+
+- Menú de la cuenta > **Integraciones** (dueño/admin): clave de Gemini y token del bot de Slack **por equipo**, cifradas en la base (AES-256-GCM). La llave sale de `SECRETS_KEY` (si no está, de `NEXTAUTH_SECRET`; si cambia, hay que volver a cargar las claves).
+- Cada equipo usa solo las suyas. `GEMINI_API_KEY` y `SLACK_BOT_TOKEN` del servidor siguen valiendo solo para el equipo más antiguo (o los slugs de `ENV_KEYS_WORKSPACES`, separados por coma).
+- Cambia el esquema (4 columnas nuevas, nulas, en `Workspace`): `db push` las crea sin tocar datos.
+- Pendiente de la fase: almacenamiento S3 con cuota y Slack por OAuth (hoy se pega el token del bot a mano).
+
+## Chat por canales
+- Cada equipo tiene `General` y `Reuniones` (se crean solos la primera vez); los líderes crean más desde el chat. Los mensajes anteriores sin canal cuentan como General. Borrar un canal pasa sus mensajes a General.
+- `/reunion` se guarda en Reuniones; `/noti general`, `/urgente` y `/ayuda`, en General. Todos quedan marcados como avisos.
+- Chat de proyecto: pestaña "Del proyecto" (mensajes que lo mencionan) y "Del equipo" (avisos, solo lectura).
+- Esquema: tabla nueva `ChatChannel` y columnas opcionales `channelId`/`announce` en `ChatMessage` (`db push` sin tocar datos).

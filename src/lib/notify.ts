@@ -19,7 +19,7 @@ export async function notifyProject(projectId: string, message: ProjectNotificat
   try {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      select: { discordWebhookUrl: true, telegramBotToken: true, telegramChatId: true, slackWebhookUrl: true },
+      select: { workspaceId: true, discordWebhookUrl: true, telegramBotToken: true, telegramChatId: true, slackWebhookUrl: true },
     });
     if (!project) return;
     const ids = message.mentionUserIds ?? [];
@@ -42,7 +42,7 @@ export async function notifyProject(projectId: string, message: ProjectNotificat
       const payload = buildPushPayload(message, `/projects/${projectId}/board`);
       jobs.push(
         message.pushAll
-          ? prisma.user.findMany({ where: message.excludeUserId ? { id: { not: message.excludeUserId } } : {}, select: { id: true } }).then((users) => sendPush(users.map((u) => u.id), payload))
+          ? prisma.user.findMany({ where: { memberships: { some: { workspaceId: project.workspaceId ?? "" } }, ...(message.excludeUserId ? { id: { not: message.excludeUserId } } : {}) }, select: { id: true } }).then((users) => sendPush(users.map((u) => u.id), payload))
           : sendPush(targets, payload)
       );
     }

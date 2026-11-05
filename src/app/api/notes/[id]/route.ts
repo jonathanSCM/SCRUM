@@ -8,7 +8,7 @@ import { logHistory } from "@/lib/history";
 // Las notas son públicas: cualquiera del equipo puede editarlas. Borrar solo
 // su autor o un líder.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ note: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
@@ -26,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ note: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

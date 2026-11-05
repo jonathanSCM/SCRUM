@@ -5,7 +5,7 @@ import { errorResponse, notFound } from "@/lib/api";
 import { DISCORD_COLOR, sendToDiscordWebhook } from "@/lib/discord";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser({ lead: true });
+  const auth = await apiUser({ lead: true, project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

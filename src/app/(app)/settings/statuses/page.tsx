@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { requireLead } from "@/lib/session";
+import { requireWorkspace } from "@/lib/session";
+import { redirect } from "next/navigation";
 import StatusesManager from "./StatusesManager";
 
 export default async function StatusesPage() {
-  await requireLead();
-  const statuses = await prisma.statusOption.findMany({ orderBy: { order: "asc" }, include: { _count: { select: { projects: true } } } });
+  const ws = await requireWorkspace();
+  if (!ws.isLead) redirect("/projects");
+  const statuses = await prisma.statusOption.findMany({ where: { workspaceId: ws.workspaceId }, orderBy: { order: "asc" }, include: { _count: { select: { projects: true } } } });
 
   return (
     <main className="mx-auto max-w-xl px-4 py-10 sm:px-6">

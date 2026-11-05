@@ -9,7 +9,7 @@ export const maxDuration = 60;
 
 // PDF del sprint. ?ai=0 lo genera sin llamar a Gemini (más rápido).
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ sprint: (await params).id });
   if ("error" in auth) return auth.error;
   if (!sprintPdfEnabled()) return notFound("El informe PDF del sprint está desactivado (SPRINT_PDF_ENABLED)");
   const { id } = await params;

@@ -27,7 +27,7 @@ export default async function BacklogPage({ params }: { params: Promise<{ id: st
       issues={[...backlogIssues, ...sprintIssues]}
       options={options}
       currentUserId={session.user.id}
-      isLead={session.user.role === "LEAD"}
+      isLead={project.access.isLead}
       completedSprints={completedCount}
       pdfEnabled={sprintPdfEnabled()}
     />

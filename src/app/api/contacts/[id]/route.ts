@@ -5,7 +5,7 @@ import { errorResponse, notFound } from "@/lib/api";
 import { parseBody, readJson, updateContactSchema } from "@/lib/validation";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ contact: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
@@ -22,7 +22,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ contact: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

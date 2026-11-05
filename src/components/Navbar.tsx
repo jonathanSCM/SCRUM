@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import { AnimatePresence, motion } from "motion/react";
 import CommandPalette from "./CommandPalette";
 import ThemeToggle from "./ThemeToggle";
+import TeamSwitcher, { type TeamOption } from "./TeamSwitcher";
 import Avatar from "@/components/ui/Avatar";
 
 const LINKS = [
@@ -17,7 +18,7 @@ const LINKS = [
   { href: "/people", label: "Equipo" },
 ];
 
-export default function Navbar({ userName, userId, isLead }: { userName: string; userId: string; isLead: boolean }) {
+export default function Navbar({ userName, userId, isLead, teams, activeId, canCreate, maxOwned }: { userName: string; userId: string; isLead: boolean; teams: TeamOption[]; activeId: string; canCreate: boolean; maxOwned: number }) {
   const pathname = usePathname();
   const links = LINKS;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -62,6 +63,7 @@ export default function Navbar({ userName, userId, isLead }: { userName: string;
               <img src="/logo.png" alt="SCRUM ProShop" className="h-8 w-8 border border-line object-cover rounded-md" />
               <span className="hidden font-display text-lg font-extrabold tracking-tight text-ink sm:inline">SCRUM ProShop</span>
             </Link>
+            <TeamSwitcher teams={teams} activeId={activeId} canCreate={canCreate} maxOwned={maxOwned} />
             <div className="hidden items-center gap-6 sm:flex">
               {links.map((link) => (
                 <Link key={link.href} href={link.href} className={linkClass(link.href)}>
@@ -91,11 +93,16 @@ export default function Navbar({ userName, userId, isLead }: { userName: string;
                   >
                     <p className="truncate border-b border-line-strong px-3 py-2 text-xs font-bold text-ink-faint">{userName}</p>
                     <Link href={`/people/${userId}`} onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
-                      Mi perfil público
+                      Mi perfil
                     </Link>
-                    <Link href="/settings/profile" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
-                      Editar perfil
+                    <Link href="/settings" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
+                      Ajustes
                     </Link>
+                    {isLead && (
+                      <Link href="/settings/integrations" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
+                        Integraciones
+                      </Link>
+                    )}
                     {isLead && (
                       <Link href="/settings/statuses" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
                         Estados de proyecto

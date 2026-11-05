@@ -49,6 +49,8 @@ model User {
   chatReactions       ChatReaction[]
   apiToken            ApiToken?
   images              UserImage[]
+  memberships         Membership[]
+  invitationsSent     Invitation[]
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
 }
@@ -72,12 +74,15 @@ model StatusOption {
   color String
   order Int    @default(0)
 
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
   projects Project[]
 }
 
 model Project {
   id          String   @id @default(cuid())
-  key         String?  @unique
+  key         String? // único dentro de cada equipo: @@unique([workspaceId, key])
   name        String
   description String   @default("")
   repoUrl     String?
@@ -101,6 +106,9 @@ model Project {
   // Definition of Ready: JSON con los textos que un ticket debe cubrir antes de empezar.
   readyItems String @default("[]")
 
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
   statusId String
   status   StatusOption @relation(fields: [statusId], references: [id])
 
@@ -122,6 +130,9 @@ model Project {
   standups    StandupEntry[]
   retroItems  RetroItem[]
   contacts    ProjectContact[]
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
 }
 
 // Sin uso desde la v2 (solo guardaba metadatos). Se reemplaza por Attachment.
@@ -378,12 +389,18 @@ model PushSubscription {
 // Chat general del equipo. El texto lleva marcas [[project:id]] / [[issue:id]] /
 // [[sprint:id]] / [[user:id]] que se muestran como chapitas con enlace.
 model ChatMessage {
-  id        String   @id @default(cuid())
-  body      String
-  legacyId  String?  @unique // id del ProjectMessage del que se copió
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt // cambia con reacciones y borrados (el chat se sincroniza por acá)
-  deletedAt DateTime? // legacy: versión anterior hacía borrado suave; ahora se borra de verdad (ver ChatDeletion)
+  id          String     @id @default(cuid())
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  body        String
+  channelId   String? // null = mensajes anteriores a los canales: cuentan como "General"
+  channel     ChatChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  announce    Boolean    @default(false) // aviso enviado por comando (/noti, /reunion, /urgente, /ayuda)
+  level       String? // null = normal | "AYUDA" | "URGENTE" (avisos por comando; se resaltan en el chat)
+  legacyId    String?    @unique // id del ProjectMessage del que se copió
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @default(now()) @updatedAt // cambia con reacciones y borrados (el chat se sincroniza por acá)
+  deletedAt   DateTime? // legacy: versión anterior hacía borrado suave; ahora se borra de verdad (ver ChatDeletion)
 
   // Respuesta a otro mensaje
   replyToId String?
@@ -399,6 +416,20 @@ model ChatMessage {
 
   @@index([createdAt])
   @@index([updatedAt])
+}
+
+// Canal del chat del equipo. Cada equipo tiene "General" (GENERAL) y "Reuniones" (REUNIONES); los líderes crean más (CUSTOM).
+model ChatChannel {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String
+  kind        String   @default("CUSTOM")
+  createdAt   DateTime @default(now())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages    ChatMessage[]
+
+  @@unique([workspaceId, slug])
 }
 
 // Referencia dentro de un mensaje. projectId permite filtrar el chat por proyecto.
@@ -419,12 +450,13 @@ model ChatRef {
 
 // Archivo adjunto de un mensaje del chat. Hoy vive en la base (ver src/lib/fileStore.ts).
 model ChatFile {
-  id        String   @id @default(cuid())
-  filename  String
-  mimeType  String
-  size      Int
-  data      Bytes
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  workspaceId String?
+  filename    String
+  mimeType    String
+  size        Int
+  data        Bytes
+  createdAt   DateTime @default(now())
 
   messageId String?
   message   ChatMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -453,8 +485,9 @@ model ChatReaction {
 // Lápida de un mensaje borrado: sirve solo para avisar a los demás navegadores
 // que lo quiten de la pantalla en su próximo refresco (se limpia a los pocos días).
 model ChatDeletion {
-  messageId String   @id
-  deletedAt DateTime @default(now())
+  workspaceId String?
+  messageId   String   @id
+  deletedAt   DateTime @default(now())
 
   @@index([deletedAt])
 }
@@ -462,11 +495,12 @@ model ChatDeletion {
 // Token personal para que un asistente (Claude) use la API en nombre de la persona.
 // Solo se guarda el hash: el token se muestra una vez al crearlo. Hay uno por usuario.
 model ApiToken {
-  id         String    @id @default(cuid())
-  tokenHash  String    @unique
-  prefix     String // primeros caracteres, solo para reconocerlo en pantalla
-  createdAt  DateTime  @default(now())
-  lastUsedAt DateTime?
+  id          String    @id @default(cuid())
+  workspaceId String? // el token solo actúa dentro de este equipo
+  tokenHash   String    @unique
+  prefix      String // primeros caracteres, solo para reconocerlo en pantalla
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -497,4 +531,68 @@ model UserImage {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, kind])
+}
+
+// ---- Multi-equipo ----
+
+// Un equipo (espacio de trabajo). Todo lo que se crea vive dentro de uno.
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  // Integraciones del equipo. Las claves se guardan cifradas (AES-256-GCM); el "hint" son los últimos 4 caracteres.
+  geminiKeyEnc  String?
+  geminiKeyHint String?
+  slackBotEnc   String?
+  slackBotHint  String?
+  // Webhook de Slack del equipo (para /noti y avisos generales, independiente del de cada proyecto).
+  slackWebhookEnc  String?
+  slackWebhookHint String?
+
+  members     Membership[]
+  projects    Project[]
+  statuses    StatusOption[]
+  chat        ChatMessage[]
+  channels    ChatChannel[]
+  invitations Invitation[]
+}
+
+// Pertenencia de una cuenta a un equipo, con su rol allí: OWNER | ADMIN | MEMBER.
+// Una cuenta puede estar en varios equipos con roles distintos.
+model Membership {
+  id        String   @id @default(cuid())
+  role      String   @default("MEMBER")
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+}
+
+// Invitación a un equipo, ligada a un email. Solo se guarda el hash del enlace; vence y sirve una sola vez.
+model Invitation {
+  id         String    @id @default(cuid())
+  email      String
+  role       String    @default("MEMBER") // ADMIN | MEMBER
+  tokenHash  String    @unique
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  invitedById String?
+  invitedBy   User?   @relation(fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([email])
 }

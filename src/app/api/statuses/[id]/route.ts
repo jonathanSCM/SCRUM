@@ -5,7 +5,7 @@ import { errorResponse, notFound } from "@/lib/api";
 import { parseBody, readJson, statusOptionSchema } from "@/lib/validation";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser({ lead: true });
+  const auth = await apiUser({ lead: true, status: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
@@ -23,7 +23,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser({ lead: true });
+  const auth = await apiUser({ lead: true, status: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
@@ -33,7 +33,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (status._count.projects > 0) {
       return NextResponse.json({ error: `Hay ${status._count.projects} proyecto(s) en este estado: movelos antes de borrarlo` }, { status: 400 });
     }
-    const total = await prisma.statusOption.count();
+    const total = await prisma.statusOption.count({ where: { workspaceId: auth.user.workspaceId! } });
     if (total <= 1) return NextResponse.json({ error: "Tiene que quedar al menos un estado" }, { status: 400 });
     await prisma.statusOption.delete({ where: { id } });
     return NextResponse.json({ ok: true });
