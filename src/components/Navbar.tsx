@@ -14,12 +14,12 @@ const LINKS = [
   { href: "/projects", label: "Proyectos" },
   { href: "/my-work", label: "Mi trabajo" },
   { href: "/chat", label: "Chat" },
-  { href: "/people", label: "Personas" },
+  { href: "/people", label: "Equipo" },
 ];
 
 export default function Navbar({ userName, userId, isLead }: { userName: string; userId: string; isLead: boolean }) {
   const pathname = usePathname();
-  const links = isLead ? [...LINKS, { href: "/settings/team", label: "Equipo" }] : LINKS;
+  const links = LINKS;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 

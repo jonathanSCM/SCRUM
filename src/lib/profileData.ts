@@ -86,10 +86,10 @@ export async function getProfile(userId: string) {
   };
 }
 
-export async function getPeople() {
+export async function getPeople(options: { withEmail?: boolean } = {}) {
   const users = await prisma.user.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true, role: true, tagline: true, chatColor: true },
+    select: { id: true, name: true, role: true, tagline: true, chatColor: true, ...(options.withEmail ? { email: true } : {}) },
   });
   const since = weekWindow().since;
   const [open, done] = await Promise.all([
@@ -98,5 +98,5 @@ export async function getPeople() {
   ]);
   const o = new Map(open.map((r) => [r.assigneeUserId, r._count._all]));
   const d = new Map(done.map((r) => [r.assigneeUserId, r._count._all]));
-  return users.map((u) => ({ ...u, open: o.get(u.id) ?? 0, doneWeek: d.get(u.id) ?? 0 }));
+  return users.map((u) => ({ ...u, email: "email" in u ? (u.email as string) : null, open: o.get(u.id) ?? 0, doneWeek: d.get(u.id) ?? 0 }));
 }
