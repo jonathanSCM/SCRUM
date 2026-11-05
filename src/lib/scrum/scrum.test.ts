@@ -583,3 +583,46 @@ describe("secretBox", () => {
     expect(decryptSecret(null)).toBeNull();
   });
 });
+
+import { parseCommand, matchNames, isCommand } from "./chatCommands";
+
+describe("comandos del chat", () => {
+  it("detecta comandos", () => {
+    expect(isCommand("/noti general hola")).toBe(true);
+    expect(isCommand("  /reunion mañana: x")).toBe(true);
+    expect(isCommand("hola /noti")).toBe(false);
+    expect(isCommand("/notificar")).toBe(false);
+  });
+  it("noti general y slack", () => {
+    expect(parseCommand("/noti general Hay deploy")).toEqual({ ok: true, command: { kind: "general", message: "Hay deploy", level: "normal" } });
+    expect(parseCommand("/noti slack  hola ")).toEqual({ ok: true, command: { kind: "slack", message: "hola", level: "normal" } });
+    expect(parseCommand("/noti general").ok).toBe(false);
+    expect(parseCommand("/noti nada hola").ok).toBe(false);
+  });
+  it("noti persona con varias personas separadas por coma", () => {
+    expect(parseCommand("/noti persona Ana, @luis ,ana: revisen el PR: urgente")).toEqual({ ok: true, command: { kind: "persona", names: ["ana", "luis"], message: "revisen el PR: urgente", level: "normal" } });
+    expect(parseCommand("/noti persona ana revisa").ok).toBe(false);
+    expect(parseCommand("/noti persona : hola").ok).toBe(false);
+  });
+  it("reunion con hora", () => {
+    expect(parseCommand("/reunion mañana 10:30: revisión del sprint")).toEqual({ ok: true, command: { kind: "reunion", when: "mañana 10:30", topic: "revisión del sprint", level: "normal" } });
+    expect(parseCommand("/reunion viernes: retro")).toEqual({ ok: true, command: { kind: "reunion", when: "viernes", topic: "retro", level: "normal" } });
+    expect(parseCommand("/reunion sin tema").ok).toBe(false);
+  });
+  it("niveles urgente y ayuda", () => {
+    expect(parseCommand("/urgente se cayó el servidor")).toEqual({ ok: true, command: { kind: "general", message: "se cayó el servidor", level: "urgente" } });
+    expect(parseCommand("/ayuda necesito ayuda para configurar esto")).toEqual({ ok: true, command: { kind: "general", message: "necesito ayuda para configurar esto", level: "ayuda" } });
+    expect(parseCommand("/urgente").ok).toBe(false);
+    expect(parseCommand("/noti !urgente general deploy roto")).toEqual({ ok: true, command: { kind: "general", message: "deploy roto", level: "urgente" } });
+    expect(parseCommand("/reunion !urgente ahora: incidente")).toEqual({ ok: true, command: { kind: "reunion", when: "ahora", topic: "incidente", level: "urgente" } });
+    expect(parseCommand("/noti !ayuda persona ana: ¿me ayudas?")).toEqual({ ok: true, command: { kind: "persona", names: ["ana"], message: "¿me ayudas?", level: "ayuda" } });
+    expect(isCommand("/urgente x")).toBe(true);
+  });
+  it("busca personas por nombre", () => {
+    const m = [{ id: "1", name: "Ana Pérez" }, { id: "2", name: "Luis Gómez" }, { id: "3", name: "Luisa Ríos" }];
+    expect(matchNames(["ana", "luis"], m)).toEqual({ found: [m[0], m[1]], missing: [], ambiguous: [] });
+    expect(matchNames(["perez"], m).missing).toEqual(["perez"]);
+    expect(matchNames(["lui"], m).ambiguous).toEqual(["lui"]);
+    expect(matchNames(["ANA PEREZ"], m).found).toEqual([m[0]]);
+  });
+});

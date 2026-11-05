@@ -8,6 +8,7 @@ import { CHAT_EMOJIS, QUICK_REACTIONS, applyInsertedRefs, makeToken, snippetOf, 
 import Avatar from "@/components/ui/Avatar";
 import { PaperclipIcon } from "@/components/ui/Icons";
 import { useToast } from "@/components/ui/Toaster";
+import { isCommand, COMMAND_HELP } from "@/lib/scrum/chatCommands";
 import { useConfirm } from "@/components/ConfirmDialog";
 
 // Tipos que devuelve la API (ver src/lib/chatData.ts).
@@ -15,6 +16,7 @@ type ResolvedRef = { kind: RefKind; id: string; label: string; sub: string | nul
 export type ChatMessage = {
   id: string;
   body: string;
+  level?: "AYUDA" | "URGENTE" | null;
   createdAt: string;
   updatedAt: string;
   author: { id: string; name: string; color: string | null } | null;
@@ -210,6 +212,17 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
   async function send() {
     if (busy || uploading > 0) return;
     if (!draft.trim() && pending.length === 0) return;
+    // Comandos (/noti …, /reunion …): no se publican como mensaje, se ejecutan.
+    if (isCommand(draft)) {
+      setBusy(true);
+      const cr = await api<{ summary: string }>("/api/chat/command", "POST", { body: draft.trim() });
+      setBusy(false);
+      if (!cr.ok) return toast.error(cr.error);
+      toast.success(cr.data.summary);
+      setDraft("");
+      if (inputRef.current) inputRef.current.style.height = "auto";
+      return;
+    }
     let body = applyInsertedRefs(draft.trim(), inserted.current);
     if (projectId && !body.includes(`[[project:${projectId}]]`)) body = `${makeToken("project", projectId)} ${body}`.trim();
     setBusy(true);
@@ -384,7 +397,8 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
               ref={inputRef}
               rows={1}
               className="field max-h-36 min-h-[2.5rem] resize-none rounded-xl bg-paper-deep py-2"
-              placeholder={projectId ? "Mensaje sobre el proyecto…" : "Escribí un mensaje…"}
+              placeholder={projectId ? "Mensaje sobre el proyecto…" : "Escribí un mensaje… (o /noti, /reunion)"}
+              title={COMMAND_HELP}
               value={draft}
               maxLength={4000}
               onChange={(e) => {
@@ -487,7 +501,7 @@ function MessageRow({
         <div
           className={cn(
             "min-w-0 max-w-full rounded-2xl px-3 py-1.5 text-sm text-ink shadow-hard-sm",
-            mine ? "rounded-br-md bg-bubble-mine" : "rounded-bl-md border border-line bg-surface"
+            m.level === "URGENTE" ? "rounded-bl-md border-2 border-danger bg-danger-bg" : m.level === "AYUDA" ? "rounded-bl-md border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30" : mine ? "rounded-br-md bg-bubble-mine" : "rounded-bl-md border border-line bg-surface"
           )}
         >
           {!mine && !grouped && (
@@ -508,6 +522,7 @@ function MessageRow({
             </button>
           )}
 
+          {m.level && <p className={cn("mb-0.5 text-[10px] font-extrabold uppercase tracking-wide", m.level === "URGENTE" ? "text-danger" : "text-amber-600")}>{m.level === "URGENTE" ? "Urgente" : "Pide ayuda"}</p>}
           {m.body && (
             <p className="whitespace-pre-wrap break-words">
               {splitMessage(m.body).map((seg, i) => {

@@ -18,6 +18,7 @@ export type ResolvedRef = {
 export type ChatMessageDTO = {
   id: string;
   body: string;
+  level: "AYUDA" | "URGENTE" | null;
   createdAt: string;
   author: { id: string; name: string; color: string | null } | null;
   refs: ResolvedRef[];
@@ -76,6 +77,7 @@ export async function toDTOs(rows: Row[], workspaceId: string): Promise<ChatMess
     return {
       id: r.id,
       body: r.body,
+      level: r.level === "URGENTE" || r.level === "AYUDA" ? r.level : null,
       updatedAt: r.updatedAt.toISOString(),
       replyTo: r.replyTo && !r.replyTo.deletedAt ? { id: r.replyTo.id, author: r.replyTo.author?.name ?? null, snippet: snippetOf(r.replyTo.body, r.replyTo._count.files > 0) } : null,
       reactions: [...grouped.values()],

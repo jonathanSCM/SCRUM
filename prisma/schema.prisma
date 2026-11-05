@@ -393,6 +393,7 @@ model ChatMessage {
   workspaceId String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   body        String
+  level       String? // null = normal | "AYUDA" | "URGENTE" (avisos por comando; se resaltan en el chat)
   legacyId    String?    @unique // id del ProjectMessage del que se copió
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @default(now()) @updatedAt // cambia con reacciones y borrados (el chat se sincroniza por acá)
@@ -529,6 +530,9 @@ model Workspace {
   geminiKeyHint String?
   slackBotEnc   String?
   slackBotHint  String?
+  // Webhook de Slack del equipo (para /noti y avisos generales, independiente del de cada proyecto).
+  slackWebhookEnc  String?
+  slackWebhookHint String?
 
   members     Membership[]
   projects    Project[]

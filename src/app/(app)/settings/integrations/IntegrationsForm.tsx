@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/ui/Toaster";
 
-type Status = { gemini: { own: boolean; hint: string | null; active: boolean }; slackBot: { own: boolean; hint: string | null; active: boolean } };
+type Status = { gemini: { own: boolean; hint: string | null; active: boolean }; slackBot: { own: boolean; hint: string | null; active: boolean }; slackWebhook: { own: boolean; hint: string | null; active: boolean } };
 
 export default function IntegrationsForm() {
   const toast = useToast();
   const [st, setSt] = useState<Status | null>(null);
   const [gemini, setGemini] = useState("");
   const [slack, setSlack] = useState("");
+  const [hook, setHook] = useState("");
 
   const load = useCallback(async () => {
     const r = await fetch("/api/workspaces/integrations");
@@ -23,6 +24,7 @@ export default function IntegrationsForm() {
     toast.success(done);
     setGemini("");
     setSlack("");
+    setHook("");
     load();
   }
 
@@ -38,6 +40,16 @@ export default function IntegrationsForm() {
           <input className="field min-w-0 flex-1 font-mono" type="password" autoComplete="off" placeholder="Pega la clave de Gemini" value={gemini} onChange={(e) => setGemini(e.target.value)} />
           <button className="btn-primary" disabled={!gemini} onClick={() => save({ geminiKey: gemini }, "Clave de Gemini guardada")}>Guardar</button>
           {st?.gemini.own && <button className="btn-ghost" onClick={() => save({ geminiKey: null }, "Clave de Gemini borrada")}>Borrar</button>}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">Canal de Slack del equipo (comandos /noti y /reunion del chat)</h2>
+        <p className="text-xs text-ink-soft">{st ? line(st.slackWebhook) : "Cargando…"} Es un Incoming Webhook (https://hooks.slack.com/services/…) del canal donde quieres que lleguen los avisos del equipo.</p>
+        <div className="flex flex-wrap gap-2">
+          <input className="field min-w-0 flex-1 font-mono" type="password" autoComplete="off" placeholder="https://hooks.slack.com/services/…" value={hook} onChange={(e) => setHook(e.target.value)} />
+          <button className="btn-primary" disabled={!hook} onClick={() => save({ slackWebhook: hook }, "Webhook guardado")}>Guardar</button>
+          {st?.slackWebhook.own && <button className="btn-ghost" onClick={() => save({ slackWebhook: null }, "Webhook borrado")}>Borrar</button>}
         </div>
       </section>
 

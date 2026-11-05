@@ -357,6 +357,34 @@ async function main() {
   const rowA2 = await prisma.workspace.findUnique({ where: { id: A.ws.id } });
   check("borrar deja todo vacío", ig7.status === 200 && !rowA2.geminiKeyEnc && !rowA2.slackBotEnc);
 
+  console.log("8) Comandos del chat");
+  const cm1 = await cPlain.req("POST", "/api/chat/command", { body: "/noti general hola" });
+  check("un miembro no puede /noti general", cm1.status === 403, `dio ${cm1.status}`);
+  const cm2 = await cPlain.req("POST", "/api/chat/command", { body: "/reunion mañana: x" });
+  check("un miembro no puede /reunion", cm2.status === 403, `dio ${cm2.status}`);
+  const cm3 = await cPlain.req("POST", "/api/chat/command", { body: "/noti persona Aldo, Ana: ojo con esto" });
+  check("un miembro sí puede /noti persona (varias personas)", cm3.status === 200, `dio ${cm3.status} ${cm3.text}`);
+  await member((await mkUser("Bruno Solo B", `bruno-${stamp}@b.test`)).id, B.ws.id, "MEMBER");
+  const cm4 = await cPlain.req("POST", "/api/chat/command", { body: "/noti persona Bruno: hola" });
+  check("no encuentra a una persona de otro equipo (solo de B)", cm4.status === 400 && /No encontré/.test(cm4.json?.error ?? ""), `dio ${cm4.status} ${cm4.text}`);
+  const cm5 = await cAOwner.req("POST", "/api/chat/command", { body: "/noti slack hola" });
+  check("/noti slack sin webhook del equipo -> 400", cm5.status === 400, `dio ${cm5.status}`);
+  const cm6 = await cAOwner.req("POST", "/api/chat/command", { body: "/noti general Aviso para todos" });
+  check("el dueño puede /noti general", cm6.status === 200, `dio ${cm6.status}`);
+  const cm8 = await cAOwner.req("POST", "/api/chat/command", { body: "/urgente servidor caído" });
+  check("el dueño puede /urgente", cm8.status === 200, `dio ${cm8.status}`);
+  const urg = await prisma.chatMessage.findFirst({ where: { workspaceId: A.ws.id, level: "URGENTE" } });
+  check("el aviso urgente queda en el chat de A, con nivel", !!urg && urg.body === "servidor caído");
+  check("y no aparece en el chat de B", (await prisma.chatMessage.count({ where: { workspaceId: B.ws.id, level: { not: null } } })) === 0);
+  const cm9 = await cPlain.req("POST", "/api/chat/command", { body: "/ayuda necesito ayuda" });
+  check("un miembro sí puede pedir /ayuda al equipo", cm9.status === 200, `dio ${cm9.status}`);
+  const cm10 = await cPlain.req("POST", "/api/chat/command", { body: "/urgente x" });
+  check("un miembro no puede /urgente", cm10.status === 403, `dio ${cm10.status}`);
+  const cm7 = await cAOwner.req("POST", "/api/chat/command", { body: "/noti inventado" });
+  check("comando inválido -> 400", cm7.status === 400);
+  const hk = await cAOwner.req("PUT", "/api/workspaces/integrations", { slackWebhook: "https://example.com/x" });
+  check("webhook de Slack con URL ajena se rechaza", hk.status === 400, `dio ${hk.status}`);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);
