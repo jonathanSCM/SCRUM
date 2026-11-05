@@ -73,6 +73,9 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
   const [index, setIndex] = useState<ChatIndex | null>(null);
   const [trigger, setTrigger] = useState<{ char: "#" | "@"; query: string; start: number } | null>(null);
   const [active, setActive] = useState(0);
+  // Segundo nivel de #: tras elegir un proyecto se listan solo sus sprints y tickets.
+  const [scope, setScope] = useState<{ id: string; label: string; start: number } | null>(null);
+  const [scoped, setScoped] = useState<Record<string, { sprints: IndexItem[]; issues: IndexItem[] }>>({});
   const inserted = useRef<Array<{ text: string; token: string }>>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -140,17 +143,37 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
     if (res.ok) setIndex(res.data);
   }, [index]);
 
+  const loadScope = useCallback(
+    async (id: string) => {
+      if (scoped[id]) return;
+      const res = await api<{ sprints: IndexItem[]; issues: IndexItem[] }>(`/api/chat/index?project=${encodeURIComponent(id)}`);
+      if (res.ok) setScoped((prev) => ({ ...prev, [id]: res.data }));
+    },
+    [scoped]
+  );
+
+  // Proyecto dentro del que se busca: el del chat del proyecto, o el que se acaba de elegir con #.
+  const scopeId = projectId ?? (scope && trigger && trigger.start === scope.start ? scope.id : null);
+  const scopeLoading = !!trigger && trigger.char === "#" && !!scopeId && !scoped[scopeId];
+
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!trigger || !index) return [];
     const q = trigger.query.toLowerCase();
     const match = (i: IndexItem) => !q || i.label.toLowerCase().includes(q);
     if (trigger.char === "@") return index.users.filter(match).slice(0, 8).map((u) => ({ ...u, kind: "user" as const, short: `@${u.label}` }));
-    return [
-      ...index.projects.filter(match).slice(0, 4).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` })),
-      ...index.issues.filter(match).slice(0, 5).map((i) => ({ ...i, kind: "issue" as const, short: `#${i.label.split(" ")[0]}` })),
-      ...index.sprints.filter(match).slice(0, 3).map((s) => ({ ...s, kind: "sprint" as const, short: `#${s.label}` })),
-    ].slice(0, 9);
-  }, [trigger, index]);
+    const issueS = (i: IndexItem) => ({ ...i, kind: "issue" as const, short: `#${i.label.split(" ")[0]}` });
+    const sprintS = (s: IndexItem) => ({ ...s, kind: "sprint" as const, short: `#${s.label}` });
+    // Nivel 2: dentro de un proyecto.
+    if (scopeId) {
+      const data = scoped[scopeId];
+      if (!data) return [];
+      return [...data.sprints.filter(match).slice(0, 6).map(sprintS), ...data.issues.filter(match).slice(0, 8).map(issueS)];
+    }
+    // Atajo: escribir la clave de un ticket (SAI-12) lo busca directo, sin pasar por el proyecto.
+    if (/^[a-z][a-z0-9]*-\d*$/i.test(q)) return index.issues.filter(match).slice(0, 8).map(issueS);
+    // Nivel 1: solo proyectos.
+    return index.projects.filter(match).slice(0, 12).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` }));
+  }, [trigger, index, scopeId, scoped]);
 
   function onChange(value: string, caret: number) {
     setDraft(value);
@@ -159,8 +182,10 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
       setTrigger({ char: m[2] as "#" | "@", query: m[3], start: caret - m[3].length - 1 });
       setActive(0);
       void loadIndex();
+      if (projectId && m[2] === "#") void loadScope(projectId);
     } else {
       setTrigger(null);
+      setScope(null);
     }
   }
 
@@ -170,8 +195,23 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
     const before = draft.slice(0, trigger.start);
     const after = draft.slice(caret);
     inserted.current.push({ text: s.short, token: makeToken(s.kind, s.id) });
+    // Elegir un proyecto abre el segundo nivel: se deja un "#" nuevo para elegir su sprint o ticket.
+    if (s.kind === "project" && !projectId && trigger.char === "#") {
+      setDraft(`${before}${s.short} #${after}`);
+      const at = before.length + s.short.length + 1;
+      setScope({ id: s.id, label: s.label, start: at });
+      setTrigger({ char: "#", query: "", start: at });
+      setActive(0);
+      void loadScope(s.id);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        inputRef.current?.setSelectionRange(at + 1, at + 1);
+      });
+      return;
+    }
     setDraft(`${before}${s.short} ${after}`);
     setTrigger(null);
+    setScope(null);
     const pos = before.length + s.short.length + 1;
     requestAnimationFrame(() => {
       inputRef.current?.focus();
@@ -321,6 +361,9 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
       >
         {trigger && suggestions.length > 0 && (
           <ul className="absolute bottom-full left-3 right-3 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-line-strong bg-surface shadow-hard-lg" role="listbox">
+            {scopeId && !projectId && scope && (
+              <li className="border-b border-line px-3 py-1 text-[11px] text-ink-faint">Dentro de <b className="text-ink-soft">{scope.label}</b> · sprints y tickets · Esc deja solo el proyecto</li>
+            )}
             {suggestions.map((s, i) => (
               <li key={`${s.kind}:${s.id}`} role="option" aria-selected={i === active}>
                 <button
@@ -341,7 +384,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
           </ul>
         )}
         {trigger && index && suggestions.length === 0 && (
-          <p className="absolute bottom-full left-3 mb-1 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-faint shadow-hard">Sin resultados para “{trigger.query}”.</p>
+          <p className="absolute bottom-full left-3 mb-1 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-faint shadow-hard">{scopeLoading ? "Cargando…" : `Sin resultados para “${trigger.query}”.`}</p>
         )}
 
         {replyTo && (
@@ -432,7 +475,14 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
                     return;
                   }
                 }
-                if (e.key === "Escape") setTrigger(null);
+                if (e.key === "Escape") {
+                  // En el segundo nivel, Esc quita el "#" sobrante y deja solo el proyecto.
+                  if (trigger && scope && trigger.start === scope.start && !trigger.query) {
+                    setDraft((d) => d.slice(0, trigger.start) + d.slice(trigger.start + 1));
+                  }
+                  setTrigger(null);
+                  setScope(null);
+                }
                 else if (e.key === "Enter" && !e.shiftKey && !isTouch()) {
                   e.preventDefault();
                   void send();
