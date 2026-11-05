@@ -17,6 +17,7 @@ export type ChatMessage = {
   id: string;
   body: string;
   level?: "AYUDA" | "URGENTE" | null;
+  channel?: string | null;
   createdAt: string;
   updatedAt: string;
   author: { id: string; name: string; color: string | null } | null;
@@ -58,7 +59,7 @@ function dayLabel(iso: string): string {
 
 // Chat general del equipo. Con projectId muestra solo los mensajes que mencionan
 // ese proyecto, y lo que se escribe queda mencionándolo.
-export default function ChatView({ initial, currentUserId, isLead, projectId, fill }: { initial: ChatMessage[]; currentUserId: string; isLead: boolean; projectId?: string; fill?: boolean }) {
+export default function ChatView({ initial, currentUserId, isLead, projectId, fill, channelId, announceOnly }: { initial: ChatMessage[]; currentUserId: string; isLead: boolean; projectId?: string; fill?: boolean; channelId?: string; announceOnly?: boolean }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -82,7 +83,9 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
   const endRef = useRef<HTMLDivElement>(null);
   const lastRef = useRef<string | null>(initial.length ? initial.reduce((max, m) => (m.updatedAt > max ? m.updatedAt : max), initial[0].updatedAt) : null);
 
-  const projectParam = projectId ? `project=${projectId}` : "";
+  // Qué se sincroniza: el chat de un proyecto, un canal, o los avisos del equipo (solo lectura).
+  const projectParam = announceOnly ? "announce=1" : [projectId ? `project=${projectId}` : "", channelId ? `channel=${channelId}` : ""].filter(Boolean).join("&");
+  const readOnly = !!announceOnly;
 
   // Quita mensajes borrados y suelta la cita de las respuestas que los mencionaban.
   const removeLocally = useCallback((ids: string[]) => {
@@ -266,7 +269,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
     let body = applyInsertedRefs(draft.trim(), inserted.current);
     if (projectId && !body.includes(`[[project:${projectId}]]`)) body = `${makeToken("project", projectId)} ${body}`.trim();
     setBusy(true);
-    const res = await api<ChatMessage>("/api/chat/messages", "POST", { body, fileIds: pending.map((f) => f.id), replyToId: replyTo?.id ?? null });
+    const res = await api<ChatMessage>("/api/chat/messages", "POST", { body, fileIds: pending.map((f) => f.id), replyToId: replyTo?.id ?? null, channelId: channelId ?? null });
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     setDraft("");
@@ -331,6 +334,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
                 mine={m.author?.id === currentUserId}
                 currentUserId={currentUserId}
                 highlighted={highlight === m.id}
+                showChannel={!!announceOnly}
                 onDelete={() => void remove(m)}
                 onReply={() => {
                   setReplyTo(m);
@@ -346,6 +350,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
       </ul>
 
       {/* Escribir */}
+      {!readOnly && (
       <div
         className={cn("relative border-t border-line-strong bg-surface p-3 transition-colors", dragging && "bg-card-2")}
         onDragOver={(e) => {
@@ -510,6 +515,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
         </div>
         <p className="mt-1 hidden text-[11px] text-ink-faint sm:block">Enter envía · Shift+Enter salto de línea</p>
       </div>
+      )}
     </div>
   );
 }
@@ -521,6 +527,7 @@ function MessageRow({
   mine,
   currentUserId,
   highlighted,
+  showChannel,
   onDelete,
   onReply,
   onReact,
@@ -532,6 +539,7 @@ function MessageRow({
   mine: boolean;
   currentUserId: string;
   highlighted: boolean;
+  showChannel: boolean;
   onDelete: () => void;
   onReply: () => void;
   onReact: (emoji: string) => void;
@@ -572,6 +580,7 @@ function MessageRow({
             </button>
           )}
 
+          {showChannel && m.channel && <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-faint">{m.channel}</p>}
           {m.level && <p className={cn("mb-0.5 text-[10px] font-extrabold uppercase tracking-wide", m.level === "URGENTE" ? "text-danger" : "text-amber-600")}>{m.level === "URGENTE" ? "Urgente" : "Pide ayuda"}</p>}
           {m.body && (
             <p className="whitespace-pre-wrap break-words">

@@ -19,6 +19,7 @@ export type ChatMessageDTO = {
   id: string;
   body: string;
   level: "AYUDA" | "URGENTE" | null;
+  channel: string | null; // nombre del canal (solo se usa en la pestaña de avisos del equipo)
   createdAt: string;
   author: { id: string; name: string; color: string | null } | null;
   refs: ResolvedRef[];
@@ -29,6 +30,7 @@ export type ChatMessageDTO = {
 };
 
 const messageInclude = {
+  channel: { select: { name: true } },
   author: { select: { id: true, name: true, chatColor: true } },
   refs: true,
   files: { select: { id: true, filename: true, mimeType: true, size: true } },
@@ -77,6 +79,7 @@ export async function toDTOs(rows: Row[], workspaceId: string): Promise<ChatMess
     return {
       id: r.id,
       body: r.body,
+      channel: r.channel?.name ?? null,
       level: r.level === "URGENTE" || r.level === "AYUDA" ? r.level : null,
       updatedAt: r.updatedAt.toISOString(),
       replyTo: r.replyTo && !r.replyTo.deletedAt ? { id: r.replyTo.id, author: r.replyTo.author?.name ?? null, snippet: snippetOf(r.replyTo.body, r.replyTo._count.files > 0) } : null,
@@ -90,8 +93,15 @@ export async function toDTOs(rows: Row[], workspaceId: string): Promise<ChatMess
 }
 
 // Últimos mensajes (cronológico). after: solo los más nuevos. projectId: solo los que mencionan ese proyecto.
-export async function loadMessages(opts: { workspaceId: string; after?: Date | null; projectId?: string | null; limit?: number }): Promise<ChatMessageDTO[]> {
-  const projectFilter = { workspaceId: opts.workspaceId, deletedAt: null, ...(opts.projectId ? { refs: { some: { projectId: opts.projectId } } } : {}) };
+// channel: filtro de un canal (ver channelFilter). announce: solo los avisos por comando de todos los canales.
+export async function loadMessages(opts: { workspaceId: string; after?: Date | null; projectId?: string | null; limit?: number; channel?: object | null; announce?: boolean }): Promise<ChatMessageDTO[]> {
+  const projectFilter = {
+    workspaceId: opts.workspaceId,
+    deletedAt: null,
+    ...(opts.projectId ? { refs: { some: { projectId: opts.projectId } } } : {}),
+    ...(opts.channel ? opts.channel : {}),
+    ...(opts.announce ? { announce: true } : {}),
+  };
   // Con "after" se devuelve lo que cambió desde entonces (mensajes nuevos, reacciones, borrados).
   if (opts.after) {
     const changed = await prisma.chatMessage.findMany({ where: { updatedAt: { gt: opts.after }, ...projectFilter }, orderBy: { updatedAt: "asc" }, take: 200, include: messageInclude });

@@ -8,6 +8,7 @@ import { parseBody, readJson } from "@/lib/validation";
 import { parseCommand, matchNames } from "@/lib/scrum/chatCommands";
 import { sendPush } from "@/lib/push";
 import { sendToSlackWebhook } from "@/lib/slack";
+import { ensureChannels } from "@/lib/chatChannels";
 import { teamSlackWebhookFor } from "@/lib/teamIntegrations";
 
 // Ejecuta un comando del chat (/noti …, /reunion …) en el equipo activo. No guarda nada en el chat:
@@ -80,7 +81,12 @@ export async function POST(req: Request) {
     }
 
     // Avisos al equipo: quedan también en el chat, resaltados según el nivel.
-    if (chatText) await prisma.chatMessage.create({ data: { body: chatText, workspaceId, authorId: me.id, level: level === "normal" ? null : level.toUpperCase() } });
+    // /reunion va al canal "Reuniones"; el resto de avisos al canal "General".
+    if (chatText) {
+      const channels = await ensureChannels(workspaceId);
+      const channelId = channels.find((ch) => ch.kind === (c.kind === "reunion" ? "REUNIONES" : "GENERAL"))?.id;
+      await prisma.chatMessage.create({ data: { body: chatText, workspaceId, authorId: me.id, channelId, announce: true, level: level === "normal" ? null : level.toUpperCase() } });
+    }
     const pushed = await sendPush(targets, { title, body: text.slice(0, 160), url: "/chat", tag: "aviso" });
     return NextResponse.json({ ok: true, summary: `Aviso a ${label}${pushed ? ` · ${pushed} dispositivo(s) con push` : ""}${toSlack ? " · enviado a Slack" : ""}` });
   } catch (e) {

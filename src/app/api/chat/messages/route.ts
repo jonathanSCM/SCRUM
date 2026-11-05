@@ -6,6 +6,7 @@ import { chatMessageSchema, parseBody, readJson } from "@/lib/validation";
 import { loadMessages, messageInclude, resolveRefs, toDTOs } from "@/lib/chatData";
 import { parseRefs, plainText } from "@/lib/scrum/chat";
 import { sendPush } from "@/lib/push";
+import { channelFilter, ensureChannels } from "@/lib/chatChannels";
 
 // ?after=<ISO> devuelve solo los nuevos; ?project=<id> solo los que mencionan ese proyecto.
 export async function GET(req: Request) {
@@ -21,7 +22,11 @@ export async function GET(req: Request) {
     // Si piden un proyecto, tiene que ser de este equipo.
     const projectParam = url.searchParams.get("project");
     if (projectParam && !(await prisma.project.findFirst({ where: { id: projectParam, workspaceId }, select: { id: true } }))) return NextResponse.json({ messages: [], deleted: [] });
-    const messages = await loadMessages({ workspaceId, after: valid, projectId: projectParam });
+    // ?channel=<id> un canal · ?announce=1 solo avisos por comando (pestaña "Del equipo" de un proyecto)
+    const channelParam = url.searchParams.get("channel");
+    const channel = channelParam ? await channelFilter(workspaceId, channelParam) : null;
+    if (channelParam && !channel) return NextResponse.json({ messages: [], deleted: [] });
+    const messages = await loadMessages({ workspaceId, after: valid, projectId: projectParam, channel, announce: url.searchParams.get("announce") === "1" });
     // Mensajes borrados desde ese momento (con margen por si los relojes no coinciden al milisegundo).
     const deleted = valid
       ? (await prisma.chatDeletion.findMany({ where: { workspaceId, deletedAt: { gt: new Date(valid.getTime() - 10_000) } }, select: { messageId: true } })).map((d) => d.messageId)
@@ -54,6 +59,11 @@ export async function POST(req: Request) {
     const projectOf = (kind: string, id: string): string | null =>
       kind === "project" ? id : kind === "issue" ? issues.find((i) => i.id === id)?.projectId ?? null : kind === "sprint" ? sprints.find((s) => s.id === id)?.projectId ?? null : null;
 
+    // Canal de destino: el pedido (del equipo) o "General".
+    const channels = await ensureChannels(workspaceId);
+    const channelId = parsed.data.channelId ? channels.find((c) => c.id === parsed.data.channelId)?.id : channels.find((c) => c.kind === "GENERAL")?.id;
+    if (!channelId) return NextResponse.json({ error: "Ese canal no existe" }, { status: 400 });
+
     if (replyToId) {
       const original = await prisma.chatMessage.findFirst({ where: { id: replyToId, workspaceId }, select: { id: true } });
       if (!original) return NextResponse.json({ error: "El mensaje al que respondés ya no existe" }, { status: 400 });
@@ -64,6 +74,7 @@ export async function POST(req: Request) {
         data: {
           body,
           workspaceId,
+          channelId,
           authorId: auth.user.id,
           replyToId,
           refs: { create: found.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id, projectId: projectOf(r.kind, r.id) })) },

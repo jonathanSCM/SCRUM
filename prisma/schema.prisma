@@ -393,6 +393,9 @@ model ChatMessage {
   workspaceId String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   body        String
+  channelId   String? // null = mensajes anteriores a los canales: cuentan como "General"
+  channel     ChatChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  announce    Boolean    @default(false) // aviso enviado por comando (/noti, /reunion, /urgente, /ayuda)
   level       String? // null = normal | "AYUDA" | "URGENTE" (avisos por comando; se resaltan en el chat)
   legacyId    String?    @unique // id del ProjectMessage del que se copió
   createdAt   DateTime   @default(now())
@@ -413,6 +416,20 @@ model ChatMessage {
 
   @@index([createdAt])
   @@index([updatedAt])
+}
+
+// Canal del chat del equipo. Cada equipo tiene "General" (GENERAL) y "Reuniones" (REUNIONES); los líderes crean más (CUSTOM).
+model ChatChannel {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String
+  kind        String   @default("CUSTOM")
+  createdAt   DateTime @default(now())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages    ChatMessage[]
+
+  @@unique([workspaceId, slug])
 }
 
 // Referencia dentro de un mensaje. projectId permite filtrar el chat por proyecto.
@@ -538,6 +555,7 @@ model Workspace {
   projects    Project[]
   statuses    StatusOption[]
   chat        ChatMessage[]
+  channels    ChatChannel[]
   invitations Invitation[]
 }
 

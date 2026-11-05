@@ -79,3 +79,9 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - Cada equipo usa solo las suyas. `GEMINI_API_KEY` y `SLACK_BOT_TOKEN` del servidor siguen valiendo solo para el equipo más antiguo (o los slugs de `ENV_KEYS_WORKSPACES`, separados por coma).
 - Cambia el esquema (4 columnas nuevas, nulas, en `Workspace`): `db push` las crea sin tocar datos.
 - Pendiente de la fase: almacenamiento S3 con cuota y Slack por OAuth (hoy se pega el token del bot a mano).
+
+## Chat por canales
+- Cada equipo tiene `General` y `Reuniones` (se crean solos la primera vez); los líderes crean más desde el chat. Los mensajes anteriores sin canal cuentan como General. Borrar un canal pasa sus mensajes a General.
+- `/reunion` se guarda en Reuniones; `/noti general`, `/urgente` y `/ayuda`, en General. Todos quedan marcados como avisos.
+- Chat de proyecto: pestaña "Del proyecto" (mensajes que lo mencionan) y "Del equipo" (avisos, solo lectura).
+- Esquema: tabla nueva `ChatChannel` y columnas opcionales `channelId`/`announce` en `ChatMessage` (`db push` sin tocar datos).

@@ -385,6 +385,45 @@ async function main() {
   const hk = await cAOwner.req("PUT", "/api/workspaces/integrations", { slackWebhook: "https://example.com/x" });
   check("webhook de Slack con URL ajena se rechaza", hk.status === 400, `dio ${hk.status}`);
 
+  console.log("9) Canales del chat");
+  const ch1 = await cAOwner.req("GET", "/api/chat/channels");
+  check("A tiene General y Reuniones", ch1.status === 200 && ch1.json.some((c) => c.kind === "GENERAL") && ch1.json.some((c) => c.kind === "REUNIONES"));
+  const chB = (await cBOwner.req("GET", "/api/chat/channels")).json;
+  check("los canales de B son otros", chB.every((c) => !ch1.json.some((x) => x.id === c.id)));
+  const ch2 = await cPlain.req("POST", "/api/chat/channels", { name: "Soporte" });
+  check("un miembro no crea canales", ch2.status === 403, `dio ${ch2.status}`);
+  const ch3 = await cAOwner.req("POST", "/api/chat/channels", { name: "Soporte" });
+  check("el dueño crea un canal", ch3.status === 201, `dio ${ch3.status}`);
+  const ch4 = await cAOwner.req("POST", "/api/chat/channels", { name: "soporte" });
+  check("nombre repetido -> 400", ch4.status === 400, `dio ${ch4.status}`);
+  const ch5 = await cBOwner.req("DELETE", `/api/chat/channels/${ch3.json.id}`);
+  // (Beto también es miembro de A desde la sección 6, así que ahí recibe 403; sin ser miembro sería 404.)
+  check("Beto (dueño de B, solo miembro en A) no borra un canal de A", ch5.status === 403 || ch5.status === 404, `dio ${ch5.status}`);
+  const ch6 = await cPlain.req("DELETE", `/api/chat/channels/${ch3.json.id}`);
+  check("un miembro no borra canales", ch6.status === 403, `dio ${ch6.status}`);
+  const gen = ch1.json.find((c) => c.kind === "GENERAL"), reu = ch1.json.find((c) => c.kind === "REUNIONES");
+  check("no se borra General", (await cAOwner.req("DELETE", `/api/chat/channels/${gen.id}`)).status === 400);
+  const p1 = await cPlain.req("POST", "/api/chat/messages", { body: "hola soporte", channelId: ch3.json.id });
+  check("se puede escribir en un canal propio", p1.status === 201, `dio ${p1.status}`);
+  const p2 = await cPlain.req("POST", "/api/chat/messages", { body: "intruso", channelId: chB[0].id });
+  check("no se escribe en un canal de otro equipo", p2.status === 400, `dio ${p2.status}`);
+  const l1 = await cPlain.req("GET", `/api/chat/messages?channel=${ch3.json.id}`);
+  check("el canal Soporte solo tiene su mensaje", l1.json.messages.length === 1 && l1.json.messages[0].body === "hola soporte");
+  const l2 = await cPlain.req("GET", `/api/chat/messages?channel=${gen.id}`);
+  check("General no incluye los de Soporte, pero sí los anteriores sin canal", !l2.json.messages.some((m) => m.body === "hola soporte") && l2.json.messages.some((m) => m.body.startsWith("Chat secreto A")));
+  const l3 = await cPlain.req("GET", `/api/chat/messages?channel=${chB[0].id}`);
+  check("pedir un canal de otro equipo no devuelve nada", l3.json.messages.length === 0);
+  await cAOwner.req("POST", "/api/chat/command", { body: "/reunion viernes 10:00: retro" });
+  const l4 = await cPlain.req("GET", `/api/chat/messages?channel=${reu.id}`);
+  check("/reunion queda en el canal Reuniones", l4.json.messages.some((m) => m.body.includes("retro")));
+  const l5 = await cPlain.req("GET", `/api/chat/messages?channel=${gen.id}`);
+  check("y no en General", !l5.json.messages.some((m) => m.body.includes("retro")));
+  const l6 = await cPlain.req("GET", "/api/chat/messages?announce=1");
+  check("announce=1 trae los avisos (reunión y urgente) y no los mensajes normales", l6.json.messages.some((m) => m.body.includes("retro")) && l6.json.messages.some((m) => m.level === "URGENTE") && !l6.json.messages.some((m) => m.body === "hola soporte"));
+  const dl = await cAOwner.req("DELETE", `/api/chat/channels/${ch3.json.id}`);
+  const l7 = await cPlain.req("GET", `/api/chat/messages?channel=${gen.id}`);
+  check("al borrar un canal sus mensajes pasan a General", dl.status === 200 && l7.json.messages.some((m) => m.body === "hola soporte"));
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);
