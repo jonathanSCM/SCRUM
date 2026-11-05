@@ -14,9 +14,10 @@ const LINKS = [
   { href: "/projects", label: "Proyectos" },
   { href: "/my-work", label: "Mi trabajo" },
   { href: "/chat", label: "Chat" },
+  { href: "/people", label: "Personas" },
 ];
 
-export default function Navbar({ userName, isLead }: { userName: string; isLead: boolean }) {
+export default function Navbar({ userName, userId, isLead }: { userName: string; userId: string; isLead: boolean }) {
   const pathname = usePathname();
   const links = isLead ? [...LINKS, { href: "/settings/team", label: "Equipo" }] : LINKS;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -76,7 +77,7 @@ export default function Navbar({ userName, isLead }: { userName: string; isLead:
             <ThemeToggle />
             <div className="relative" ref={menuRef}>
               <button onClick={() => setMenuOpen((v) => !v)} aria-haspopup="menu" aria-expanded={menuOpen} aria-label="Menú de usuario" className="flex items-center gap-2">
-                <Avatar name={userName} size={32} />
+                <Avatar name={userName} userId={userId} size={32} />
               </button>
               <AnimatePresence>
                 {menuOpen && (
@@ -89,8 +90,11 @@ export default function Navbar({ userName, isLead }: { userName: string; isLead:
                     transition={{ type: "spring", stiffness: 500, damping: 32 }}
                   >
                     <p className="truncate border-b border-line-strong px-3 py-2 text-xs font-bold text-ink-faint">{userName}</p>
+                    <Link href={`/people/${userId}`} onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
+                      Mi perfil público
+                    </Link>
                     <Link href="/settings/profile" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
-                      Mi perfil
+                      Editar perfil
                     </Link>
                     {isLead && (
                       <Link href="/settings/statuses" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">

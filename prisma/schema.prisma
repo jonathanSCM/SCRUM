@@ -30,6 +30,7 @@ model User {
   createdAt           DateTime  @default(now())
   discordUserId       String?
   chatColor           String? // color propio en el chat (#RRGGBB)
+  tagline             String? // frase corta del perfil público
   telegramUsername    String?
   slackUserId         String?
 
@@ -47,6 +48,7 @@ model User {
   chatMessages        ChatMessage[]
   chatReactions       ChatReaction[]
   apiToken            ApiToken?
+  images              UserImage[]
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
 }
@@ -481,4 +483,18 @@ model ApiTokenLog {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+// Foto de perfil y banner (ya reducidos y recodificados a WebP). Una fila por tipo.
+model UserImage {
+  id        String   @id @default(cuid())
+  kind      String // AVATAR | BANNER
+  mimeType  String
+  data      Bytes
+  updatedAt DateTime @default(now()) @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind])
 }

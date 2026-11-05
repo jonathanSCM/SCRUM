@@ -331,7 +331,7 @@ function DrawerBody({
 
           <Field label="Encargado">
             <div className="flex items-center gap-2">
-              <Avatar name={issue.assignee?.name} size={22} />
+              <Avatar name={issue.assignee?.name} userId={issue.assignee?.id} size={22} />
               <select className="field field-sm flex-1" value={issue.assigneeUserId ?? ""} onChange={(e) => patch({ assigneeUserId: e.target.value || null })}>
                 <option value="">Sin asignar</option>
                 {data.options.members.map((m) => (
@@ -348,7 +348,7 @@ function DrawerBody({
 
           <Field label="Reportado por">
             <div className="flex items-center gap-2 text-sm text-ink-soft">
-              <Avatar name={issue.reporter?.name} size={22} />
+              <Avatar name={issue.reporter?.name} userId={issue.reporter?.id} size={22} />
               {issue.reporter?.name ?? "—"}
             </div>
           </Field>
@@ -840,7 +840,7 @@ function Comments({
           const mine = c.author?.id === currentUserId || currentUserRole === "LEAD";
           return (
             <li key={c.id} className="flex gap-3">
-              <Avatar name={c.author?.name} size={28} />
+              <Avatar name={c.author?.name} userId={c.author?.id} size={28} />
               <div className="min-w-0 flex-1">
                 <p className="text-xs">
                   <span className="font-bold text-ink">{c.author?.name ?? "Usuario eliminado"}</span>{" "}

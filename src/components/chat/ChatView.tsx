@@ -481,7 +481,7 @@ function MessageRow({
   return (
     <li id={`msg-${m.id}`} className={cn("group flex items-end gap-2 rounded-xl px-1 py-0.5 transition-colors", mine && "flex-row-reverse", grouped ? "pt-0" : "pt-1.5", highlighted && "bg-surface/70")}>
       {/* Avatar solo en el primer mensaje de cada tanda y solo de los demás */}
-      {!mine && (grouped ? <span className="w-[30px] shrink-0" /> : <Avatar name={m.author?.name} size={30} color={color} />)}
+      {!mine && (grouped ? <span className="w-[30px] shrink-0" /> : <Link href={m.author ? `/people/${m.author.id}` : "#"} aria-label={`Perfil de ${m.author?.name ?? "usuario"}`}><Avatar name={m.author?.name} userId={m.author?.id} size={30} color={color} /></Link>)}
 
       <div className={cn("flex min-w-0 max-w-[82%] flex-col sm:max-w-[72%]", mine ? "items-end" : "items-start")}>
         <div
@@ -492,7 +492,7 @@ function MessageRow({
         >
           {!mine && !grouped && (
             <p className="mb-0.5 text-xs font-bold" style={{ color: accent }}>
-              {m.author?.name ?? "Usuario eliminado"}
+              {m.author ? <Link href={`/people/${m.author.id}`} className="hover:underline">{m.author.name}</Link> : "Usuario eliminado"}
             </p>
           )}
 
