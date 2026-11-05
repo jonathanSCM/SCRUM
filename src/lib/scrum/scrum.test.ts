@@ -14,6 +14,7 @@ import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTi
 import { isValidDateString, shiftDate, missingStandups, summarizeReview, localDateString } from "./ceremonies";
 import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from "./checklist";
 import { buildPushPayload } from "../push";
+import { snippetOf, parseRefs, splitMessage, applyInsertedRefs, makeToken, isValidChatColor, plainText } from "./chat";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
 
 describe("issueKey", () => {
@@ -401,5 +402,39 @@ describe("push", () => {
     expect(p.body.length).toBeLessThanOrEqual(160);
     expect(p.url).toBe("/projects/p/board");
     expect(buildPushPayload({ title: "t", description: "d", url: "https://x/y" }, "/z").url).toBe("https://x/y");
+  });
+});
+
+describe("chat general", () => {
+  const pid = "cmw2qzmlb00027dc301ldwwwj";
+  it("encuentra las referencias sin repetir", () => {
+    const body = `mirá ${makeToken("project", pid)} y ${makeToken("issue", "abcdefgh12")} otra vez ${makeToken("project", pid)}`;
+    expect(parseRefs(body)).toEqual([{ kind: "project", id: pid }, { kind: "issue", id: "abcdefgh12" }]);
+    expect(parseRefs("[[project:x]] [[foo:abcdefgh12]]")).toEqual([]);
+  });
+  it("parte el mensaje en texto, chapitas y enlaces (solo http/https)", () => {
+    const segs = splitMessage(`hola ${makeToken("sprint", "abcdefgh12")} ver https://proshop.lat/a?b=1, o javascript:alert(1)`);
+    expect(segs.map((x) => x.type)).toEqual(["text", "ref", "text", "link", "text"]);
+    const link = segs.find((x) => x.type === "link");
+    expect(link && link.type === "link" && link.href).toBe("https://proshop.lat/a?b=1");
+    expect(splitMessage("javascript:alert(1)").every((x) => x.type === "text")).toBe(true);
+  });
+  it("reemplaza lo insertado por su marca", () => {
+    const t = makeToken("issue", "abcdefgh12");
+    expect(applyInsertedRefs("mirá #SAI-2 Pantalla ya", [{ text: "#SAI-2 Pantalla", token: t }])).toBe(`mirá ${t} ya`);
+  });
+  it("texto plano y colores", () => {
+    expect(plainText(`hola ${makeToken("user", "abcdefgh12")}`, () => "@Ana")).toBe("hola @Ana");
+    expect(isValidChatColor("#6d28d9")).toBe(true);
+    expect(isValidChatColor("red")).toBe(false);
+  });
+});
+
+describe("respuestas del chat", () => {
+  it("arma el resumen citado", () => {
+    expect(snippetOf("hola   mundo", false)).toBe("hola mundo");
+    expect(snippetOf("", true)).toBe("Archivo adjunto");
+    expect(snippetOf(`mirá ${makeToken("issue", "abcdefgh12")}`, false)).toBe("mirá [ticket]");
+    expect(snippetOf("x".repeat(300), false).length).toBe(110);
   });
 });

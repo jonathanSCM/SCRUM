@@ -29,6 +29,7 @@ model User {
   lockedUntil         DateTime?
   createdAt           DateTime  @default(now())
   discordUserId       String?
+  chatColor           String? // color propio en el chat (#RRGGBB)
   telegramUsername    String?
   slackUserId         String?
 
@@ -43,6 +44,9 @@ model User {
   standups            StandupEntry[]
   retroItems          RetroItem[]
   pushSubscriptions   PushSubscription[]
+  chatMessages        ChatMessage[]
+  chatReactions       ChatReaction[]
+  chatFiles           ChatFile[]
 }
 
 model PasswordResetToken {
@@ -110,6 +114,7 @@ model Project {
   history     HistoryEntry[]
   notes       Note[]
   messages    ProjectMessage[]
+  chatRefs    ChatRef[]
   standups    StandupEntry[]
   retroItems  RetroItem[]
   contacts    ProjectContact[]
@@ -281,7 +286,8 @@ model Note {
   @@index([projectId, updatedAt])
 }
 
-// Chat del equipo dentro de cada proyecto.
+// Chat por proyecto (v anterior). Ya no se usa: sus mensajes se copian al chat
+// general (ChatMessage.legacyId) y la tabla se conserva hasta una release de limpieza.
 model ProjectMessage {
   id        String   @id @default(cuid())
   body      String
@@ -363,4 +369,79 @@ model PushSubscription {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// Chat general del equipo. El texto lleva marcas [[project:id]] / [[issue:id]] /
+// [[sprint:id]] / [[user:id]] que se muestran como chapitas con enlace.
+model ChatMessage {
+  id        String   @id @default(cuid())
+  body      String
+  legacyId  String?  @unique // id del ProjectMessage del que se copió
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt // cambia con reacciones y borrados (el chat se sincroniza por acá)
+  deletedAt DateTime? // borrado "suave": queda "Mensaje eliminado", como en WhatsApp
+
+  // Respuesta a otro mensaje
+  replyToId String?
+  replyTo   ChatMessage?  @relation("ChatReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   ChatMessage[] @relation("ChatReplies")
+
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  refs      ChatRef[]
+  files     ChatFile[]
+  reactions ChatReaction[]
+
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+// Referencia dentro de un mensaje. projectId permite filtrar el chat por proyecto.
+model ChatRef {
+  id       String @id @default(cuid())
+  kind     String // PROJECT | ISSUE | SPRINT | USER
+  targetId String
+
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([projectId])
+}
+
+// Archivo adjunto de un mensaje del chat. Hoy vive en la base (ver src/lib/fileStore.ts).
+model ChatFile {
+  id        String   @id @default(cuid())
+  filename  String
+  mimeType  String
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  messageId String?
+  message   ChatMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([messageId])
+}
+
+// Reacción con emoji a un mensaje (una por persona y emoji).
+model ChatReaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  createdAt DateTime @default(now())
+
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
 }

@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/home", label: "Inicio" },
   { href: "/projects", label: "Proyectos" },
   { href: "/my-work", label: "Mi trabajo" },
+  { href: "/chat", label: "Chat" },
 ];
 
 export default function Navbar({ userName, isLead }: { userName: string; isLead: boolean }) {

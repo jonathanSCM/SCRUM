@@ -1,6 +1,6 @@
 import { colorForName, initials } from "@/lib/ui";
 
-export default function Avatar({ name, size = 24, title }: { name: string | null | undefined; size?: number; title?: string }) {
+export default function Avatar({ name, size = 24, title, color }: { name: string | null | undefined; size?: number; title?: string; color?: string | null }) {
   if (!name) {
     return (
       <span
@@ -15,8 +15,8 @@ export default function Avatar({ name, size = 24, title }: { name: string | null
   return (
     <span
       title={title ?? name}
-      className="inline-flex shrink-0 select-none items-center justify-center rounded-full font-bold text-[#1b1730]"
-      style={{ width: size, height: size, background: colorForName(name), fontSize: size * 0.4 }}
+      className={`inline-flex shrink-0 select-none items-center justify-center rounded-full font-bold ${color ? "text-white" : "text-[#1b1730]"}`}
+      style={{ width: size, height: size, background: color ?? colorForName(name), fontSize: size * 0.4 }}
     >
       {initials(name)}
     </span>
