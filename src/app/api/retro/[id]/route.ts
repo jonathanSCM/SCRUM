@@ -4,7 +4,7 @@ import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ retro: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

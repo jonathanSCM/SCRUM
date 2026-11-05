@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Avatar from "@/components/ui/Avatar";
+import { roleBadge } from "@/lib/scrum/roles";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/ui/Toaster";
 
-type Person = { id: string; name: string; role: string; tagline: string | null; chatColor: string | null; open: number; doneWeek: number; email: string | null };
+type Person = { id: string; name: string; wsRole: "OWNER" | "ADMIN" | "MEMBER"; tagline: string | null; chatColor: string | null; open: number; doneWeek: number; email: string | null };
 
-export default function PeopleDirectory({ people: initial, currentUserId, isLead }: { people: Person[]; currentUserId: string; isLead: boolean }) {
+export default function PeopleDirectory({ people: initial, workspaceName, currentUserId, isLead }: { people: Person[]; workspaceName: string; currentUserId: string; isLead: boolean }) {
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
@@ -102,8 +103,9 @@ export default function PeopleDirectory({ people: initial, currentUserId, isLead
                   {p.name}
                   {p.id === currentUserId && <span className="ml-1.5 text-xs font-medium text-ink-faint">(vos)</span>}
                 </p>
-                <p className="truncate text-xs text-ink-soft">{p.tagline || (p.role === "LEAD" ? "Líder" : "Miembro")}</p>
-                {isLead && p.email && <p className="truncate font-mono text-[11px] text-ink-faint">{p.email}{p.tagline ? ` · ${p.role === "LEAD" ? "Líder" : "Miembro"}` : ""}</p>}
+                <p className="truncate text-xs text-ink-soft">{p.tagline}</p>
+                <p className="mt-0.5"><span className={`lozenge ${p.wsRole === "OWNER" ? "text-rust" : "text-ink-soft"}`}>{roleBadge(p.wsRole, workspaceName)}</span></p>
+                {isLead && p.email && <p className="truncate font-mono text-[11px] text-ink-faint">{p.email}</p>}
                 <p className="mt-1 font-mono text-[11px] text-ink-faint">{p.open} abiertos · {p.doneWeek} terminados esta semana</p>
               </div>
             </Link>

@@ -6,7 +6,7 @@ import NotesView, { type NoteRow } from "./NotesView";
 export default async function NotesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireSession();
-  await getProjectOrNotFound(id);
+  const project = await getProjectOrNotFound(id);
 
   const notes = await prisma.note.findMany({
     where: { projectId: id },
@@ -25,5 +25,5 @@ export default async function NotesPage({ params }: { params: Promise<{ id: stri
     author: n.author,
   }));
 
-  return <NotesView projectId={id} notes={rows} currentUserId={session.user.id} isLead={session.user.role === "LEAD"} />;
+  return <NotesView projectId={id} notes={rows} currentUserId={session.user.id} isLead={project.access.isLead} />;
 }

@@ -8,7 +8,7 @@ import { logHistory } from "@/lib/history";
 // Solo un líder configura Slack. La URL del webhook funciona como una
 // contraseña: nunca se devuelve completa.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser({ lead: true });
+  const auth = await apiUser({ lead: true, project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

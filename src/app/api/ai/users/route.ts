@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { membersOf } from "@/lib/workspace";
 import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 
 export async function GET() {
-  const auth = await apiUser();
+  const auth = await apiUser({ workspace: true });
   if ("error" in auth) return auth.error;
   try {
-    const users = await prisma.user.findMany({ select: { id: true, name: true, email: true }, orderBy: { name: "asc" } });
-    return NextResponse.json(users);
+    const members = await membersOf(auth.user.workspaceId!);
+    return NextResponse.json(members.map(({ id, name, email }) => ({ id, name, email })));
   } catch (e) {
     return errorResponse(e);
   }

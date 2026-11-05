@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { migrateLegacy } from "./legacy-migrate";
+import { migrateWorkspaces } from "./workspace-migrate";
 
 const prisma = new PrismaClient();
 
@@ -39,6 +40,10 @@ async function main() {
 
   const copied = await migrateProjectMessages();
   if (copied > 0) console.log(`Chat: ${copied} mensajes de proyectos copiados al chat general.`);
+
+  const wsReport = await migrateWorkspaces(prisma);
+  const wsChanges = Object.entries(wsReport).map(([k, v]) => `${k}=${v}`);
+  if (wsChanges.length) console.log(`Equipos: ${wsChanges.join(", ")}`);
 
   const userCount = await prisma.user.count();
   if (userCount === 0) console.log("No hay usuarios todavía: entrá a /register para crear el primer admin.");

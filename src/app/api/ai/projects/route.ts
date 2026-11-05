@@ -4,10 +4,11 @@ import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 
 export async function GET() {
-  const auth = await apiUser();
+  const auth = await apiUser({ workspace: true });
   if ("error" in auth) return auth.error;
   try {
     const projects = await prisma.project.findMany({
+      where: { workspaceId: auth.user.workspaceId! },
       orderBy: { name: "asc" },
       select: { id: true, key: true, name: true, description: true, deployUrl: true, status: { select: { id: true, name: true } }, lead: { select: { name: true } }, _count: { select: { tasks: true } } },
     });

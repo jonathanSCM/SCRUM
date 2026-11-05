@@ -9,7 +9,7 @@ import { sendPush } from "@/lib/push";
 
 // ?after=<ISO> devuelve solo los nuevos; ?project=<id> solo los que mencionan ese proyecto.
 export async function GET(req: Request) {
-  const auth = await apiUser();
+  const auth = await apiUser({ workspace: true });
   if ("error" in auth) return auth.error;
   const url = new URL(req.url);
   const after = url.searchParams.get("after");
@@ -17,10 +17,14 @@ export async function GET(req: Request) {
 
   try {
     const valid = afterDate && !Number.isNaN(afterDate.getTime()) ? afterDate : null;
-    const messages = await loadMessages({ after: valid, projectId: url.searchParams.get("project") });
+    const workspaceId = auth.user.workspaceId!;
+    // Si piden un proyecto, tiene que ser de este equipo.
+    const projectParam = url.searchParams.get("project");
+    if (projectParam && !(await prisma.project.findFirst({ where: { id: projectParam, workspaceId }, select: { id: true } }))) return NextResponse.json({ messages: [], deleted: [] });
+    const messages = await loadMessages({ workspaceId, after: valid, projectId: projectParam });
     // Mensajes borrados desde ese momento (con margen por si los relojes no coinciden al milisegundo).
     const deleted = valid
-      ? (await prisma.chatDeletion.findMany({ where: { deletedAt: { gt: new Date(valid.getTime() - 10_000) } }, select: { messageId: true } })).map((d) => d.messageId)
+      ? (await prisma.chatDeletion.findMany({ where: { workspaceId, deletedAt: { gt: new Date(valid.getTime() - 10_000) } }, select: { messageId: true } })).map((d) => d.messageId)
       : [];
     return NextResponse.json({ messages, deleted });
   } catch (e) {
@@ -29,7 +33,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const auth = await apiUser();
+  const auth = await apiUser({ workspace: true });
   if ("error" in auth) return auth.error;
   const parsed = parseBody(chatMessageSchema, await readJson(req));
   if ("error" in parsed) return parsed.error;
@@ -39,18 +43,19 @@ export async function POST(req: Request) {
   try {
     // Solo se conservan las referencias que existen; cada una guarda su proyecto para poder filtrar.
     const wanted = parseRefs(body);
-    const resolved = await resolveRefs(wanted.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id })));
+    const workspaceId = auth.user.workspaceId!;
+    const resolved = await resolveRefs(wanted.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id })), workspaceId);
     const found = wanted.filter((r) => resolved.has(`${r.kind.toUpperCase()}:${r.id}`));
 
     const [issues, sprints] = await Promise.all([
-      prisma.task.findMany({ where: { id: { in: found.filter((r) => r.kind === "issue").map((r) => r.id) } }, select: { id: true, projectId: true } }),
-      prisma.sprint.findMany({ where: { id: { in: found.filter((r) => r.kind === "sprint").map((r) => r.id) } }, select: { id: true, projectId: true } }),
+      prisma.task.findMany({ where: { id: { in: found.filter((r) => r.kind === "issue").map((r) => r.id) }, project: { workspaceId } }, select: { id: true, projectId: true } }),
+      prisma.sprint.findMany({ where: { id: { in: found.filter((r) => r.kind === "sprint").map((r) => r.id) }, project: { workspaceId } }, select: { id: true, projectId: true } }),
     ]);
     const projectOf = (kind: string, id: string): string | null =>
       kind === "project" ? id : kind === "issue" ? issues.find((i) => i.id === id)?.projectId ?? null : kind === "sprint" ? sprints.find((s) => s.id === id)?.projectId ?? null : null;
 
     if (replyToId) {
-      const original = await prisma.chatMessage.findUnique({ where: { id: replyToId }, select: { id: true } });
+      const original = await prisma.chatMessage.findFirst({ where: { id: replyToId, workspaceId }, select: { id: true } });
       if (!original) return NextResponse.json({ error: "El mensaje al que respondés ya no existe" }, { status: 400 });
     }
 
@@ -58,6 +63,7 @@ export async function POST(req: Request) {
       const created = await tx.chatMessage.create({
         data: {
           body,
+          workspaceId,
           authorId: auth.user.id,
           replyToId,
           refs: { create: found.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id, projectId: projectOf(r.kind, r.id) })) },
@@ -65,12 +71,12 @@ export async function POST(req: Request) {
       });
       if (fileIds.length) {
         // Solo archivos que subió esta persona y que todavía no están en ningún mensaje.
-        await tx.chatFile.updateMany({ where: { id: { in: fileIds }, uploadedById: auth.user.id, messageId: null }, data: { messageId: created.id } });
+        await tx.chatFile.updateMany({ where: { id: { in: fileIds }, uploadedById: auth.user.id, workspaceId, messageId: null }, data: { messageId: created.id } });
       }
       return tx.chatMessage.findUniqueOrThrow({ where: { id: created.id }, include: messageInclude });
     });
 
-    const [dto] = await toDTOs([message]);
+    const [dto] = await toDTOs([message], workspaceId);
 
     // Aviso del navegador a las personas mencionadas.
     const mentioned = found.filter((r) => r.kind === "user" && r.id !== auth.user.id).map((r) => r.id);

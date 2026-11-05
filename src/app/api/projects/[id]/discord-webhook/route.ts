@@ -9,7 +9,7 @@ import { logHistory } from "@/lib/history";
 // contraseña (cualquiera con ella puede escribir en el canal), así que nunca
 // se devuelve completa: solo si hay una guardada y cómo termina.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser({ lead: true });
+  const auth = await apiUser({ lead: true, project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

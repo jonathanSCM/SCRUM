@@ -14,6 +14,7 @@ import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTi
 import { isValidDateString, shiftDate, missingStandups, summarizeReview, localDateString } from "./ceremonies";
 import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from "./checklist";
 import { buildPushPayload } from "../push";
+import { toLegacyRole, roleBadge, normalizeRole, migratedRole, canRemoveOrDemote, slugify, uniqueSlug } from "./roles";
 import { weekWindow, compareLabel, mergeProjectActivity, WEEK_MS } from "./weekly";
 import { isAllowedForToken } from "../aiAccess";
 import { importSchema, countIssues, matchMember, issueKeyOf } from "./aiImport";
@@ -501,5 +502,39 @@ describe("perfil público: resumen semanal", () => {
     expect(rows.map((r) => r.projectId)).toEqual(["b", "a", "c"]);
     expect(rows[0]).toMatchObject({ projectId: "b", open: 1, completed: 3 });
     expect(mergeProjectActivity([new Map([["x", 0]])], ["open"])).toEqual([]);
+  });
+});
+
+describe("roles por equipo", () => {
+  it("mapea al rol que usa el resto de la app", () => {
+    expect(toLegacyRole("OWNER")).toBe("LEAD");
+    expect(toLegacyRole("ADMIN")).toBe("LEAD");
+    expect(toLegacyRole("MEMBER")).toBe("MEMBER");
+  });
+  it("arma la marca de rol", () => {
+    expect(roleBadge("OWNER", "ProShop")).toBe("DUEÑO DE ProShop");
+    expect(roleBadge("ADMIN", "Acme")).toBe("ADMIN DE Acme");
+    expect(roleBadge("MEMBER", "Acme")).toBe("MIEMBRO DE Acme");
+  });
+  it("ante un rol raro, el de menos permisos", () => {
+    expect(normalizeRole("OWNER")).toBe("OWNER");
+    expect(normalizeRole("superadmin")).toBe("MEMBER");
+    expect(normalizeRole(null)).toBe("MEMBER");
+  });
+  it("migra los roles antiguos", () => {
+    expect(migratedRole("LEAD", true)).toBe("OWNER");
+    expect(migratedRole("LEAD", false)).toBe("ADMIN");
+    expect(migratedRole("MEMBER", false)).toBe("MEMBER");
+  });
+  it("no deja un equipo sin dueño", () => {
+    expect(canRemoveOrDemote(1, "OWNER")).toBe(false);
+    expect(canRemoveOrDemote(2, "OWNER")).toBe(true);
+    expect(canRemoveOrDemote(1, "ADMIN")).toBe(true);
+  });
+  it("genera slugs únicos", () => {
+    expect(slugify("Mi Equipo Ñandú!")).toBe("mi-equipo-nandu");
+    expect(slugify("¡¡¡")).toBe("equipo");
+    expect(uniqueSlug("ProShop", ["proshop"])).toBe("proshop-2");
+    expect(uniqueSlug("ProShop", ["proshop", "proshop-2"])).toBe("proshop-3");
   });
 });

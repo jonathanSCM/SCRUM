@@ -6,7 +6,7 @@ import { putChatFile } from "@/lib/fileStore";
 
 // Sube un archivo para adjuntarlo a un mensaje (se enlaza al enviar el mensaje).
 export async function POST(req: Request) {
-  const auth = await apiUser();
+  const auth = await apiUser({ workspace: true });
   if ("error" in auth) return auth.error;
 
   try {
@@ -23,6 +23,7 @@ export async function POST(req: Request) {
       size: file.size,
       data: new Uint8Array(await file.arrayBuffer()),
       uploadedById: auth.user.id,
+      workspaceId: auth.user.workspaceId!,
     });
     return NextResponse.json({ id, filename: file.name.slice(0, 200) || "archivo", mimeType: file.type || "application/octet-stream", size: file.size }, { status: 201 });
   } catch (e) {

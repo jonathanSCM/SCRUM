@@ -8,7 +8,7 @@ import { parseStringList } from "@/lib/scrum/ready";
 // Todo lo que hay que saber de un proyecto para trabajar sobre él: sprints, épicas,
 // historias y tickets con su estado, responsable y jerarquía; DoR y estados disponibles.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ project: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
   try {
@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         orderBy: { number: "asc" },
         include: { assignee: { select: { name: true } }, sprint: { select: { name: true } }, epic: { select: { number: true } }, parent: { select: { number: true } } },
       }),
-      prisma.statusOption.findMany({ orderBy: { order: "asc" }, select: { id: true, name: true } }),
+      prisma.statusOption.findMany({ where: { workspaceId: project.workspaceId }, orderBy: { order: "asc" }, select: { id: true, name: true } }),
     ]);
     const key = (n: number | null) => formatIssueKey(project.key, n);
     return NextResponse.json({

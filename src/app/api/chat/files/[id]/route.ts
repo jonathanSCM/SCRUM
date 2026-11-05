@@ -7,7 +7,7 @@ import { getChatFile } from "@/lib/fileStore";
 const INLINE_TYPES = /^(image\/(png|jpe?g|gif|webp)|application\/pdf)$/;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ chatFile: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

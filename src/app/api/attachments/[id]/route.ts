@@ -7,7 +7,7 @@ import { logHistory } from "@/lib/history";
 const INLINE_TYPES = /^(image\/(png|jpe?g|gif|webp)|application\/pdf|text\/plain)$/;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ attachment: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
@@ -32,7 +32,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ attachment: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

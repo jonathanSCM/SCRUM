@@ -200,3 +200,19 @@ Consecuencias en el plan:
 
 ## 9. Primer paso propuesto
 Empezar por la **Fase 1** en una rama aparte, con la migración probada sobre una copia de los datos y las pruebas de aislamiento corriendo antes de unir nada a `main`. Nada de la Fase 2 en adelante se construye hasta que la Fase 1 pase todas las pruebas.
+
+## 10. Estado de la Fase 1 (cimientos)
+
+Hecho en la rama `claude/pensive-goldberg-pnp76p` (aún sin unir a `main`):
+- [x] Modelos `Workspace` y `Membership`; `workspaceId` en `Project`, `StatusOption`, `ChatMessage`, `ChatFile`, `ChatDeletion` y `ApiToken`; `Project.key` único por equipo.
+- [x] Migración idempotente del equipo actual a "ProShop" (dueño = `OWNER_EMAIL` o el líder más antiguo), probada sobre una copia de datos reales de prueba.
+- [x] Capa de acceso única: `apiUser({ project: id })` y equivalentes (`issue`, `sprint`, `note`, `chatMessage`…), `requireWorkspace()` y `requireAccessTo()` para páginas. Respuesta 404 ante recursos de otro equipo.
+- [x] Las 63 rutas de la API y las páginas pasan por esa capa; todas las listas de personas, proyectos, estados, chat y búsqueda se filtran por equipo; responsables, encargados y estados deben ser del mismo equipo.
+- [x] Rol por equipo (el de `User.role` queda solo como dato antiguo). Marca de rol en Equipo y perfiles.
+- [x] Token IA acotado a su equipo.
+- [x] Guardia en `npm test` y suite `scripts/isolation-test.mjs` (78 comprobaciones; se verificó que detecta fugas rompiendo el aislamiento a propósito: 15 fallas).
+
+Pendiente de la Fase 1 antes de unir a `main`:
+- [ ] Correr la suite de aislamiento contra PostgreSQL (aquí solo hubo SQLite).
+- [ ] Probar la migración sobre una copia de la base de producción.
+- [ ] Limitación conocida hasta la Fase 2: el equipo activo sale de una cookie y, si no hay, del equipo más antiguo de la persona. Con un solo equipo en producción es transparente. En la Fase 2 pasa a la dirección web (`/t/<slug>/…`) con selector de equipo.

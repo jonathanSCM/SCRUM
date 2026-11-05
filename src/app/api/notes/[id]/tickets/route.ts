@@ -9,7 +9,7 @@ import { logHistory } from "@/lib/history";
 
 // Convierte puntos de una nota (acta de reunión, brief) en tareas del backlog.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ note: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

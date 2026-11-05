@@ -5,7 +5,7 @@ import { deleteIssue, updateIssue } from "@/lib/issues";
 import { parseBody, readJson, updateIssueSchema } from "@/lib/validation";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ issue: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
@@ -21,7 +21,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ issue: (await params).id });
   if ("error" in auth) return auth.error;
   const { id } = await params;
 

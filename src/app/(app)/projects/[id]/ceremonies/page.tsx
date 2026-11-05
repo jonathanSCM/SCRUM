@@ -41,7 +41,7 @@ export default async function CeremoniesPage({ params, searchParams }: { params:
       sprints={sprints.map((s) => ({ id: s.id, name: s.name, state: s.state }))}
       selectedSprintId={selected?.id ?? null}
       currentUserId={session.user.id}
-      isLead={session.user.role === "LEAD"}
+      isLead={project.access.isLead}
       review={review}
       retro={retro.map((r) => ({ id: r.id, column: r.column, body: r.body, ticketKey: r.ticketKey, author: r.author }))}
       actas={actas.map((n) => ({ id: n.id, title: n.title, body: n.body, kind: n.kind, createdAt: n.createdAt.toISOString(), author: n.author?.name ?? null }))}

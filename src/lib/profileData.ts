@@ -2,13 +2,17 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { mergeProjectActivity, weekWindow } from "@/lib/scrum/weekly";
+import { normalizeRole } from "@/lib/scrum/roles";
 
 // Datos del perfil público: quién es y qué hizo esta semana. Solo trabajo en tickets,
 // notas y dailys: NO se cuenta el chat ni cuánto escribe cada persona.
 
 const count = (rows: Array<{ projectId: string; _count: { _all: number } }>) => new Map(rows.map((r) => [r.projectId, r._count._all]));
 
-export async function getProfile(userId: string) {
+export async function getProfile(userId: string, workspaceId: string) {
+  // Solo se muestra a alguien si es parte del equipo desde el que se mira.
+  const member = await prisma.membership.findUnique({ where: { userId_workspaceId: { userId, workspaceId } }, select: { id: true } });
+  if (!member) return null;
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, name: true, role: true, tagline: true, chatColor: true, createdAt: true, images: { select: { kind: true } } },
@@ -16,7 +20,8 @@ export async function getProfile(userId: string) {
   if (!user) return null;
 
   const { since, prevSince, sinceDay, prevSinceDay } = weekWindow();
-  const real = { issueType: { not: "EPIC" } };
+  const inWs = { project: { workspaceId } };
+  const real = { issueType: { not: "EPIC" }, ...inWs };
   const mine = { assigneeUserId: userId, ...real };
 
   const [done, doneBefore, created, createdBefore, comments, commentsBefore, notesWeek, notesBefore, dailys, dailysBefore, inProgress, openByProject, doneByProject, createdByProject, notesByProject] = await Promise.all([
@@ -29,12 +34,12 @@ export async function getProfile(userId: string) {
     prisma.task.count({ where: { ...mine, status: "DONE", completedAt: { gte: prevSince, lt: since } } }),
     prisma.task.count({ where: { reporterId: userId, ...real, createdAt: { gte: since } } }),
     prisma.task.count({ where: { reporterId: userId, ...real, createdAt: { gte: prevSince, lt: since } } }),
-    prisma.comment.count({ where: { authorId: userId, createdAt: { gte: since } } }),
-    prisma.comment.count({ where: { authorId: userId, createdAt: { gte: prevSince, lt: since } } }),
-    prisma.note.count({ where: { authorId: userId, createdAt: { gte: since } } }),
-    prisma.note.count({ where: { authorId: userId, createdAt: { gte: prevSince, lt: since } } }),
-    prisma.standupEntry.count({ where: { userId, date: { gte: sinceDay } } }),
-    prisma.standupEntry.count({ where: { userId, date: { gte: prevSinceDay, lt: sinceDay } } }),
+    prisma.comment.count({ where: { authorId: userId, task: inWs, createdAt: { gte: since } } }),
+    prisma.comment.count({ where: { authorId: userId, task: inWs, createdAt: { gte: prevSince, lt: since } } }),
+    prisma.note.count({ where: { authorId: userId, ...inWs, createdAt: { gte: since } } }),
+    prisma.note.count({ where: { authorId: userId, ...inWs, createdAt: { gte: prevSince, lt: since } } }),
+    prisma.standupEntry.count({ where: { userId, ...inWs, date: { gte: sinceDay } } }),
+    prisma.standupEntry.count({ where: { userId, ...inWs, date: { gte: prevSinceDay, lt: sinceDay } } }),
     prisma.task.findMany({
       where: { ...mine, status: { in: ["IN_PROGRESS", "IN_REVIEW"] } },
       orderBy: { updatedAt: "desc" },
@@ -44,7 +49,7 @@ export async function getProfile(userId: string) {
     prisma.task.groupBy({ by: ["projectId"], where: { ...mine, status: { not: "DONE" } }, _count: { _all: true } }),
     prisma.task.groupBy({ by: ["projectId"], where: { ...mine, status: "DONE", completedAt: { gte: since } }, _count: { _all: true } }),
     prisma.task.groupBy({ by: ["projectId"], where: { reporterId: userId, ...real, createdAt: { gte: since } }, _count: { _all: true } }),
-    prisma.note.groupBy({ by: ["projectId"], where: { authorId: userId, createdAt: { gte: since } }, _count: { _all: true } }),
+    prisma.note.groupBy({ by: ["projectId"], where: { authorId: userId, ...inWs, createdAt: { gte: since } }, _count: { _all: true } }),
   ]);
 
   const activity = mergeProjectActivity([count(openByProject), count(doneByProject), count(createdByProject), count(notesByProject)], ["open", "completed", "created", "notes"]);
@@ -86,17 +91,28 @@ export async function getProfile(userId: string) {
   };
 }
 
-export async function getPeople(options: { withEmail?: boolean } = {}) {
-  const users = await prisma.user.findMany({
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, role: true, tagline: true, chatColor: true, ...(options.withEmail ? { email: true } : {}) },
+export async function getPeople(workspaceId: string, options: { withEmail?: boolean } = {}) {
+  const rows = await prisma.membership.findMany({
+    where: { workspaceId },
+    orderBy: { user: { name: "asc" } },
+    select: { role: true, user: { select: { id: true, name: true, tagline: true, chatColor: true, ...(options.withEmail ? { email: true } : {}) } } },
   });
   const since = weekWindow().since;
+  const inWs = { project: { workspaceId } };
   const [open, done] = await Promise.all([
-    prisma.task.groupBy({ by: ["assigneeUserId"], where: { assigneeUserId: { not: null }, issueType: { not: "EPIC" }, status: { not: "DONE" } }, _count: { _all: true } }),
-    prisma.task.groupBy({ by: ["assigneeUserId"], where: { assigneeUserId: { not: null }, issueType: { not: "EPIC" }, status: "DONE", completedAt: { gte: since } }, _count: { _all: true } }),
+    prisma.task.groupBy({ by: ["assigneeUserId"], where: { ...inWs, assigneeUserId: { not: null }, issueType: { not: "EPIC" }, status: { not: "DONE" } }, _count: { _all: true } }),
+    prisma.task.groupBy({ by: ["assigneeUserId"], where: { ...inWs, assigneeUserId: { not: null }, issueType: { not: "EPIC" }, status: "DONE", completedAt: { gte: since } }, _count: { _all: true } }),
   ]);
   const o = new Map(open.map((r) => [r.assigneeUserId, r._count._all]));
   const d = new Map(done.map((r) => [r.assigneeUserId, r._count._all]));
-  return users.map((u) => ({ ...u, email: "email" in u ? (u.email as string) : null, open: o.get(u.id) ?? 0, doneWeek: d.get(u.id) ?? 0 }));
+  return rows.map((r) => ({
+    id: r.user.id,
+    name: r.user.name,
+    tagline: r.user.tagline,
+    chatColor: r.user.chatColor,
+    email: "email" in r.user ? (r.user.email as string) : null,
+    wsRole: normalizeRole(r.role),
+    open: o.get(r.user.id) ?? 0,
+    doneWeek: d.get(r.user.id) ?? 0,
+  }));
 }

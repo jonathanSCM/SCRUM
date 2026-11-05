@@ -10,7 +10,7 @@ import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { getBaseUrl } from "@/lib/baseUrl";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ issue: (await params).id });
   if ("error" in auth) return auth.error;
   const { user } = auth;
   const { id } = await params;

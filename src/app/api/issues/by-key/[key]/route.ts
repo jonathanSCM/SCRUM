@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { membersOf } from "@/lib/workspace";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { findIssueByKey } from "@/lib/issues";
@@ -11,12 +12,12 @@ import { parseLabels } from "@/lib/scrum/labels";
 // ticket, sus comentarios, adjuntos (sin el contenido), actividad, y las
 // opciones del proyecto para los selectores (miembros, sprints, épicas).
 export async function GET(_req: Request, { params }: { params: Promise<{ key: string }> }) {
-  const auth = await apiUser();
+  const auth = await apiUser({ workspace: true });
   if ("error" in auth) return auth.error;
   const { key } = await params;
 
   try {
-    const issue = await findIssueByKey(key);
+    const issue = await findIssueByKey(key, auth.user.workspaceId!);
     if (!issue) return notFound("Ticket no encontrado");
 
     const [project, comments, attachments, history, members, sprints, epics, stories] = await Promise.all([
@@ -32,7 +33,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
         select: { id: true, filename: true, mimeType: true, size: true, createdAt: true, uploadedBy: { select: { id: true, name: true } } },
       }),
       prisma.historyEntry.findMany({ where: { taskId: issue.id }, orderBy: { changedAt: "desc" }, take: 40 }),
-      prisma.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+      membersOf(auth.user.workspaceId!).then((m) => m.map(({ id, name }) => ({ id, name }))),
       prisma.sprint.findMany({
         where: { projectId: issue.projectId, state: { in: ["PLANNED", "ACTIVE"] } },
         orderBy: [{ state: "asc" }, { createdAt: "asc" }],
