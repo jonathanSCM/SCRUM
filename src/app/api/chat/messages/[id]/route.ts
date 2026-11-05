@@ -3,24 +3,25 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 
-// Borrado "suave", como WhatsApp: el mensaje queda como "Mensaje eliminado" (así las
-// respuestas que lo citan no quedan huérfanas), pero se pierde el texto, los archivos y las reacciones.
+// Borra el mensaje de verdad (con sus archivos, reacciones y referencias).
+// Las respuestas que lo citaban quedan como mensajes normales, sin la cita.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await apiUser();
   if ("error" in auth) return auth.error;
   const { id } = await params;
 
   try {
-    const message = await prisma.chatMessage.findUnique({ where: { id }, select: { authorId: true, deletedAt: true } });
-    if (!message) return notFound("Mensaje no encontrado");
+    const message = await prisma.chatMessage.findUnique({ where: { id }, select: { authorId: true } });
+    if (!message) return NextResponse.json({ ok: true }); // ya no existe: nada que hacer
     if (message.authorId !== auth.user.id && auth.user.role !== "LEAD") {
       return NextResponse.json({ error: "Solo su autor o un líder puede borrar el mensaje" }, { status: 403 });
     }
-    if (message.deletedAt) return NextResponse.json({ ok: true });
     await prisma.$transaction([
-      prisma.chatFile.deleteMany({ where: { messageId: id } }),
-      prisma.chatReaction.deleteMany({ where: { messageId: id } }),
-      prisma.chatMessage.update({ where: { id }, data: { body: "", deletedAt: new Date() } }),
+      // Se suelta la cita explícitamente (y se mueve updatedAt) para que los demás vean el cambio.
+      prisma.chatMessage.updateMany({ where: { replyToId: id }, data: { replyToId: null, updatedAt: new Date() } }),
+      prisma.chatMessage.delete({ where: { id } }),
+      prisma.chatDeletion.upsert({ where: { messageId: id }, create: { messageId: id }, update: { deletedAt: new Date() } }),
+      prisma.chatDeletion.deleteMany({ where: { deletedAt: { lt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } } }),
     ]);
     return NextResponse.json({ ok: true });
   } catch (e) {

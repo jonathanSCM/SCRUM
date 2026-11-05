@@ -16,11 +16,13 @@ export async function GET(req: Request) {
   const afterDate = after ? new Date(after) : null;
 
   try {
-    const messages = await loadMessages({
-      after: afterDate && !Number.isNaN(afterDate.getTime()) ? afterDate : null,
-      projectId: url.searchParams.get("project"),
-    });
-    return NextResponse.json(messages);
+    const valid = afterDate && !Number.isNaN(afterDate.getTime()) ? afterDate : null;
+    const messages = await loadMessages({ after: valid, projectId: url.searchParams.get("project") });
+    // Mensajes borrados desde ese momento (con margen por si los relojes no coinciden al milisegundo).
+    const deleted = valid
+      ? (await prisma.chatDeletion.findMany({ where: { deletedAt: { gt: new Date(valid.getTime() - 10_000) } }, select: { messageId: true } })).map((d) => d.messageId)
+      : [];
+    return NextResponse.json({ messages, deleted });
   } catch (e) {
     return errorResponse(e);
   }
