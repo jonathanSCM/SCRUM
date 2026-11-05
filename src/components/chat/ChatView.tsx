@@ -33,10 +33,10 @@ const GROUP_MS = 5 * 60 * 1000;
 const IMAGE_RE = /^image\/(png|jpe?g|gif|webp)$/;
 
 const CHIP_STYLE: Record<RefKind, string> = {
-  project: "border-rust/40 bg-white text-rust",
-  issue: "border-moss bg-white text-moss-ink",
-  sprint: "border-blue bg-white text-blue",
-  user: "border-line-strong bg-white text-ink-soft",
+  project: "border-rust/40 bg-surface text-rust",
+  issue: "border-moss bg-surface text-moss-ink",
+  sprint: "border-blue bg-surface text-blue",
+  user: "border-line-strong bg-surface text-ink-soft",
 };
 const KIND_LABEL: Record<RefKind, string> = { project: "Proyecto", issue: "Ticket", sprint: "Sprint", user: "Persona" };
 
@@ -246,9 +246,9 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-line-strong bg-card shadow-hard" style={{ height: "min(74vh, 700px)" }}>
       {/* Mensajes: fondo suave para que las burbujas blancas se distingan */}
-      <ul className="flex-1 space-y-1 overflow-y-auto bg-[#ece8f6] px-3 py-4 sm:px-5" aria-live="polite">
+      <ul className="flex-1 space-y-1 overflow-y-auto bg-chat-bg px-3 py-4 sm:px-5" aria-live="polite">
         {messages.length === 0 && (
-          <li className="mx-auto my-10 w-fit rounded-full bg-white/80 px-4 py-1.5 text-sm text-ink-soft shadow-hard-sm">Todavía no hay mensajes. Escribí el primero.</li>
+          <li className="mx-auto my-10 w-fit rounded-full bg-surface/80 px-4 py-1.5 text-sm text-ink-soft shadow-hard-sm">Todavía no hay mensajes. Escribí el primero.</li>
         )}
         {messages.map((m, i) => {
           const prev = messages[i - 1];
@@ -258,7 +258,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
             <Fragment key={m.id}>
               {newDay && (
                 <li className="flex justify-center py-2" aria-hidden="true">
-                  <span className="rounded-full bg-white/90 px-3 py-0.5 text-[11px] font-semibold capitalize text-ink-soft shadow-hard-sm">{dayLabel(m.createdAt)}</span>
+                  <span className="rounded-full bg-surface/90 px-3 py-0.5 text-[11px] font-semibold capitalize text-ink-soft shadow-hard-sm">{dayLabel(m.createdAt)}</span>
                 </li>
               )}
               <MessageRow
@@ -284,7 +284,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
 
       {/* Escribir */}
       <div
-        className={cn("relative border-t border-line-strong bg-white p-3 transition-colors", dragging && "bg-card-2")}
+        className={cn("relative border-t border-line-strong bg-surface p-3 transition-colors", dragging && "bg-card-2")}
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);
@@ -297,7 +297,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
         }}
       >
         {trigger && suggestions.length > 0 && (
-          <ul className="absolute bottom-full left-3 right-3 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-line-strong bg-white shadow-hard-lg" role="listbox">
+          <ul className="absolute bottom-full left-3 right-3 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-line-strong bg-surface shadow-hard-lg" role="listbox">
             {suggestions.map((s, i) => (
               <li key={`${s.kind}:${s.id}`} role="option" aria-selected={i === active}>
                 <button
@@ -318,7 +318,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
           </ul>
         )}
         {trigger && index && suggestions.length === 0 && (
-          <p className="absolute bottom-full left-3 mb-1 rounded-md border border-line-strong bg-white px-3 py-1.5 text-xs text-ink-faint shadow-hard">Sin resultados para “{trigger.query}”.</p>
+          <p className="absolute bottom-full left-3 mb-1 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-faint shadow-hard">Sin resultados para “{trigger.query}”.</p>
         )}
 
         {replyTo && (
@@ -390,7 +390,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId }: 
               }}
             />
             {emojiOpen && (
-              <div className="absolute bottom-full right-0 z-20 mb-1 w-72 rounded-lg border border-line-strong bg-white p-2 shadow-hard-lg">
+              <div className="absolute bottom-full right-0 z-20 mb-1 w-72 rounded-lg border border-line-strong bg-surface p-2 shadow-hard-lg">
                 <div className="grid max-h-48 grid-cols-8 gap-0.5 overflow-y-auto">
                   {CHAT_EMOJIS.map((em) => (
                     <button key={em} type="button" className="rounded p-1 text-lg hover:bg-card-2" onClick={() => insertEmoji(em)} aria-label={`Insertar ${em}`}>
@@ -456,7 +456,7 @@ function MessageRow({
   const accent = color ?? "var(--rust)";
 
   return (
-    <li id={`msg-${m.id}`} className={cn("group flex items-end gap-2 rounded-xl px-1 py-0.5 transition-colors", mine && "flex-row-reverse", grouped ? "pt-0" : "pt-1.5", highlighted && "bg-white/70")}>
+    <li id={`msg-${m.id}`} className={cn("group flex items-end gap-2 rounded-xl px-1 py-0.5 transition-colors", mine && "flex-row-reverse", grouped ? "pt-0" : "pt-1.5", highlighted && "bg-surface/70")}>
       {/* Avatar solo en el primer mensaje de cada tanda y solo de los demás */}
       {!mine && (grouped ? <span className="w-[30px] shrink-0" /> : <Avatar name={m.author?.name} size={30} color={color} />)}
 
@@ -464,7 +464,7 @@ function MessageRow({
         <div
           className={cn(
             "min-w-0 max-w-full rounded-2xl px-3 py-1.5 text-sm text-ink shadow-hard-sm",
-            mine ? "rounded-br-md bg-[#dcd2fa]" : "rounded-bl-md border border-line bg-white"
+            mine ? "rounded-br-md bg-bubble-mine" : "rounded-bl-md border border-line bg-surface"
           )}
         >
           {!mine && !grouped && (
@@ -477,7 +477,7 @@ function MessageRow({
             <button
               type="button"
               onClick={() => onJump(m.replyTo!.id)}
-              className={cn("mb-1.5 block w-full rounded-lg border-l-4 px-2 py-1 text-left text-xs hover:brightness-95", mine ? "bg-white/60" : "bg-paper-deep")}
+              className={cn("mb-1.5 block w-full rounded-lg border-l-4 px-2 py-1 text-left text-xs hover:brightness-95", mine ? "bg-surface/60" : "bg-paper-deep")}
               style={{ borderLeftColor: "var(--rust)" }}
             >
               <span className="block font-semibold text-rust">{m.replyTo.author ?? "Usuario eliminado"}</span>
@@ -509,7 +509,7 @@ function MessageRow({
                     <img src={`/api/chat/files/${f.id}`} alt={f.filename} className="max-h-56 max-w-full rounded-lg border border-line" loading="lazy" />
                   </a>
                 ) : (
-                  <a key={f.id} href={`/api/chat/files/${f.id}`} download={f.filename} className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-lg border border-line-strong bg-white px-2 py-1 text-xs text-ink hover:border-rust">
+                  <a key={f.id} href={`/api/chat/files/${f.id}`} download={f.filename} className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2 py-1 text-xs text-ink hover:border-rust">
                     <PaperclipIcon size={12} />
                     <span className="truncate">{f.filename}</span>
                     <span className="text-ink-faint">{formatBytes(f.size)}</span>
@@ -532,7 +532,7 @@ function MessageRow({
                   type="button"
                   onClick={() => onReact(r.emoji)}
                   title={r.users.join(", ")}
-                  className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-px text-xs shadow-hard-sm", iReacted ? "border-rust bg-[#ede9fe] text-rust" : "border-line-strong bg-white text-ink-soft hover:border-rust")}
+                  className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-px text-xs shadow-hard-sm", iReacted ? "border-rust bg-chip-tint text-rust" : "border-line-strong bg-surface text-ink-soft hover:border-rust")}
                 >
                   <span>{r.emoji}</span>
                   <span className="font-semibold">{r.count}</span>
@@ -549,7 +549,7 @@ function MessageRow({
             <button type="button" className="text-ink-soft hover:text-danger" onClick={onDelete}>Eliminar</button>
           )}
           {picker && (
-            <div className={cn("absolute bottom-full z-20 mb-1 flex gap-0.5 rounded-full border border-line-strong bg-white px-2 py-1 shadow-hard-lg", mine ? "right-0" : "left-0")}>
+            <div className={cn("absolute bottom-full z-20 mb-1 flex gap-0.5 rounded-full border border-line-strong bg-surface px-2 py-1 shadow-hard-lg", mine ? "right-0" : "left-0")}>
               {QUICK_REACTIONS.map((em) => (
                 <button
                   key={em}

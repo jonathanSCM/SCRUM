@@ -18,7 +18,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
       </div>
       <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
         <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">{project.name}</h1>
-        <span className="tag border" style={{ background: `${project.status.color}22`, borderColor: `${project.status.color}77`, color: `color-mix(in srgb, ${project.status.color} 60%, #1b1730)` }}>
+        <span className="tag border" style={{ background: `${project.status.color}22`, borderColor: `${project.status.color}77`, color: `color-mix(in srgb, ${project.status.color} 55%, var(--ink))` }}>
           {project.status.name}
         </span>
         <div className="flex items-center gap-2 text-xs text-ink-faint" title="Encargado del proyecto">

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { AnimatePresence, motion } from "motion/react";
 import CommandPalette from "./CommandPalette";
+import ThemeToggle from "./ThemeToggle";
 import Avatar from "@/components/ui/Avatar";
 
 const LINKS = [
@@ -72,6 +73,7 @@ export default function Navbar({ userName, isLead }: { userName: string; isLead:
 
           <div className="flex shrink-0 items-center gap-3 sm:gap-4">
             <CommandPalette />
+            <ThemeToggle />
             <div className="relative" ref={menuRef}>
               <button onClick={() => setMenuOpen((v) => !v)} aria-haspopup="menu" aria-expanded={menuOpen} aria-label="Menú de usuario" className="flex items-center gap-2">
                 <Avatar name={userName} size={32} />
