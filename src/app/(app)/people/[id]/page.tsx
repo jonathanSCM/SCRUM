@@ -64,7 +64,10 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           <p className="text-xs text-ink-faint">En el equipo desde {formatDate(user.memberSince, { day: "numeric", month: "long", year: "numeric" })}</p>
         </div>
         {mine && (
-          <Link href="/settings/profile" className="btn-ghost btn-sm mb-1 self-start sm:self-auto">Editar mi perfil</Link>
+          <div className="mb-1 flex gap-2 self-start sm:self-auto">
+            <Link href="/settings/profile" className="btn-ghost btn-sm">Editar mi perfil</Link>
+            <Link href="/settings" className="btn-ghost btn-sm">Ajustes</Link>
+          </div>
         )}
       </div>
 

@@ -93,10 +93,10 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
                   >
                     <p className="truncate border-b border-line-strong px-3 py-2 text-xs font-bold text-ink-faint">{userName}</p>
                     <Link href={`/people/${userId}`} onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
-                      Mi perfil público
+                      Mi perfil
                     </Link>
-                    <Link href="/settings/profile" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
-                      Editar perfil
+                    <Link href="/settings" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
+                      Ajustes
                     </Link>
                     {isLead && (
                       <Link href="/settings/integrations" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
