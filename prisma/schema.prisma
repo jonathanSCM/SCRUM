@@ -524,6 +524,12 @@ model Workspace {
   slug      String   @unique
   createdAt DateTime @default(now())
 
+  // Integraciones del equipo. Las claves se guardan cifradas (AES-256-GCM); el "hint" son los últimos 4 caracteres.
+  geminiKeyEnc  String?
+  geminiKeyHint String?
+  slackBotEnc   String?
+  slackBotHint  String?
+
   members     Membership[]
   projects    Project[]
   statuses    StatusOption[]

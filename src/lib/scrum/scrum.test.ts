@@ -570,3 +570,16 @@ describe("cambios de rol e invitaciones", () => {
     expect(maxOwnedTeams("abc")).toBe(3);
   });
 });
+
+describe("secretBox", () => {
+  it("cifra y descifra, y no deja la clave en claro", async () => {
+    process.env.SECRETS_KEY = "prueba";
+    const { encryptSecret, decryptSecret } = await import("../secretBox");
+    const blob = encryptSecret("AIzaSy-clave-secreta");
+    expect(blob).not.toContain("clave-secreta");
+    expect(decryptSecret(blob)).toBe("AIzaSy-clave-secreta");
+    expect(encryptSecret("x")).not.toBe(encryptSecret("x"));
+    expect(decryptSecret(blob.slice(0, -3) + "AAA")).toBeNull();
+    expect(decryptSecret(null)).toBeNull();
+  });
+});

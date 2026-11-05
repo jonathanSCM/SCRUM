@@ -2,7 +2,7 @@ import { z } from "zod";
 import { sortTickets, summarizeTickets, type SprintReportData } from "@/lib/scrum/sprintReport";
 
 // Sugerencias para el sprint con Gemini (API REST, sin SDK). La clave se lee
-// de GEMINI_API_KEY (variable de entorno). NUNCA lanza: si Gemini falla, el
+// de la clave de Gemini del equipo. NUNCA lanza: si Gemini falla, el
 // informe sale igual, solo sin la parte de IA.
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
@@ -64,12 +64,8 @@ export function parseInsights(text: string, validKeys: Set<string>): SprintInsig
   }
 }
 
-export function geminiConfigured(): boolean {
-  return !!process.env.GEMINI_API_KEY;
-}
-
-export async function generateSprintInsights(data: SprintReportData): Promise<SprintInsights | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
+// La clave la resuelve quien llama (por equipo, ver teamIntegrations.ts). Sin clave no se usa IA.
+export async function generateSprintInsights(data: SprintReportData, apiKey: string | null): Promise<SprintInsights | null> {
   if (!apiKey || data.tickets.length === 0) return null;
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
 

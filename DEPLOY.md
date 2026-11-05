@@ -72,3 +72,10 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - Borrar un equipo NO está implementado a propósito (se hará con exportación previa).
 - `scripts/isolation-test.mjs` ahora tiene 106 comprobaciones; pasa en SQLite y PostgreSQL 16.
 - Nota: se usa cookie + selector en vez de URLs `/t/<slug>` (desvío respecto al plan, más simple y sin romper enlaces existentes).
+
+## Multi-equipo, Fase 3 (integraciones por equipo)
+
+- Menú de la cuenta > **Integraciones** (dueño/admin): clave de Gemini y token del bot de Slack **por equipo**, cifradas en la base (AES-256-GCM). La llave sale de `SECRETS_KEY` (si no está, de `NEXTAUTH_SECRET`; si cambia, hay que volver a cargar las claves).
+- Cada equipo usa solo las suyas. `GEMINI_API_KEY` y `SLACK_BOT_TOKEN` del servidor siguen valiendo solo para el equipo más antiguo (o los slugs de `ENV_KEYS_WORKSPACES`, separados por coma).
+- Cambia el esquema (4 columnas nuevas, nulas, en `Workspace`): `db push` las crea sin tocar datos.
+- Pendiente de la fase: almacenamiento S3 con cuota y Slack por OAuth (hoy se pega el token del bot a mano).

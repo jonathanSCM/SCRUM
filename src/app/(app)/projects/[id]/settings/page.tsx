@@ -3,7 +3,7 @@ import { membersOf } from "@/lib/workspace";
 import { requireSession } from "@/lib/session";
 import { getProjectOrNotFound } from "@/lib/projectData";
 import { parseStringList } from "@/lib/scrum/ready";
-import { slackBotConfigured } from "@/lib/slack";
+import { slackBotTokenFor } from "@/lib/teamIntegrations";
 import { sprintPdfEnabled } from "@/lib/features";
 import SettingsForm from "./SettingsForm";
 
@@ -39,7 +39,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
         readyItems: parseStringList(project.readyItems),
         webhookConfigured: !!project.discordWebhookUrl,
         slackChannelId: project.slackChannelId ?? "",
-        slackBot: slackBotConfigured(),
+        slackBot: !!(await slackBotTokenFor(project.access.workspaceId)),
         pdfEnabled: sprintPdfEnabled(),
         slackConfigured: !!project.slackWebhookUrl,
         slackHint: project.slackWebhookUrl ? project.slackWebhookUrl.slice(-6) : null,

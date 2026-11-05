@@ -99,6 +99,11 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
                       Editar perfil
                     </Link>
                     {isLead && (
+                      <Link href="/settings/integrations" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
+                        Integraciones
+                      </Link>
+                    )}
+                    {isLead && (
                       <Link href="/settings/statuses" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-card-2" role="menuitem">
                         Estados de proyecto
                       </Link>

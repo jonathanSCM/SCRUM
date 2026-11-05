@@ -332,6 +332,31 @@ async function main() {
   check("un admin puede salirse", lv2.status === 200, `dio ${lv2.status}`);
   check("Marta sigue en B", (await prisma.membership.count({ where: { userId: multi.id, workspaceId: B.ws.id } })) === 1);
 
+  console.log("7) Fase 3: integraciones por equipo");
+  const GKEY = `AIzaSyTESTKEY${stamp}abcdefghijklmnop`;
+  const plain = await mkUser("Pablo Plano", `pablo-${stamp}@a.test`);
+  await member(plain.id, A.ws.id, "MEMBER");
+  const cPlain = await new Client("Pablo (miembro A)").login(plain.email);
+  const ig0 = await cPlain.req("PUT", "/api/workspaces/integrations", { geminiKey: GKEY });
+  check("un miembro no puede guardar claves", ig0.status === 403, `dio ${ig0.status}`);
+  const ig1 = await cAOwner.req("PUT", "/api/workspaces/integrations", { geminiKey: GKEY });
+  check("el dueño guarda la clave de Gemini", ig1.status === 200, `dio ${ig1.status}`);
+  const ig2 = await cAOwner.req("GET", "/api/workspaces/integrations");
+  check("GET informa que hay clave pero no la devuelve", ig2.json?.gemini?.own === true && !ig2.text.includes(GKEY) && ig2.json.gemini.hint === GKEY.slice(-4));
+  const rowA = await prisma.workspace.findUnique({ where: { id: A.ws.id } });
+  check("la clave está cifrada en la base", !!rowA.geminiKeyEnc && !rowA.geminiKeyEnc.includes(GKEY));
+  const ig3 = await cBOwner.req("GET", "/api/workspaces/integrations");
+  check("el equipo B no ve la clave de A", ig3.json?.gemini?.own === false);
+  const ig4 = await cAMember.req("GET", "/api/workspaces/integrations");
+  check("Aldo (ahora admin en A) ve la configuración de A", ig4.status === 200 && ig4.json?.gemini?.own === true);
+  const ig5 = await cAOwner.req("PUT", "/api/workspaces/integrations", { slackBotToken: "no-es-un-token" });
+  check("token de Slack inválido -> 400", ig5.status === 400, `dio ${ig5.status}`);
+  const ig6 = await cAOwner.req("PUT", "/api/workspaces/integrations", { slackBotToken: `xoxb-${"1".repeat(30)}` });
+  check("token de Slack válido se guarda", ig6.status === 200, `dio ${ig6.status}`);
+  const ig7 = await cAOwner.req("PUT", "/api/workspaces/integrations", { geminiKey: null, slackBotToken: null });
+  const rowA2 = await prisma.workspace.findUnique({ where: { id: A.ws.id } });
+  check("borrar deja todo vacío", ig7.status === 200 && !rowA2.geminiKeyEnc && !rowA2.slackBotEnc);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

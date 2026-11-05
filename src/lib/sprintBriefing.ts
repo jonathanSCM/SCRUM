@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { getBaseUrl } from "@/lib/baseUrl";
 import { logHistory } from "@/lib/history";
-import { generateSprintInsights, geminiConfigured, type SprintInsights } from "@/lib/gemini";
+import { generateSprintInsights, type SprintInsights } from "@/lib/gemini";
 import { renderSprintPdf } from "@/lib/sprintPdf";
-import { sendToSlackWebhook, slackBotConfigured, uploadFileToSlack } from "@/lib/slack";
+import { sendToSlackWebhook, uploadFileToSlack } from "@/lib/slack";
+import { geminiKeyFor, slackBotTokenFor } from "@/lib/teamIntegrations";
+import { workspaceOfResource } from "@/lib/workspace";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { PRIORITY_META, STATUS_META, ISSUE_TYPE_META, type IssueStatus, type IssueType, type Priority } from "@/lib/scrum/constants";
 import { missingReadyItems, parseStringList } from "@/lib/scrum/ready";
@@ -51,9 +53,11 @@ export async function loadSprintReportData(sprintId: string): Promise<SprintRepo
 export async function buildSprintPdf(sprintId: string, options: { ai?: boolean } = {}) {
   const data = await loadSprintReportData(sprintId);
   if (!data) return null;
-  const insights: SprintInsights | null = options.ai === false ? null : await generateSprintInsights(data);
+  const workspaceId = await workspaceOfResource("sprint", sprintId);
+  const geminiKey = options.ai === false ? null : await geminiKeyFor(workspaceId);
+  const insights: SprintInsights | null = geminiKey ? await generateSprintInsights(data, geminiKey) : null;
   const pdf = await renderSprintPdf(data, insights);
-  return { data, insights, pdf };
+  return { data, insights, pdf, workspaceId, aiConfigured: !!geminiKey };
 }
 
 export type BriefingResult = { delivered: "file" | "link" | "none"; ai: boolean; error?: string };
@@ -65,7 +69,8 @@ export async function sendSprintBriefing(sprintId: string, actor?: { id: string;
   try {
     const built = await buildSprintPdf(sprintId);
     if (!built) return { delivered: "none", ai: false, error: "Sprint no encontrado" };
-    const { data, insights, pdf } = built;
+    const { data, insights, pdf, workspaceId, aiConfigured } = built;
+    const botToken = await slackBotTokenFor(workspaceId);
 
     const sprint = await prisma.sprint.findUnique({
       where: { id: sprintId },
@@ -74,15 +79,15 @@ export async function sendSprintBriefing(sprintId: string, actor?: { id: string;
     if (!sprint?.projectId || !sprint.project) return { delivered: "none", ai: !!insights };
 
     const s = summarizeTickets(data.tickets);
-    const headline = `Arrancó *${data.sprint.name}* en ${data.project.name}: ${s.count} tickets · ${s.points} pts${insights ? "" : geminiConfigured() ? " (sin sugerencias de IA: Gemini no respondió)" : ""}`;
+    const headline = `Arrancó *${data.sprint.name}* en ${data.project.name}: ${s.count} tickets · ${s.points} pts${insights ? "" : aiConfigured ? " (sin sugerencias de IA: Gemini no respondió)" : ""}`;
     const filename = `${(data.project.key ?? data.project.name).replace(/[^\w-]+/g, "_")}-${data.sprint.name.replace(/[^\w-]+/g, "_")}.pdf`;
     const link = `${getBaseUrl()}/api/sprints/${sprintId}/report`;
 
     let result: BriefingResult = { delivered: "none", ai: !!insights };
     const { slackChannelId, slackWebhookUrl } = sprint.project;
 
-    if (slackBotConfigured() && slackChannelId) {
-      const up = await uploadFileToSlack({ channelId: slackChannelId, filename, content: pdf, title: `${data.project.name} · ${data.sprint.name}`, comment: headline });
+    if (botToken && slackChannelId) {
+      const up = await uploadFileToSlack({ token: botToken, channelId: slackChannelId, filename, content: pdf, title: `${data.project.name} · ${data.sprint.name}`, comment: headline });
       if (up.ok) result = { delivered: "file", ai: !!insights };
       else console.error("[briefing] no se pudo subir el PDF a Slack:", up.error);
       if (!up.ok) result.error = up.error;
