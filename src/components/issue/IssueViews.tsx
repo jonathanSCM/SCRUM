@@ -148,7 +148,7 @@ export function IssueRowView({
       ) : null}
       <PriorityIcon priority={issue.priority} />
       <PointsBadge points={issue.storyPoints} />
-      <Avatar name={issue.assignee?.name} size={22} />
+      <Avatar name={issue.assignee?.name} userId={issue.assignee?.id} size={22} />
     </div>
   );
 }
@@ -211,7 +211,7 @@ export function IssueCardView({
           )}
           <PriorityIcon priority={issue.priority} size={15} />
           <PointsBadge points={issue.storyPoints} />
-          <Avatar name={issue.assignee?.name} size={22} />
+          <Avatar name={issue.assignee?.name} userId={issue.assignee?.id} size={22} />
         </span>
       </div>
     </div>

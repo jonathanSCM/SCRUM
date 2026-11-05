@@ -18,7 +18,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
         const { label, detail } = describeHistory(e);
         return (
           <li key={e.id} className="flex items-start gap-3 border-b border-line-strong px-4 py-3 last:border-b-0">
-            <Avatar name={e.changedByName} size={26} />
+            <Avatar name={e.changedByName} userId={e.changedById} size={26} />
             <div className="min-w-0 flex-1 text-sm">
               <p className="text-ink">
                 <b>{e.changedByName ?? "Sistema"}</b> <span className="text-ink-soft">· {label}</span>

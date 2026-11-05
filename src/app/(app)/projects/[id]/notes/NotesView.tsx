@@ -81,7 +81,7 @@ export default function NotesView({ projectId, notes, currentUserId, isLead }: {
                   <h2 className="font-display text-base font-extrabold text-ink">{n.title}</h2>
                   <span className="lozenge text-ink-soft">{isNoteKind(n.kind) ? NOTE_KIND_META[n.kind].label : n.kind}</span>
                   <span className="ml-auto flex items-center gap-2 text-xs text-ink-faint">
-                    <Avatar name={n.author?.name} size={20} />
+                    <Avatar name={n.author?.name} userId={n.author?.id} size={20} />
                     {n.author?.name ?? "Usuario eliminado"} · {timeAgo(n.updatedAt)}
                   </span>
                 </header>

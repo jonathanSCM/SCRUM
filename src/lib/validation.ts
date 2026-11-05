@@ -58,6 +58,7 @@ export const updateProfileSchema = z.object({
     .transform((v) => v.replace(/^@/, ""))
     .refine((v) => v === "" || TELEGRAM_USERNAME_PATTERN.test(v), "Usuario de Telegram inválido (5 a 32 letras, números o _)")
     .nullish(),
+  tagline: z.string().trim().max(120).nullish(),
   chatColor: z
     .string()
     .trim()

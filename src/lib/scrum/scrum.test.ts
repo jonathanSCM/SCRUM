@@ -14,6 +14,7 @@ import { basicSuggestions, pdfSafe, sortTickets, summarizeTickets, type ReportTi
 import { isValidDateString, shiftDate, missingStandups, summarizeReview, localDateString } from "./ceremonies";
 import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from "./checklist";
 import { buildPushPayload } from "../push";
+import { weekWindow, compareLabel, mergeProjectActivity, WEEK_MS } from "./weekly";
 import { isAllowedForToken } from "../aiAccess";
 import { importSchema, countIssues, matchMember, issueKeyOf } from "./aiImport";
 import { snippetOf, parseRefs, splitMessage, applyInsertedRefs, makeToken, isValidChatColor, plainText } from "./chat";
@@ -476,5 +477,29 @@ describe("token IA", () => {
     expect(matchMember(m, "Maria")?.id).toBe("1");
     expect(matchMember(m, "Juan")).toBeNull(); // ambiguo
     expect(matchMember(m, "Nadie")).toBeNull();
+  });
+});
+
+describe("perfil público: resumen semanal", () => {
+  it("calcula las ventanas de 7 días", () => {
+    const now = new Date("2026-11-10T12:00:00Z");
+    const w = weekWindow(now);
+    expect(now.getTime() - w.since.getTime()).toBe(WEEK_MS);
+    expect(w.sinceDay).toBe("2026-11-03");
+    expect(w.prevSinceDay).toBe("2026-10-27");
+  });
+  it("compara con la semana pasada", () => {
+    expect(compareLabel(5, 2)).toEqual({ text: "+3 vs semana pasada", tone: "up" });
+    expect(compareLabel(1, 4)).toEqual({ text: "−3 vs semana pasada", tone: "down" });
+    expect(compareLabel(2, 2).tone).toBe("same");
+  });
+  it("junta la actividad por proyecto y ordena", () => {
+    const rows = mergeProjectActivity(
+      [new Map([["a", 2], ["b", 1]]), new Map([["b", 3]]), new Map([["c", 1]]), new Map()],
+      ["open", "completed", "created", "notes"]
+    );
+    expect(rows.map((r) => r.projectId)).toEqual(["b", "a", "c"]);
+    expect(rows[0]).toMatchObject({ projectId: "b", open: 1, completed: 3 });
+    expect(mergeProjectActivity([new Map([["x", 0]])], ["open"])).toEqual([]);
   });
 });

@@ -159,7 +159,7 @@ function DailyPanel({ projectId, currentUserId }: { projectId: string; currentUs
           entries.map((en) => (
             <article key={en.id} className="border border-line bg-card rounded-lg">
               <header className="flex items-center gap-2 border-b border-line-strong bg-card-2 px-3 py-2">
-                <Avatar name={en.user.name} size={22} />
+                <Avatar name={en.user.name} userId={en.user.id} size={22} />
                 <b className="text-sm text-ink">{en.user.name}</b>
               </header>
               <dl className="grid gap-x-4 gap-y-2 px-3 py-3 text-sm sm:grid-cols-2">

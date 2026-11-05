@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import Avatar from "@/components/ui/Avatar";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -118,13 +120,16 @@ export default function TeamManager({
       <ul className="space-y-2">
         {users.map((u) => (
           <li key={u.id} className="flex items-center justify-between border border-line bg-card px-3.5 py-2.5 rounded-xl2 shadow-hard">
-            <div>
+            <div className="flex items-center gap-3">
+              <Avatar name={u.name} userId={u.id} size={32} />
+              <div>
               <p className="text-sm text-ink">
-                {u.name} {u.id === currentUserId && <span className="text-xs text-ink-faint">(vos)</span>}
+                <Link href={`/people/${u.id}`} className="hover:underline">{u.name}</Link> {u.id === currentUserId && <span className="text-xs text-ink-faint">(vos)</span>}
               </p>
               <p className="text-xs text-ink-faint">
                 {u.email} · {u.role === "LEAD" ? "Líder" : "Miembro"}
               </p>
+              </div>
             </div>
             {u.id !== currentUserId && (
               <button onClick={() => removeUser(u.id, u.name)} className="text-xs text-ink-faint hover:text-danger">

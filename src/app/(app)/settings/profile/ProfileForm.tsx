@@ -8,12 +8,14 @@ import { CHAT_COLORS } from "@/lib/scrum/chat";
 import Avatar from "@/components/ui/Avatar";
 import { PwaCard } from "@/components/PwaControls";
 import AiTokenCard from "@/components/AiTokenCard";
+import ProfileImages from "@/components/ProfileImages";
 
-export default function ProfileForm({ name: initialName, discordUserId: initialDiscord, telegramUsername: initialTelegram, slackUserId: initialSlack, chatColor: initialColor }: { name: string; discordUserId: string; telegramUsername: string; slackUserId: string; chatColor: string }) {
+export default function ProfileForm({ name: initialName, discordUserId: initialDiscord, telegramUsername: initialTelegram, slackUserId: initialSlack, chatColor: initialColor, userId, tagline: initialTagline, hasAvatar, hasBanner }: { name: string; discordUserId: string; telegramUsername: string; slackUserId: string; chatColor: string; userId: string; tagline: string; hasAvatar: boolean; hasBanner: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState(initialName);
   const [discord, setDiscord] = useState(initialDiscord);
+  const [tagline, setTagline] = useState(initialTagline);
   const [chatColor, setChatColor] = useState(initialColor);
   const [slack, setSlack] = useState(initialSlack);
   const [telegram, setTelegram] = useState(initialTelegram);
@@ -26,7 +28,7 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const res = await api("/api/users/me", "PATCH", { name, discordUserId: discord.trim(), telegramUsername: telegram.trim(), slackUserId: slack.trim(), chatColor });
+    const res = await api("/api/users/me", "PATCH", { name, discordUserId: discord.trim(), telegramUsername: telegram.trim(), slackUserId: slack.trim(), chatColor, tagline: tagline.trim() });
     setSaving(false);
     if (!res.ok) return toast.error(res.error);
     toast.success("Perfil guardado");
@@ -52,9 +54,15 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
 
       <form onSubmit={save} className="space-y-4 border border-line bg-card p-5 rounded-lg">
         <h2 className="font-display text-lg font-extrabold text-ink">Datos</h2>
+        <ProfileImages userId={userId} name={name} chatColor={chatColor} hasAvatar={hasAvatar} hasBanner={hasBanner} />
         <div>
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Nombre</label>
           <input className="field" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-ink-soft">Frase de tu perfil</label>
+          <input className="field" placeholder="Ej: Desarrollo frontend y diseño" maxLength={120} value={tagline} onChange={(e) => setTagline(e.target.value)} />
+          <p className="mt-1 text-xs text-ink-faint">Se ve en tu perfil público, junto a tu nombre.</p>
         </div>
         <div>
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Mi color en el chat</label>

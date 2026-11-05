@@ -22,7 +22,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
           {project.status.name}
         </span>
         <div className="flex items-center gap-2 text-xs text-ink-faint" title="Encargado del proyecto">
-          <Avatar name={project.lead?.name} size={22} />
+          <Avatar name={project.lead?.name} userId={project.lead?.id} size={22} />
           {project.lead?.name ?? "Sin encargado"}
         </div>
         {activeSprint && (
