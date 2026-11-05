@@ -180,14 +180,23 @@ Duración orientativa si se trabaja de forma continua: de **6 a 9 semanas** hast
 ## 7. Qué NO cambia
 Tableros, sprints, Definition of Ready, ceremonias, notas, chat, token IA, perfil público y modo oscuro siguen igual: solo pasan a vivir **dentro de un equipo**.
 
-## 8. Decisiones que necesito de ti antes de empezar
-1. **¿Registro abierto o por invitación al inicio?** Recomiendo abierto con verificación de email, o por invitación si prefieres vender "a mano" los primeros clientes.
-2. **¿Cobro por asiento o por equipo?**
-3. **¿País y pasarela de pago?** Define si sirve Stripe o conviene un "merchant of record".
-4. **¿La IA (Gemini) la pagas tú con cuota por plan, o cada equipo pone su clave?**
-5. **¿Hace falta el rol de invitado (cliente) desde el inicio?** Recomiendo dejarlo para la Fase 6.
-6. **¿Nombre y dominio del producto?** Afecta correos, enlaces de invitación y Slack.
-7. **El equipo actual de ProShop:** ¿sigue como primer equipo, con tu cuenta como Dueño? (Recomendado.)
+## 8. Decisiones tomadas (2026-11-05)
+
+| Tema | Decisión |
+|---|---|
+| Registro | **Solo por invitación** al inicio. Sin registro abierto. |
+| Cobro | Se define más adelante; lo probable son ventajas por plan o cuenta gratis. **No se construye todavía.** |
+| Pasarela de pago | En el futuro, después de definir el cobro. |
+| IA (Gemini) | **Una clave por equipo**, configurable desde un panel del equipo (Fase 3). |
+| Nombre y dominio | Se mantiene SCRUM ProShop en `https://scrum.proshop.lat/`. |
+| Equipo actual | Sigue como primer equipo ("ProShop"), con el dueño actual como **Dueño**. |
+| Marca de rol | En el perfil y en la lista del equipo se muestra el rol por equipo: **DUEÑO DE ProShop**, **ADMIN DE …**, **MIEMBRO DE …**. Solo se muestran los equipos que comparten quien mira y la persona. |
+| Invitados (clientes) | Fase posterior. |
+
+Consecuencias en el plan:
+- La Fase 4 (cobro) queda en pausa hasta definir el modelo; las Fases 1, 2, 3 y 5 siguen.
+- Sin registro abierto, la verificación de email y los límites anti-abuso del alta bajan de prioridad (siguen siendo necesarios para las invitaciones).
+- Crear equipos nuevos: lo puede hacer una cuenta existente, con un tope configurable de equipos propios (`MAX_OWNED_TEAMS`, por defecto 3).
 
 ## 9. Primer paso propuesto
 Empezar por la **Fase 1** en una rama aparte, con la migración probada sobre una copia de los datos y las pruebas de aislamiento corriendo antes de unir nada a `main`. Nada de la Fase 2 en adelante se construye hasta que la Fase 1 pase todas las pruebas.
