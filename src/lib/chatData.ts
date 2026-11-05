@@ -23,8 +23,7 @@ export type ChatMessageDTO = {
   refs: ResolvedRef[];
   files: Array<{ id: string; filename: string; mimeType: string; size: number }>;
   updatedAt: string;
-  deleted: boolean;
-  replyTo: { id: string; author: string | null; snippet: string; deleted: boolean } | null;
+  replyTo: { id: string; author: string | null; snippet: string } | null;
   reactions: Array<{ emoji: string; count: number; users: string[]; userIds: string[] }>;
 };
 
@@ -62,7 +61,7 @@ export async function toDTOs(rows: Row[]): Promise<ChatMessageDTO[]> {
   const resolved = await resolveRefs(rows.flatMap((r) => r.refs.map((x) => ({ kind: x.kind, targetId: x.targetId }))));
   return rows.map((r) => {
     // Las marcas del texto (no las filas) mandan el orden; las filas sirven para filtrar.
-    const refs = parseRefs(r.deletedAt ? "" : r.body).map((p): ResolvedRef => {
+    const refs = parseRefs(r.body).map((p): ResolvedRef => {
       const hit = resolved.get(`${p.kind.toUpperCase()}:${p.id}`);
       return hit ?? { kind: p.kind, id: p.id, label: "(eliminado)", sub: null, href: null, missing: true };
     });
@@ -74,27 +73,23 @@ export async function toDTOs(rows: Row[]): Promise<ChatMessageDTO[]> {
       g.userIds.push(x.user.id);
       grouped.set(x.emoji, g);
     }
-    const deleted = !!r.deletedAt;
     return {
       id: r.id,
-      body: deleted ? "" : r.body,
+      body: r.body,
       updatedAt: r.updatedAt.toISOString(),
-      deleted,
-      replyTo: r.replyTo
-        ? { id: r.replyTo.id, author: r.replyTo.author?.name ?? null, snippet: r.replyTo.deletedAt ? "" : snippetOf(r.replyTo.body, r.replyTo._count.files > 0), deleted: !!r.replyTo.deletedAt }
-        : null,
-      reactions: deleted ? [] : [...grouped.values()],
+      replyTo: r.replyTo && !r.replyTo.deletedAt ? { id: r.replyTo.id, author: r.replyTo.author?.name ?? null, snippet: snippetOf(r.replyTo.body, r.replyTo._count.files > 0) } : null,
+      reactions: [...grouped.values()],
       createdAt: r.createdAt.toISOString(),
       author: r.author ? { id: r.author.id, name: r.author.name, color: r.author.chatColor } : null,
       refs,
-      files: deleted ? [] : r.files,
+      files: r.files,
     };
   });
 }
 
 // Últimos mensajes (cronológico). after: solo los más nuevos. projectId: solo los que mencionan ese proyecto.
 export async function loadMessages(opts: { after?: Date | null; projectId?: string | null; limit?: number } = {}): Promise<ChatMessageDTO[]> {
-  const projectFilter = opts.projectId ? { refs: { some: { projectId: opts.projectId } } } : {};
+  const projectFilter = { deletedAt: null, ...(opts.projectId ? { refs: { some: { projectId: opts.projectId } } } : {}) };
   // Con "after" se devuelve lo que cambió desde entonces (mensajes nuevos, reacciones, borrados).
   if (opts.after) {
     const changed = await prisma.chatMessage.findMany({ where: { updatedAt: { gt: opts.after }, ...projectFilter }, orderBy: { updatedAt: "asc" }, take: 200, include: messageInclude });

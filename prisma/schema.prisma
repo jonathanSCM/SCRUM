@@ -379,7 +379,7 @@ model ChatMessage {
   legacyId  String?  @unique // id del ProjectMessage del que se copió
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt // cambia con reacciones y borrados (el chat se sincroniza por acá)
-  deletedAt DateTime? // borrado "suave": queda "Mensaje eliminado", como en WhatsApp
+  deletedAt DateTime? // legacy: versión anterior hacía borrado suave; ahora se borra de verdad (ver ChatDeletion)
 
   // Respuesta a otro mensaje
   replyToId String?
@@ -444,4 +444,13 @@ model ChatReaction {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId, emoji])
+}
+
+// Lápida de un mensaje borrado: sirve solo para avisar a los demás navegadores
+// que lo quiten de la pantalla en su próximo refresco (se limpia a los pocos días).
+model ChatDeletion {
+  messageId String   @id
+  deletedAt DateTime @default(now())
+
+  @@index([deletedAt])
 }

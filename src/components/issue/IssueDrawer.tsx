@@ -106,7 +106,7 @@ export default function IssueDrawer({ currentUserId, currentUserRole }: { curren
         <>
           <motion.div
             key="backdrop"
-            className="fixed inset-0 z-[55] bg-[#1b1730]/30"
+            className="fixed inset-0 z-[55] bg-black/30"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

@@ -206,7 +206,7 @@ function ProjectTable({ projects, statuses }: { projects: ProjectCardData[]; sta
             <tr key={p.id} className="border-b border-line-strong last:border-b-0 hover:bg-card-2">
               <td className="px-3 py-2 font-mono text-xs text-moss-ink">{p.key}</td>
               <td className="px-3 py-2 font-semibold"><Link href={`/projects/${p.id}/board`} className="text-ink hover:underline">{p.name}</Link></td>
-              <td className="px-3 py-2"><span className="lozenge" style={{ color: `color-mix(in srgb, ${byId.get(p.statusId)?.color ?? "#6f6a88"} 60%, #1b1730)` }}>{byId.get(p.statusId)?.name}</span></td>
+              <td className="px-3 py-2"><span className="lozenge" style={{ color: `color-mix(in srgb, ${byId.get(p.statusId)?.color ?? "#6f6a88"} 55%, var(--ink))` }}>{byId.get(p.statusId)?.name}</span></td>
               <td className="px-3 py-2 text-ink-soft">{p.lead ?? "—"}</td>
               <td className="px-3 py-2 text-ink-soft">{p.activeSprint?.name ?? "—"}</td>
               <td className="px-3 py-2 text-right font-mono text-xs">{p.done}/{p.total} · {pct(p.done, p.total)}%</td>

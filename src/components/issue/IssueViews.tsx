@@ -14,7 +14,7 @@ export function EpicChip({ epic }: { epic: NonNullable<IssueCardData["epic"]> })
     <span
       title={`Épica ${epic.key}: ${epic.title}`}
       className="inline-block max-w-[9rem] truncate border px-1.5 py-px text-[10px] font-extrabold uppercase tracking-wide rounded-md"
-      style={{ color: "#1b1730", background: `${color}26`, borderColor: `${color}80` }}
+      style={{ color: "var(--ink)", background: `color-mix(in srgb, ${color} 18%, transparent)`, borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}
     >
       {epic.title}
     </span>

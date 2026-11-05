@@ -34,6 +34,9 @@ async function main() {
   const changes = Object.entries(report).map(([k, v]) => `${k}=${v}`);
   console.log(changes.length ? `Migración de datos: ${changes.join(", ")}` : "Migración de datos: nada para convertir.");
 
+  // La versión anterior del chat hacía borrado "suave": se eliminan de verdad.
+  await prisma.chatMessage.deleteMany({ where: { deletedAt: { not: null } } });
+
   const copied = await migrateProjectMessages();
   if (copied > 0) console.log(`Chat: ${copied} mensajes de proyectos copiados al chat general.`);
 

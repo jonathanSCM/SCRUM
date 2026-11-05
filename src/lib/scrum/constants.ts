@@ -6,20 +6,20 @@ export const ISSUE_TYPES = ["EPIC", "STORY", "TASK", "BUG"] as const;
 export type IssueType = (typeof ISSUE_TYPES)[number];
 
 export const ISSUE_TYPE_META: Record<IssueType, { label: string; plural: string; color: string }> = {
-  EPIC: { label: "Épica", plural: "Épicas", color: "#7c3aed" },
-  STORY: { label: "Historia", plural: "Historias", color: "#059669" },
-  TASK: { label: "Tarea", plural: "Tareas", color: "#2563eb" },
-  BUG: { label: "Bug", plural: "Bugs", color: "#dc2626" },
+  EPIC: { label: "Épica", plural: "Épicas", color: "var(--c-epic)" },
+  STORY: { label: "Historia", plural: "Historias", color: "var(--c-story)" },
+  TASK: { label: "Tarea", plural: "Tareas", color: "var(--c-task)" },
+  BUG: { label: "Bug", plural: "Bugs", color: "var(--c-bug)" },
 };
 
 export const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"] as const;
 export type IssueStatus = (typeof STATUSES)[number];
 
 export const STATUS_META: Record<IssueStatus, { label: string; color: string }> = {
-  TODO: { label: "Por hacer", color: "#6f6a88" },
-  IN_PROGRESS: { label: "En progreso", color: "#6d28d9" },
-  IN_REVIEW: { label: "En revisión", color: "#b45309" },
-  DONE: { label: "Hecho", color: "#059669" },
+  TODO: { label: "Por hacer", color: "var(--c-todo)" },
+  IN_PROGRESS: { label: "En progreso", color: "var(--c-progress)" },
+  IN_REVIEW: { label: "En revisión", color: "var(--c-review)" },
+  DONE: { label: "Hecho", color: "var(--c-done)" },
 };
 
 export const DONE_STATUS: IssueStatus = "DONE";
@@ -28,19 +28,19 @@ export const PRIORITIES = ["URGENTE", "ALTA", "MEDIA", "BAJA"] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
 export const PRIORITY_META: Record<Priority, { label: string; color: string; weight: number }> = {
-  URGENTE: { label: "Urgente", color: "#dc2626", weight: 4 },
-  ALTA: { label: "Alta", color: "#b45309", weight: 3 },
-  MEDIA: { label: "Media", color: "#7c3aed", weight: 2 },
-  BAJA: { label: "Baja", color: "#2563eb", weight: 1 },
+  URGENTE: { label: "Urgente", color: "var(--c-urgent)", weight: 4 },
+  ALTA: { label: "Alta", color: "var(--c-high)", weight: 3 },
+  MEDIA: { label: "Media", color: "var(--c-medium)", weight: 2 },
+  BAJA: { label: "Baja", color: "var(--c-low)", weight: 1 },
 };
 
 export const SPRINT_STATES = ["PLANNED", "ACTIVE", "COMPLETED"] as const;
 export type SprintState = (typeof SPRINT_STATES)[number];
 
 export const SPRINT_STATE_META: Record<SprintState, { label: string; color: string }> = {
-  PLANNED: { label: "Planificado", color: "#6f6a88" },
-  ACTIVE: { label: "Activo", color: "#059669" },
-  COMPLETED: { label: "Completado", color: "#6d28d9" },
+  PLANNED: { label: "Planificado", color: "var(--c-todo)" },
+  ACTIVE: { label: "Activo", color: "var(--c-done)" },
+  COMPLETED: { label: "Completado", color: "var(--c-progress)" },
 };
 
 // Escala de story points (Fibonacci acotada, como Jira).

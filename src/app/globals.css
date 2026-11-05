@@ -26,10 +26,32 @@
   --danger-bg: #fef2f2;
   --warn: #b45309;
 
+  --surface-rgb: 255 255 255; /* superficies que deben ser "blanco" en claro y oscuras en oscuro */
+  --chat-bg: #ece8f6;
+  --bubble-mine: #dcd2fa;
+  --chip-tint: #ede9fe;
+  --on-fill: #ffffff; /* texto sobre rellenos de color (iconos de tipo) */
+  --on-moss: #ffffff;
+  --shadow-rgb: 27 23 48;
+
+  /* colores semánticos de tipos, estados y prioridades */
+  --c-epic: #7c3aed;
+  --c-story: #059669;
+  --c-task: #2563eb;
+  --c-bug: #dc2626;
+  --c-todo: #6f6a88;
+  --c-progress: #6d28d9;
+  --c-review: #b45309;
+  --c-done: #059669;
+  --c-urgent: #dc2626;
+  --c-high: #b45309;
+  --c-medium: #7c3aed;
+  --c-low: #2563eb;
+
   --radius: 10px;
   --radius-sm: 6px;
-  --shadow-sm: 0 1px 2px rgba(27, 23, 48, 0.06);
-  --shadow-md: 0 4px 14px rgba(27, 23, 48, 0.08);
+  --shadow-sm: 0 1px 2px rgb(var(--shadow-rgb) / 0.06);
+  --shadow-md: 0 4px 14px rgb(var(--shadow-rgb) / 0.08);
 
   --paper: rgb(var(--paper-rgb));
   --ink: rgb(var(--ink-rgb));
@@ -37,6 +59,62 @@
   --accent: rgb(var(--accent-rgb));
 
   color-scheme: light;
+}
+
+/* Tema oscuro: se activa con data-theme="dark" (ver ThemeToggle y el script del layout). */
+:root[data-theme="dark"] {
+  --paper-rgb: 15 14 23; /* #0f0e17 */
+  --paper-deep: #151421;
+  --paper-raised: #1a1927;
+  --paper-raised-2: #232137;
+  --ink-rgb: 237 235 248;
+  --ink-soft: #bdb8d4;
+  --ink-faint: #8f8aa9;
+  --line: #2c2a40;
+  --line-strong: #403d5c;
+  --rust-rgb: 139 92 246; /* #8b5cf6 */
+  --rust-dark: #7c3aed;
+  --accent-rgb: 167 139 250;
+  --moss: #2fe3a6; /* el menta de la marca brilla sobre oscuro */
+  --moss-ink: #34d399;
+  --blue: #60a5fa;
+  --ring: rgba(139, 92, 246, 0.4);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.12);
+  --warn: #fbbf24;
+
+  --surface-rgb: 26 25 39;
+  --chat-bg: #12111c;
+  --bubble-mine: #3a2f6e;
+  --chip-tint: #2a2347;
+  --on-fill: #0f0e17;
+  --on-moss: #0b2e22;
+  --shadow-rgb: 0 0 0;
+
+  --c-epic: #a78bfa;
+  --c-story: #34d399;
+  --c-task: #60a5fa;
+  --c-bug: #f87171;
+  --c-todo: #9490b0;
+  --c-progress: #a78bfa;
+  --c-review: #fbbf24;
+  --c-done: #34d399;
+  --c-urgent: #f87171;
+  --c-high: #fbbf24;
+  --c-medium: #a78bfa;
+  --c-low: #60a5fa;
+
+  color-scheme: dark;
+}
+
+@layer base {
+  /* Controles sin clase propia: que sigan el tema (por defecto el navegador los pinta grises). */
+  select,
+  textarea,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]):not([type="file"]) {
+    background-color: var(--paper);
+    color: var(--ink);
+  }
 }
 
 html {
@@ -50,7 +128,7 @@ body {
 }
 
 ::selection {
-  background: rgba(109, 40, 217, 0.18);
+  background: rgb(var(--rust-rgb) / 0.25);
   color: var(--ink);
 }
 
@@ -155,10 +233,19 @@ body {
   background: var(--paper-deep);
 }
 
-/* select compacto para barras de filtros y campos del ticket */
+/* select compacto para barras de filtros y campos del ticket (también solo, sin .field) */
 .field-sm {
   padding: 0.3rem 0.5rem;
   font-size: 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--paper);
+  color: var(--ink);
+}
+.field-sm:focus {
+  outline: none;
+  border-color: var(--rust);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 
 .btn-primary,
@@ -197,11 +284,14 @@ body {
 /* acción positiva (iniciar / completar): menta */
 .btn-mint {
   background: var(--moss);
-  color: #ffffff;
+  color: var(--on-moss);
   box-shadow: var(--shadow-sm);
 }
 .btn-mint:hover:not(:disabled) {
   background: #0f9d75;
+}
+:root[data-theme="dark"] .btn-mint:hover:not(:disabled) {
+  background: #5eecbb;
 }
 
 .btn-ghost {
@@ -221,6 +311,9 @@ body {
 }
 .btn-danger:hover:not(:disabled) {
   background: #b91c1c;
+}
+:root[data-theme="dark"] .btn-danger {
+  color: #1a0b0b;
 }
 
 /* botón chico para barras y acciones secundarias */

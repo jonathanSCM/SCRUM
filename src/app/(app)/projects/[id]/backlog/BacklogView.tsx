@@ -553,7 +553,7 @@ function SummaryChips({ info }: { info?: { count: number; points: number; byStat
           {info.byStatus[s]}
         </span>
       ))}
-      <span title="Story points totales" className="ml-1 inline-flex h-[20px] min-w-[20px] items-center justify-center border border-line bg-ink px-1 font-mono text-[10px] font-bold text-white rounded-md">
+      <span title="Story points totales" className="ml-1 inline-flex h-[20px] min-w-[20px] items-center justify-center border border-line bg-ink px-1 font-mono text-[10px] font-bold text-paper rounded-md">
         {info.points}
       </span>
     </span>
