@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, PointerSensor, pointerWithin, rectIntersection, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { api } from "@/lib/client";
 import { cn, pct } from "@/lib/ui";
 import { daysRemaining } from "@/lib/scrum/sprintLifecycle";
@@ -12,7 +12,8 @@ import { suggestProjectKey } from "@/lib/scrum/issueKey";
 import Avatar from "@/components/ui/Avatar";
 import Modal from "@/components/ui/Modal";
 import EmptyState from "@/components/ui/EmptyState";
-import { PlusIcon } from "@/components/ui/Icons";
+import { DragIcon, PlusIcon } from "@/components/ui/Icons";
+import { useDragScroll } from "@/lib/useDragScroll";
 import { ProgressBar, staggerChild, staggerParent } from "@/components/ui/Motion";
 import { useToast } from "@/components/ui/Toaster";
 
@@ -51,6 +52,7 @@ export default function ProjectsView({ projects, statuses }: { projects: Project
     } catch {}
   }
 
+  const panRef = useDragScroll<HTMLDivElement>();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -95,8 +97,8 @@ export default function ProjectsView({ projects, statuses }: { projects: Project
       {items.length === 0 ? (
         <EmptyState title="Todavía no hay proyectos" hint="Creá el primero: va a tener su propia clave (por ejemplo PRO-1), backlog y sprints." action={<button className="btn-primary btn-sm" onClick={() => setCreating(true)}>Crear proyecto</button>} />
       ) : view === "board" ? (
-        <DndContext sensors={sensors} onDragStart={(e) => setDragId(String(e.active.id))} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
-          <div className="flex gap-3 overflow-x-auto pb-3">
+        <DndContext sensors={sensors} collisionDetection={(args) => { const hit = pointerWithin(args); return hit.length ? hit : rectIntersection(args); }} onDragStart={(e) => setDragId(String(e.active.id))} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
+          <div ref={panRef} className="flex min-h-[60vh] cursor-grab gap-3 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {statuses.map((s) => (
               <StatusColumn key={s.id} status={s} projects={filtered.filter((p) => p.statusId === s.id)} />
             ))}
@@ -132,10 +134,23 @@ function StatusColumn({ status, projects }: { status: Status; projects: ProjectC
 }
 
 function DraggableCard({ project }: { project: ProjectCardData }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: project.id });
+  // Solo el cuadradito arrastra el proyecto a otra fase; el resto de la tarjeta abre el proyecto.
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({ id: project.id });
   return (
-    <motion.div variants={staggerChild} ref={setNodeRef} {...attributes} {...listeners} className={isDragging ? "opacity-30" : undefined}>
+    <motion.div variants={staggerChild} ref={setNodeRef} className={cn("relative", isDragging && "opacity-30")}>
       <ProjectCard project={project} />
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        data-no-pan
+        {...attributes}
+        {...listeners}
+        title="Arrastrar para cambiar de fase"
+        aria-label={`Mover ${project.name} a otra fase`}
+        className="absolute right-2 top-2 flex h-6 w-6 cursor-grab touch-none items-center justify-center rounded-md border border-line-strong bg-paper text-ink-faint transition-colors hover:border-rust hover:text-rust active:cursor-grabbing"
+      >
+        <DragIcon size={14} />
+      </button>
     </motion.div>
   );
 }
