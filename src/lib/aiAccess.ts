@@ -21,6 +21,15 @@ const RULES: Array<{ method: string; path: RegExp }> = [
   { method: "PATCH", path: new RegExp(`^/api/notes/${ID}$`) },
 ];
 
+// Borrados que un token puede hacer SOLO si su dueño activó "permitir borrar" (se comprueba en apiUser,
+// porque el middleware no consulta la base). Nunca proyectos, sprints, personas ni equipos.
+const DELETE_RULES: RegExp[] = [new RegExp(`^/api/issues/${ID}$`), new RegExp(`^/api/notes/${ID}$`), new RegExp(`^/api/comments/${ID}$`)];
+
+export function isDeletableByToken(method: string, pathname: string): boolean {
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  return method.toUpperCase() === "DELETE" && DELETE_RULES.some((r) => r.test(path));
+}
+
 export function isAllowedForToken(method: string, pathname: string): boolean {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
   return RULES.some((r) => r.method === method.toUpperCase() && r.path.test(path));

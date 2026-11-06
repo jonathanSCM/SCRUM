@@ -501,6 +501,7 @@ model ApiToken {
   prefix      String // primeros caracteres, solo para reconocerlo en pantalla
   createdAt   DateTime  @default(now())
   lastUsedAt  DateTime?
+  allowDelete Boolean   @default(false) // opcional: permite borrar tickets, notas y comentarios
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

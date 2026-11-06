@@ -435,6 +435,26 @@ async function main() {
   const refsB = await prisma.chatRef.findMany({ where: { messageId: kb.json.id } });
   check("en B, #SAI apunta al proyecto de B", refsB.some((r) => r.targetId === B.project.id) && !refsB.some((r) => r.targetId === A.project.id));
 
+  console.log("11) Token IA: permiso de borrar");
+  // (Marta salió de A en la sección 6: se la vuelve a agregar para probar el token.)
+  await prisma.membership.upsert({ where: { userId_workspaceId: { userId: multi.id, workspaceId: A.ws.id } }, create: { userId: multi.id, workspaceId: A.ws.id, role: "ADMIN" }, update: {} });
+  const mine = await tk.req("POST", `/api/projects/${A.project.id}/issues`, { title: "para borrar con token" });
+  const dl0 = await tk.req("DELETE", `/api/issues/${mine.json.id}`);
+  check("sin 'permitir borrar' el token no borra (403)", dl0.status === 403, `dio ${dl0.status}`);
+  await prisma.apiToken.updateMany({ where: { userId: multi.id }, data: { allowDelete: true } });
+  const dl1 = await tk.req("DELETE", `/api/issues/${B.task.id}`);
+  check("con permiso, no borra tickets de otro equipo (404)", dl1.status === 404, `dio ${dl1.status}`);
+  check("y el ticket de B sigue ahí", !!(await prisma.task.findUnique({ where: { id: B.task.id } })));
+  const dl2 = await tk.req("DELETE", `/api/projects/${A.project.id}`);
+  check("con permiso, sigue sin poder borrar proyectos (403)", dl2.status === 403, `dio ${dl2.status}`);
+  const dl3 = await tk.req("DELETE", `/api/issues/${mine.json.id}`);
+  check("con permiso, borra un ticket de su equipo", dl3.status === 200 && !(await prisma.task.findUnique({ where: { id: mine.json.id } })), `dio ${dl3.status}`);
+  const dl4 = await tk.req("DELETE", `/api/workspaces/leave`);
+  check("con permiso, el token sigue sin poder salir de equipos ni administrar (403)", dl4.status === 403, `dio ${dl4.status}`);
+  await prisma.apiToken.updateMany({ where: { userId: multi.id }, data: { allowDelete: false } });
+  const dl5 = await tk.req("DELETE", `/api/notes/${A.note.id}`);
+  check("al desactivarlo vuelve a no poder borrar (403)", dl5.status === 403, `dio ${dl5.status}`);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

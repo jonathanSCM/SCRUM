@@ -16,7 +16,7 @@ import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from 
 import { buildPushPayload } from "../push";
 import { canChangeRole, invitationState, inviteExpiry, normalizeEmail, maxOwnedTeams, toLegacyRole, roleBadge, normalizeRole, migratedRole, canRemoveOrDemote, slugify, uniqueSlug } from "./roles";
 import { weekWindow, compareLabel, mergeProjectActivity, WEEK_MS } from "./weekly";
-import { isAllowedForToken } from "../aiAccess";
+import { isAllowedForToken, isDeletableByToken } from "../aiAccess";
 import { importSchema, countIssues, matchMember, issueKeyOf } from "./aiImport";
 import { snippetOf, parseRefs, splitMessage, applyInsertedRefs, makeToken, isValidChatColor, plainText } from "./chat";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
@@ -458,6 +458,12 @@ describe("token IA", () => {
       ["GET", "/api/ai/projects/abc/extra"], ["POST", "/api/ai/projects"],
     ];
     for (const [m, p] of no) expect(isAllowedForToken(m, p), `${m} ${p}`).toBe(false);
+  });
+  it("borrados de token: solo tickets, notas y comentarios", () => {
+    for (const p of ["/api/issues/abc123", "/api/notes/abc123", "/api/comments/abc123"]) expect(isDeletableByToken("DELETE", p), p).toBe(true);
+    for (const p of ["/api/projects/abc123", "/api/sprints/abc123", "/api/users/abc123", "/api/workspaces/leave", "/api/issues/abc/comments", "/api/tokens"]) expect(isDeletableByToken("DELETE", p), p).toBe(false);
+    expect(isDeletableByToken("GET", "/api/issues/abc123")).toBe(false);
+    expect(isAllowedForToken("DELETE", "/api/issues/abc123")).toBe(false);
   });
   it("valida y cuenta una importación", () => {
     const input = importSchema.parse({

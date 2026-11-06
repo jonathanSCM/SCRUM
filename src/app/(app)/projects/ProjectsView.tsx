@@ -88,6 +88,7 @@ export default function ProjectsView({ projects, statuses }: { projects: Project
               </button>
             ))}
           </div>
+          <Link href="/projects/import" className="btn-ghost btn-sm">Importar con IA</Link>
           <button className="btn-primary btn-sm" onClick={() => setCreating(true)}>
             <PlusIcon size={14} /> Nuevo proyecto
           </button>
