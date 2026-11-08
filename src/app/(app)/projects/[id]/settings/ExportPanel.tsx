@@ -90,6 +90,7 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
         <select className="field" value={kind} onChange={(e) => setKind(e.target.value as ExportPromptKind)}>
           <option value="analyze">Analizar el proyecto y recomendar prioridades</option>
           <option value="newTickets">Proponer tickets nuevos (devuelve JSON para Importar con IA)</option>
+          <option value="changes">Proponer cambios a tickets existentes (estado, prioridad, responsable…)</option>
         </select>
       </div>
       <div className="flex flex-wrap gap-2">

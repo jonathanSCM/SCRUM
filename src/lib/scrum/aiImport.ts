@@ -70,3 +70,31 @@ export function matchMember<T extends { id: string; name: string; email: string 
 }
 
 export const issueKeyOf = (type: string, title: string) => `${type}:${title.trim().toLowerCase()}`;
+
+
+// ---- Cambios sobre tickets que ya existen (se identifican por su clave, ej. SAI-12) ----
+export const MAX_CHANGES = 300;
+
+export const changesSchema = z.object({
+  project: z.object({ id: z.string().min(1) }),
+  changes: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(40),
+        title: z.string().trim().min(1).max(300).optional(),
+        description: z.string().max(20000).optional(),
+        status: z.enum(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"]).optional(),
+        priority: priority.optional(),
+        storyPoints: z.number().int().min(0).max(100).nullable().optional(),
+        assignee: z.string().trim().max(200).nullable().optional(), // nombre o email; null = sin responsable
+        sprint: z.string().trim().max(200).nullable().optional(), // nombre del sprint; null = al backlog
+        labels: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
+        dueDate: z.string().trim().refine((v) => !Number.isNaN(Date.parse(v)), "Fecha inválida").nullable().optional(),
+        comment: z.string().trim().min(1).max(5000).optional(),
+      })
+    )
+    .min(1)
+    .max(MAX_CHANGES),
+});
+
+export type ChangesInput = z.infer<typeof changesSchema>;

@@ -78,7 +78,7 @@ Reglas:
 - Los campos opcionales se pueden omitir.`;
 
 // Prompts para pasar la exportación del proyecto a una IA (junto con el JSON).
-export type ExportPromptKind = "analyze" | "newTickets";
+export type ExportPromptKind = "analyze" | "newTickets" | "changes";
 
 export function buildExportPrompt(kind: ExportPromptKind, projectId: string): string {
   const intro = `Te paso el JSON de un proyecto de SCRUM ProShop (épicas, historias, tareas y bugs con su estado, prioridad, responsables y comentarios; el modo completo suma sprints, notas, retros y archivos). Léelo entero antes de responder y usa las claves (por ejemplo SAI-12) para referirte a los tickets. No inventes datos que no estén en el JSON.`;
@@ -92,6 +92,25 @@ Quiero que me hagas, en español y de forma concisa:
 4. Sugerencias de mejora para el siguiente sprint.
 
 Al final, espera mis preguntas.`;
+  }
+  if (kind === "changes") {
+    return `${intro}
+
+Quiero que propongas CAMBIOS sobre tickets que YA existen (reordenar prioridades, corregir estados, asignar responsables, ajustar puntos, mover entre sprints, agregar comentarios). Cuando termine la conversación, respóndeme SOLO con un bloque de código JSON en este formato para aplicarlo en la app (Proyectos > Importar con IA):
+
+{
+  "project": { "id": "${projectId}" },
+  "changes": [
+    { "key": "SAI-12", "status": "IN_PROGRESS", "priority": "ALTA", "storyPoints": 5, "assignee": "nombre o email", "sprint": "Sprint 2", "comment": "Motivo del cambio" }
+  ]
+}
+
+Reglas:
+- "key" es obligatorio y debe ser un ticket del JSON que te pasé. Incluye SOLO los campos que cambian.
+- status: TODO | IN_PROGRESS | IN_REVIEW | DONE. priority: URGENTE | ALTA | MEDIA | BAJA.
+- assignee: nombre o email de alguien del proyecto, o null para dejarlo sin responsable. sprint: nombre exacto de un sprint existente, o null para llevarlo al backlog.
+- También se aceptan title, description, labels (lista), dueDate (AAAA-MM-DD) y comment.
+- Máximo 300 cambios. JSON válido (comillas dobles, sin comas finales ni comentarios).`;
   }
   return `${intro}
 

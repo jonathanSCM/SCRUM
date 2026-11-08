@@ -540,6 +540,28 @@ async function main() {
   const rt2 = await cAOwner.req("POST", "/api/ai/import", { project: { id: rt.json.project.id }, epics: ex1.json.epics, stories: ex1.json.stories, tasks: ex1.json.tasks });
   check("y repetirlo no duplica nada", rt2.status === 200 && (rt2.json.created.tasks.length + rt2.json.created.stories.length + rt2.json.created.epics.length) === 0, `dio ${rt2.status} ${rt2.text.slice(0, 200)}`);
 
+  console.log("15) Sprint 3: enlaces de Drive y cambios por JSON");
+  const drx = await cPlain.req("POST", `/api/projects/${A.project.id}/resources`, { url: "https://docs.google.com/document/d/1AbCdEfGhIjKlMn/edit", taskId: A.task.id });
+  check("un enlace de Drive sin título recibe un nombre amable y vista previa", drx.status === 201 && drx.json.title === "Documento de Google" && drx.json.preview?.endsWith("/preview") && drx.json.service === "Google Drive", `dio ${drx.status} ${drx.text.slice(0, 160)}`);
+  const dr2x = await cPlain.req("GET", `/api/projects/${A.project.id}/resources?task=${A.task.id}`);
+  check("se listan los enlaces de un ticket", dr2x.status === 200 && dr2x.json.length >= 1 && dr2x.json.every((r) => r.task?.id === A.task.id));
+  const ch0x = await cPlain.req("POST", "/api/ai/changes", { project: { id: A.project.id }, changes: [{ key: "SAI-1", status: "IN_PROGRESS", priority: "URGENTE", storyPoints: 8, assignee: "Aldo", sprint: "Sprint A", comment: "Ajuste por la IA" }] });
+  check("cambios por JSON: se aplican estado, prioridad, puntos, responsable, sprint y comentario", ch0x.status === 200 && ch0x.json.applied.length === 1 && ch0x.json.failed.length === 0 && ch0x.json.applied[0].fields.length === 6, `dio ${ch0x.status} ${ch0x.text.slice(0, 220)}`);
+  const t1x = await prisma.task.findUnique({ where: { id: A.task.id } });
+  check("quedaron guardados", t1x.status === "IN_PROGRESS" && t1x.priority === "URGENTE" && t1x.storyPoints === 8 && t1x.assigneeUserId === aMember.id && t1x.sprintId === A.sprint.id);
+  check("y el comentario quedó a nombre de quien lo aplicó", (await prisma.comment.count({ where: { taskId: A.task.id, authorId: plain.id, body: "Ajuste por la IA" } })) === 1);
+  const ch1x = await cPlain.req("POST", "/api/ai/changes", { project: { id: A.project.id }, changes: [{ key: "SAI-999", status: "DONE" }, { key: "XYZ-1", status: "DONE" }, { key: "SAI-1", assignee: "Nadie Existe" }, { key: "SAI-1", sprint: "No hay" }, { key: "SAI-1" }] });
+  check("claves inexistentes, de otro proyecto, personas o sprints desconocidos y cambios vacíos fallan uno por uno", ch1x.status === 200 && ch1x.json.failed.length === 5 && ch1x.json.applied.length === 0, `${ch1x.status} ${ch1x.text.slice(0, 300)}`);
+  const ch2x = await cBOnly.req("POST", "/api/ai/changes", { project: { id: A.project.id }, changes: [{ key: "SAI-1", status: "DONE" }] });
+  check("alguien de otro equipo no cambia tickets de A (404)", ch2x.status === 404, `dio ${ch2x.status}`);
+  const ch3x = await cPlain.req("POST", "/api/ai/changes", { project: { id: B.project.id }, changes: [{ key: "SAI-1", status: "DONE" }] });
+  check("tampoco con el proyecto de B si no es miembro de B (404)", ch3x.status === 404, `dio ${ch3x.status}`);
+  check("el ticket de B no se tocó", (await prisma.task.findUnique({ where: { id: B.task.id } })).status !== "DONE");
+  const ch4x = await tk.req("POST", "/api/ai/changes", { project: { id: A.project.id }, changes: [{ key: "SAI-1", priority: "ALTA" }] });
+  check("el token IA puede aplicar cambios en su equipo", ch4x.status === 200 && ch4x.json.applied.length === 1, `dio ${ch4x.status} ${ch4x.text.slice(0, 160)}`);
+  const ch5x = await cPlain.req("POST", "/api/ai/changes", { project: { id: A.project.id }, changes: [{ key: "SAI-1", status: "HECHO" }] });
+  check("un estado inválido se rechaza (400)", ch5x.status === 400, `dio ${ch5x.status}`);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

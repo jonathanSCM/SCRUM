@@ -12,6 +12,7 @@ const RULES: Array<{ method: string; path: RegExp }> = [
   { method: "GET", path: new RegExp(`^/api/projects/${ID}/export-json$`) },
   // Crear proyectos, sprints (sin iniciar), tickets y notas; mover; comentar
   { method: "POST", path: /^\/api\/ai\/import$/ },
+  { method: "POST", path: /^\/api\/ai\/changes$/ },
   { method: "POST", path: /^\/api\/projects$/ },
   { method: "POST", path: new RegExp(`^/api/projects/${ID}/(issues|move|bulk|sprints|notes)$`) },
   { method: "POST", path: new RegExp(`^/api/issues/${ID}/comments$`) },

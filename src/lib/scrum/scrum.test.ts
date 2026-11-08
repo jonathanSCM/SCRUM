@@ -725,3 +725,24 @@ describe("menciones en comentarios y fechas del checklist", () => {
     expect(isOverdue({ id: "a", text: "x", done: false }, "2026-02-01")).toBe(false);
   });
 });
+
+import { friendlyTitle, previewUrl } from "./resources";
+
+describe("enlaces de Drive: nombre y vista previa", () => {
+  it("nombre amable según el tipo de enlace", () => {
+    expect(friendlyTitle("https://docs.google.com/document/d/1AbCdEfGhIjK/edit")).toBe("Documento de Google");
+    expect(friendlyTitle("https://docs.google.com/spreadsheets/d/1AbCdEfGhIjK/edit#gid=0")).toBe("Hoja de cálculo de Google");
+    expect(friendlyTitle("https://drive.google.com/drive/folders/1AbCdEfGhIjK")).toBe("Carpeta de Google Drive");
+    expect(friendlyTitle("https://drive.google.com/file/d/1AbCdEfGhIjK/view")).toBe("Archivo de Google Drive");
+    expect(friendlyTitle("https://ejemplo.com/a/b/")).toBe("ejemplo.com/a/b");
+  });
+  it("vista previa: solo direcciones conocidas y con id válido", () => {
+    expect(previewUrl("https://drive.google.com/file/d/1AbCdEfGhIjK/view?usp=sharing")).toBe("https://drive.google.com/file/d/1AbCdEfGhIjK/preview");
+    expect(previewUrl("https://docs.google.com/document/d/1AbCdEfGhIjK/edit")).toBe("https://docs.google.com/document/d/1AbCdEfGhIjK/preview");
+    expect(previewUrl("https://drive.google.com/drive/folders/1AbCdEfGhIjK")).toBe("https://drive.google.com/embeddedfolderview?id=1AbCdEfGhIjK#list");
+    expect(previewUrl("https://docs.google.com/forms/d/1AbCdEfGhIjK/edit")).toBeNull();
+    expect(previewUrl("https://evil.com/file/d/1AbCdEfGhIjK")).toBeNull();
+    expect(previewUrl("https://drive.google.com.evil.com/file/d/1AbCdEfGhIjK")).toBeNull();
+    expect(previewUrl("https://www.figma.com/design/abc/Mi-diseno")).toContain("figma.com/embed");
+  });
+});

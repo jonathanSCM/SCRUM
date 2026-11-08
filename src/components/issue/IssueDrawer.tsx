@@ -289,6 +289,8 @@ function DrawerBody({
 
           <Attachments issueId={issue.id} items={data.attachments} onChange={load} />
 
+          <TicketLinks projectId={issue.projectId} issueId={issue.id} currentUserId={currentUserId} isLead={currentUserRole === "LEAD"} />
+
           <section>
             <div className="mb-3 flex gap-5 border-b border-line-strong">
               {(
@@ -1002,5 +1004,74 @@ function Involved({ issueId, people, current, onChange }: { issueId: string; peo
         </select>
       )}
     </div>
+  );
+}
+
+
+// Enlaces (Drive, Figma…) de este ticket. Se guardan en la sección Archivos del proyecto, asociados al ticket.
+type TicketResource = { id: string; kind: "FILE" | "LINK"; title: string; url: string | null; service: string | null; uploadedBy: { id: string; name: string } | null };
+function TicketLinks({ projectId, issueId, currentUserId, isLead }: { projectId: string; issueId: string; currentUserId: string; isLead: boolean }) {
+  const toast = useToast();
+  const [items, setItems] = useState<TicketResource[]>([]);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await api<TicketResource[]>(`/api/projects/${projectId}/resources?task=${issueId}`);
+    if (res.ok) setItems(res.data);
+  }, [projectId, issueId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function add() {
+    const value = url.trim();
+    if (!value || busy) return;
+    setBusy(true);
+    const res = await api(`/api/projects/${projectId}/resources`, "POST", { url: value, taskId: issueId });
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error);
+    setUrl("");
+    void load();
+  }
+
+  async function remove(id: string) {
+    const res = await api(`/api/resources/${id}`, "DELETE");
+    if (!res.ok) return toast.error(res.error);
+    void load();
+  }
+
+  return (
+    <section>
+      <h3 className="mb-2 font-display text-sm font-bold text-ink">
+        Enlaces y documentos {items.length > 0 && <span className="font-mono text-ink-faint">({items.length})</span>}
+      </h3>
+      {items.length > 0 && (
+        <ul className="mb-2 space-y-1.5">
+          {items.map((r) => (
+            <li key={r.id} className="flex items-center gap-2 rounded-md border border-line-strong px-2.5 py-1.5 text-sm">
+              <span className="shrink-0 rounded border border-blue px-1 text-[10px] font-bold uppercase text-blue">{r.kind === "LINK" ? r.service ?? "Enlace" : "Archivo"}</span>
+              <a href={r.kind === "LINK" ? r.url! : `/api/resources/${r.id}/file`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-medium text-ink hover:text-rust hover:underline">{r.title}</a>
+              {(r.uploadedBy?.id === currentUserId || isLead) && (
+                <button className="text-xs text-ink-faint hover:text-danger" onClick={() => remove(r.id)} aria-label={`Quitar ${r.title}`}>quitar</button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <input
+        className="field field-sm"
+        placeholder="Pega un enlace (Drive, Figma…) y Enter"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void add();
+          }
+        }}
+      />
+      <p className="mt-1 text-[11px] text-ink-faint">Para subir archivos o ver todo con etiquetas, usa la pestaña <a href={`/projects/${projectId}/files`} className="font-semibold text-rust hover:underline">Archivos</a>.</p>
+    </section>
   );
 }

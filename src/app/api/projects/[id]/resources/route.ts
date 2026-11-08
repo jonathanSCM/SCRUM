@@ -3,16 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { logHistory } from "@/lib/history";
-import { MAX_RESOURCE_BYTES, normalizeTags, normalizeUrl } from "@/lib/scrum/resources";
+import { MAX_RESOURCE_BYTES, friendlyTitle, normalizeTags, normalizeUrl } from "@/lib/scrum/resources";
 import { checkBelongsTo, listResources, resourceSelect, toResourceDTO } from "@/lib/resourceData";
 
 // Archivos y enlaces del proyecto.
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const auth = await apiUser({ project: id });
   if ("error" in auth) return auth.error;
   try {
-    return NextResponse.json(await listResources(id));
+    const q = new URL(req.url).searchParams;
+    return NextResponse.json(await listResources(id, { taskId: q.get("task"), sprintId: q.get("sprint") }));
   } catch (e) {
     return errorResponse(e);
   }
@@ -51,7 +52,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     } else {
       const url = normalizeUrl(str("url"));
       if (!url) return NextResponse.json({ error: "Pega un enlace válido (http o https) o elige un archivo" }, { status: 400 });
-      data = { kind: "LINK", title: str("title").slice(0, 200) || url.replace(/^https?:\/\//, "").slice(0, 120), url };
+      data = { kind: "LINK", title: str("title").slice(0, 200) || friendlyTitle(url), url };
     }
 
     const row = await prisma.projectResource.create({

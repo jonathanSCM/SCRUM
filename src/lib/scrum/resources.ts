@@ -57,3 +57,53 @@ export function linkService(url: string): string {
   if (host.endsWith("onedrive.live.com") || host.endsWith("sharepoint.com") || host === "1drv.ms") return "OneDrive";
   return host;
 }
+
+const DRIVE_ID = "[A-Za-z0-9_-]{10,}";
+
+// Nombre amable para un enlace sin título (sin consultar la red).
+export function friendlyTitle(url: string): string {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return url.slice(0, 120);
+  }
+  const p = u.pathname;
+  if (u.hostname === "docs.google.com") {
+    if (p.startsWith("/document/")) return "Documento de Google";
+    if (p.startsWith("/spreadsheets/")) return "Hoja de cálculo de Google";
+    if (p.startsWith("/presentation/")) return "Presentación de Google";
+    if (p.startsWith("/forms/")) return "Formulario de Google";
+  }
+  if (u.hostname === "drive.google.com") {
+    if (/\/folders\//.test(p)) return "Carpeta de Google Drive";
+    if (/\/file\//.test(p) || u.searchParams.has("id")) return "Archivo de Google Drive";
+  }
+  if (u.hostname.endsWith("figma.com")) return "Diseño en Figma";
+  return (u.hostname.replace(/^www\./, "") + p.replace(/\/$/, "")).slice(0, 120);
+}
+
+// Dirección para mostrar el enlace dentro de la app (vista previa), o null si no se puede incrustar.
+export function previewUrl(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const p = u.pathname;
+  if (u.hostname === "drive.google.com") {
+    const file = p.match(new RegExp(`^/file/d/(${DRIVE_ID})`));
+    if (file) return `https://drive.google.com/file/d/${file[1]}/preview`;
+    const folder = p.match(new RegExp(`^/drive/(?:u/\\\\d+/)?folders/(${DRIVE_ID})`));
+    if (folder) return `https://drive.google.com/embeddedfolderview?id=${folder[1]}#list`;
+    return null;
+  }
+  if (u.hostname === "docs.google.com") {
+    const doc = p.match(new RegExp(`^/(document|spreadsheets|presentation)/d/(${DRIVE_ID})`));
+    if (doc) return `https://docs.google.com/${doc[1]}/d/${doc[2]}/preview`;
+    return null;
+  }
+  if (u.hostname.endsWith("figma.com") && /^\/(file|design|proto|board)\//.test(p)) return `https://www.figma.com/embed?embed_host=scrum-proshop&url=${encodeURIComponent(url)}`;
+  return null;
+}

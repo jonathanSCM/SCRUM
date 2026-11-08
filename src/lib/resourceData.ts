@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
-import { linkService, parseTags } from "@/lib/scrum/resources";
+import { friendlyTitle, linkService, parseTags, previewUrl } from "@/lib/scrum/resources";
 
 export type ResourceDTO = {
   id: string;
@@ -9,6 +9,7 @@ export type ResourceDTO = {
   title: string;
   url: string | null;
   service: string | null;
+  preview: string | null; // dirección para ver el enlace dentro de la app (Drive, Docs, Figma)
   filename: string | null;
   mimeType: string | null;
   size: number | null;
@@ -39,6 +40,7 @@ export function toResourceDTO(r: Row, projectKey: string | null): ResourceDTO {
     title: r.title,
     url: r.url,
     service: r.url ? linkService(r.url) : null,
+    preview: r.url ? previewUrl(r.url) : null,
     filename: r.filename,
     mimeType: r.mimeType,
     size: r.size,
@@ -50,9 +52,9 @@ export function toResourceDTO(r: Row, projectKey: string | null): ResourceDTO {
   };
 }
 
-export async function listResources(projectId: string): Promise<ResourceDTO[]> {
+export async function listResources(projectId: string, filter: { taskId?: string | null; sprintId?: string | null } = {}): Promise<ResourceDTO[]> {
   const project = await prisma.project.findUnique({ where: { id: projectId }, select: { key: true } });
-  const rows = await prisma.projectResource.findMany({ where: { projectId }, orderBy: { createdAt: "desc" }, select: resourceSelect, take: 500 });
+  const rows = await prisma.projectResource.findMany({ where: { projectId, ...(filter.taskId ? { taskId: filter.taskId } : {}), ...(filter.sprintId ? { sprintId: filter.sprintId } : {}) }, orderBy: { createdAt: "desc" }, select: resourceSelect, take: 500 });
   return rows.map((r) => toResourceDTO(r, project?.key ?? null));
 }
 

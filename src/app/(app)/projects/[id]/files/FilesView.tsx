@@ -22,6 +22,7 @@ export default function FilesView({ projectId, initial, sprints, tickets, curren
   const [tag, setTag] = useState("");
   const [scope, setScope] = useState(""); // "" todo | "project" | sprint:<id> | task:<id>
   const [editing, setEditing] = useState<ResourceDTO | null>(null);
+  const [previewing, setPreviewing] = useState<ResourceDTO | null>(null);
 
   const allTags = useMemo(() => [...new Set(items.flatMap((r) => r.tags))].sort((a, b) => a.localeCompare(b)), [items]);
   const shown = useMemo(() => {
@@ -83,6 +84,8 @@ export default function FilesView({ projectId, initial, sprints, tickets, curren
         />
       )}
 
+      {previewing && <PreviewModal r={previewing} onClose={() => setPreviewing(null)} />}
+
       {items.length === 0 ? (
         <EmptyState title="Todavía no hay archivos ni enlaces" hint="Sube documentos o pega enlaces (Drive, Figma…), ponles etiquetas e indica si son del proyecto, de un sprint o de un ticket." />
       ) : shown.length === 0 ? (
@@ -110,6 +113,7 @@ export default function FilesView({ projectId, initial, sprints, tickets, curren
                   </p>
                 )}
               </div>
+              {previewSrc(r) && <button className="shrink-0 text-xs text-ink-soft hover:text-ink" onClick={() => setPreviewing(r)}>Vista previa</button>}
               {(r.uploadedBy?.id === currentUserId || isLead) && (
                 <div className="flex shrink-0 gap-3 text-xs">
                   <button className="text-ink-soft hover:text-ink" onClick={() => { setAdding(null); setEditing(r); }}>Editar</button>
@@ -205,5 +209,37 @@ function ResourceForm({ mode, projectId, resource, sprints, tickets, knownTags, 
         <button className="btn-primary" disabled={busy}>{busy ? "Guardando…" : mode === "edit" ? "Guardar" : mode === "file" ? "Subir" : "Agregar"}</button>
       </div>
     </form>
+  );
+}
+
+
+// Dirección que se puede mostrar dentro de la app: enlaces de Drive/Docs/Figma, imágenes y PDF.
+function previewSrc(r: ResourceDTO): string | null {
+  if (r.kind === "LINK") return r.preview;
+  return r.mimeType && /^(image\/(png|jpe?g|gif|webp)|application\/pdf)$/.test(r.mimeType) ? `/api/resources/${r.id}/file` : null;
+}
+
+function PreviewModal({ r, onClose }: { r: ResourceDTO; onClose: () => void }) {
+  const src = previewSrc(r)!;
+  const isImage = r.kind === "FILE" && !!r.mimeType?.startsWith("image/");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label={`Vista previa de ${r.title}`} onClick={onClose}>
+      <div className="flex h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-line-strong bg-surface shadow-hard-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 border-b border-line px-4 py-2">
+          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{r.title}</p>
+          <a href={r.kind === "LINK" ? r.url! : `/api/resources/${r.id}/file`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-rust hover:underline">Abrir en otra pestaña</a>
+          <button className="text-ink-faint hover:text-ink" onClick={onClose} aria-label="Cerrar">✕</button>
+        </div>
+        <div className="min-h-0 flex-1 bg-paper-deep">
+          {isImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={src} alt={r.title} className="mx-auto h-full w-full object-contain" />
+          ) : (
+            <iframe src={src} title={r.title} className="h-full w-full border-0" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" referrerPolicy="no-referrer" />
+          )}
+        </div>
+        {r.kind === "LINK" && <p className="border-t border-line px-4 py-1.5 text-[11px] text-ink-faint">Si no se ve, el documento no está compartido con tu cuenta o no permite vista previa: usa «Abrir en otra pestaña».</p>}
+      </div>
+    </div>
   );
 }
