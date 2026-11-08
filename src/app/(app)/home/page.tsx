@@ -6,6 +6,8 @@ import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { pct } from "@/lib/ui";
 import HomeView from "./HomeView";
 
+export const metadata = { title: "Inicio" };
+
 export default async function HomePage() {
   const { session, workspaceId } = await requireWorkspace();
   const inWs = { project: { workspaceId } };

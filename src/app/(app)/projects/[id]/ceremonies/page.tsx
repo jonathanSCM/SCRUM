@@ -5,6 +5,8 @@ import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { summarizeReview } from "@/lib/scrum/ceremonies";
 import CeremoniesView from "./CeremoniesView";
 
+export const metadata = { title: "Ceremonias" };
+
 export default async function CeremoniesPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; sprint?: string }> }) {
   const { id } = await params;
   const { tab, sprint: sprintParam } = await searchParams;

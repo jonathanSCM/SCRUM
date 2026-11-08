@@ -82,7 +82,7 @@ export async function POST(req: Request) {
     const created = { epics: [] as string[], stories: [] as string[], tasks: [] as string[] };
     const skipped: string[] = [];
 
-    type Common = { title: string; description?: string; priority?: "URGENTE" | "ALTA" | "MEDIA" | "BAJA"; storyPoints?: number | null; assignee?: string; labels?: string[]; checklist?: string[]; dueDate?: string };
+    type Common = { title: string; description?: string; priority?: "URGENTE" | "ALTA" | "MEDIA" | "BAJA"; storyPoints?: number | null; assignee?: string; labels?: string[]; checklist?: Array<string | { text: string; done?: boolean; due?: string | null }>; dueDate?: string };
     async function ensure(type: "EPIC" | "STORY" | "TASK" | "BUG", c: Common, extra: Partial<CreateIssueInput> = {}): Promise<string> {
       const k = issueKeyOf(type, c.title);
       const found = existing.get(k);
@@ -107,7 +107,10 @@ export async function POST(req: Request) {
           labels: c.labels,
           dueDate: c.dueDate,
           assigneeUserId,
-          checklist: c.checklist?.map((text, i) => ({ id: `i${i}${Math.random().toString(36).slice(2, 7)}`, text, done: false })),
+          checklist: c.checklist?.map((step, i) => {
+            const o = typeof step === "string" ? { text: step } : step;
+            return { id: `i${i}${Math.random().toString(36).slice(2, 7)}`, text: o.text, done: "done" in o ? !!o.done : false, ...("due" in o && o.due ? { due: o.due } : {}) };
+          }),
           ...extra,
         },
         user,

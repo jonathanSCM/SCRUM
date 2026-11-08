@@ -7,7 +7,7 @@ import { timeAgo } from "@/lib/ui";
 import { useToast } from "@/components/ui/Toaster";
 import { useConfirm } from "@/components/ConfirmDialog";
 
-type TokenInfo = { prefix: string; createdAt: string; lastUsedAt: string | null } | null;
+type TokenInfo = { prefix: string; createdAt: string; lastUsedAt: string | null; allowDelete: boolean } | null;
 type LogRow = { route: string; createdAt: string };
 
 // Mi perfil → Token IA: para que un asistente (Claude) cargue proyectos en tu nombre.
@@ -20,6 +20,7 @@ export default function AiTokenCard({ userName }: { userName: string }) {
   const [busy, setBusy] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null); // token en claro: solo existe justo después de crearlo
   const [showLogs, setShowLogs] = useState(false);
+  const [wantDelete, setWantDelete] = useState(false); // para el token que se va a generar
 
   async function load() {
     const res = await api<{ token: TokenInfo; logs: LogRow[] }>("/api/tokens");
@@ -36,10 +37,18 @@ export default function AiTokenCard({ userName }: { userName: string }) {
   async function generate() {
     if (info && !(await confirm("Ya tenés un token. Generar uno nuevo invalida el anterior y lo que lo use deja de funcionar. ¿Seguimos?", { confirmLabel: "Generar nuevo" }))) return;
     setBusy(true);
-    const res = await api<{ token: string }>("/api/tokens", "POST", {});
+    const res = await api<{ token: string }>("/api/tokens", "POST", { allowDelete: info?.allowDelete ?? wantDelete });
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     setFresh(res.data.token);
+    await load();
+  }
+
+  async function toggleDelete(next: boolean) {
+    if (next && !(await confirm("Con esto el asistente podrá borrar tickets, notas y comentarios (nunca proyectos ni sprints). Activalo solo para una limpieza puntual y desactivalo después. ¿Activar?", { confirmLabel: "Activar borrado", danger: true }))) return;
+    const res = await api("/api/tokens", "PATCH", { allowDelete: next });
+    if (!res.ok) return toast.error(res.error);
+    toast.success(next ? "El token ahora puede borrar" : "El token ya no puede borrar");
     await load();
   }
 
@@ -68,13 +77,18 @@ export default function AiTokenCard({ userName }: { userName: string }) {
       <h2 className="font-display text-lg font-extrabold text-ink">Token IA</h2>
       <p className="text-sm text-ink-soft">
         Dale este token a tu asistente (Claude) para que lea tus proyectos y cargue épicas, historias, tareas y notas por vos, sin crear todo a mano.
-        Lo que haga queda registrado a tu nombre, con tus mismos permisos. No puede borrar nada ni iniciar o completar sprints.
+        Lo que haga queda registrado a tu nombre, con tus mismos permisos. Por defecto no puede borrar; puedes activarlo abajo. Nunca puede iniciar ni completar sprints, ni borrar proyectos.
       </p>
 
       {loading ? (
         <div className="skeleton h-10 w-full" />
       ) : !info ? (
-        <button className="btn-primary btn-sm" disabled={busy} onClick={generate}>Generar token</button>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm text-ink-soft">
+            <input type="checkbox" checked={wantDelete} onChange={(e) => setWantDelete(e.target.checked)} /> Permitir que borre tickets, notas y comentarios
+          </label>
+          <button className="btn-primary btn-sm" disabled={busy} onClick={generate}>Generar token</button>
+        </div>
       ) : (
         <div className="space-y-3">
           {fresh ? (
@@ -82,7 +96,7 @@ export default function AiTokenCard({ userName }: { userName: string }) {
               <p className="text-xs font-semibold text-ink">Copialo ahora: por seguridad no se vuelve a mostrar.</p>
               <code className="block overflow-x-auto whitespace-nowrap rounded border border-line-strong bg-paper px-2 py-1.5 text-xs text-ink">{fresh}</code>
               <div className="flex flex-wrap gap-2">
-                <button className="btn-primary btn-sm" onClick={() => copy(buildAiAccessPrompt(window.location.origin, fresh, userName), "Prompt")}>Copiar prompt para Claude</button>
+                <button className="btn-primary btn-sm" onClick={() => copy(buildAiAccessPrompt(window.location.origin, fresh, userName, info.allowDelete), "Prompt")}>Copiar prompt para Claude</button>
                 <button className="btn-ghost btn-sm" onClick={() => copy(fresh, "Token")}>Copiar solo el token</button>
               </div>
               <p className="text-xs text-ink-faint">El prompt ya incluye el token y las instrucciones: pegáselo a Claude y listo.</p>
@@ -93,6 +107,10 @@ export default function AiTokenCard({ userName }: { userName: string }) {
               {info.lastUsedAt ? `último uso ${timeAgo(info.lastUsedAt)}` : "todavía sin usar"}. Si lo perdiste, generá uno nuevo.
             </p>
           )}
+          <label className="flex items-start gap-2 text-sm text-ink-soft">
+            <input type="checkbox" className="mt-1" checked={info.allowDelete} onChange={(e) => void toggleDelete(e.target.checked)} />
+            <span>Permitir que borre tickets, notas y comentarios <span className="text-ink-faint">(no proyectos ni sprints). Actívalo solo cuando lo necesites.</span></span>
+          </label>
           <div className="flex flex-wrap gap-2">
             <button className="btn-ghost btn-sm" disabled={busy} onClick={generate}>Generar nuevo</button>
             <button className="btn-ghost btn-sm text-danger" disabled={busy} onClick={revoke}>Revocar</button>

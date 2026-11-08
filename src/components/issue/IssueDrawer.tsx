@@ -20,6 +20,9 @@ import {
   type Priority,
 } from "@/lib/scrum/constants";
 import Avatar from "@/components/ui/Avatar";
+import Markdown from "@/components/ui/Markdown";
+import MentionTextarea from "@/components/ui/MentionTextarea";
+import { isOverdue, type ChecklistItem } from "@/lib/scrum/checklist";
 import { CommentIcon, PaperclipIcon, TrashIcon, XIcon, TypeIcon, PriorityIcon } from "@/components/ui/Icons";
 import { StatusLozenge } from "@/components/ui/Lozenge";
 import { useToast } from "@/components/ui/Toaster";
@@ -42,7 +45,7 @@ type IssueDetail = {
   storyPoints: number | null;
   labels: string[];
   readyDone: string[];
-  checklist: Array<{ id: string; text: string; done: boolean }>;
+  checklist: ChecklistItem[];
   parentId: string | null;
   dueDate: string | null;
   createdAt: string;
@@ -67,6 +70,7 @@ type Payload = {
   attachments: Attachment[];
   history: HistoryRow[];
   children: Child[];
+  involved: UserRef[];
   options: { members: UserRef[]; sprints: SprintOption[]; epics: EpicOption[]; stories: Array<{ id: string; number: number | null; title: string }>; readyItems: string[] };
 };
 
@@ -243,6 +247,18 @@ function DrawerBody({
               <h3 className="mb-2 font-display text-sm font-bold text-ink">
                 {isEpic ? "Tickets de la épica" : "Tareas de la historia"} <span className="font-mono text-ink-faint">({done}/{data.children.length})</span>
               </h3>
+              {data.project && (
+                <QuickChild
+                  projectId={data.project.id}
+                  parentId={issue.id}
+                  isEpic={isEpic}
+                  epicId={isEpic ? issue.id : issue.epicId}
+                  onCreated={() => {
+                    void load();
+                    router.refresh();
+                  }}
+                />
+              )}
               {data.children.length === 0 ? (
                 <p className="text-sm text-ink-faint">{isEpic ? "Todavía no hay tickets en esta épica. Elegí la épica desde cualquier ticket." : "Todavía no hay tareas en esta historia. Elegí la historia desde una tarea o un bug."}</p>
               ) : (
@@ -266,12 +282,14 @@ function DrawerBody({
           )}
 
           {!isEpic && data.options.readyItems.length > 0 && (
-            <ReadyChecklist items={data.options.readyItems} done={issue.readyDone} onChange={(readyDone) => patch({ readyDone })} />
+            <ReadyChecklist items={data.options.readyItems} done={issue.readyDone} onChange={(readyDone) => patch({ readyDone })} settingsHref={`/projects/${issue.projectId}/settings`} />
           )}
 
           {!isEpic && <Checklist items={issue.checklist} onChange={(checklist) => patch({ checklist })} />}
 
           <Attachments issueId={issue.id} items={data.attachments} onChange={load} />
+
+          <TicketLinks projectId={issue.projectId} issueId={issue.id} currentUserId={currentUserId} isLead={currentUserRole === "LEAD"} />
 
           <section>
             <div className="mb-3 flex gap-5 border-b border-line-strong">
@@ -294,7 +312,7 @@ function DrawerBody({
               ))}
             </div>
             {tab === "comments" ? (
-              <Comments issueId={issue.id} items={data.comments} currentUserId={currentUserId} currentUserRole={currentUserRole} onChange={() => { load(); router.refresh(); }} />
+              <Comments people={data.options.members} issueId={issue.id} items={data.comments} currentUserId={currentUserId} currentUserRole={currentUserRole} onChange={() => { load(); router.refresh(); }} />
             ) : (
               <Activity items={data.history} />
             )}
@@ -344,6 +362,15 @@ function DrawerBody({
                 Asignármelo
               </button>
             )}
+          </Field>
+
+          <Field label="Involucrados">
+            <Involved
+              issueId={issue.id}
+              people={data.options.members}
+              current={data.involved ?? []}
+              onChange={load}
+            />
           </Field>
 
           <Field label="Reportado por">
@@ -567,10 +594,14 @@ function DescriptionEditor({ value, onSave }: { value: string; onSave: (v: strin
         </div>
       ) : (
         <div
-          className="min-h-[3.5rem] cursor-text whitespace-pre-wrap border border-transparent px-2 py-1.5 -mx-2 text-sm leading-relaxed text-ink-soft hover:border-line-strong rounded-md"
-          onClick={() => setEditing(true)}
+          className="min-h-[3.5rem] cursor-text border border-transparent px-2 py-1.5 -mx-2 text-sm leading-relaxed text-ink-soft hover:border-line-strong rounded-md"
+          onClick={(e) => {
+            // Un clic en un enlace lo abre; en cualquier otra parte, edita.
+            if ((e.target as HTMLElement).closest("a")) return;
+            setEditing(true);
+          }}
         >
-          {value || <span className="text-ink-faint">Agregá una descripción…</span>}
+          {value ? <Markdown text={value} /> : <span className="text-ink-faint">Agrega una descripción… (admite **negrita**, listas y enlaces)</span>}
         </div>
       )}
     </section>
@@ -578,7 +609,7 @@ function DescriptionEditor({ value, onSave }: { value: string; onSave: (v: strin
 }
 
 // Definition of Ready: qué falta para poder empezar este ticket.
-function ReadyChecklist({ items, done, onChange }: { items: string[]; done: string[]; onChange: (done: string[]) => void }) {
+function ReadyChecklist({ items, done, onChange, settingsHref }: { items: string[]; done: string[]; onChange: (done: string[]) => void; settingsHref: string }) {
   const covered = items.filter((i) => done.includes(i)).length;
   const ready = covered === items.length;
   function toggle(item: string) {
@@ -591,6 +622,10 @@ function ReadyChecklist({ items, done, onChange }: { items: string[]; done: stri
         Definition of Ready <span className="font-mono text-ink-faint">({covered}/{items.length})</span>
         <span className={`lozenge ${ready ? "text-moss-ink" : "text-warn"}`}>{ready ? "Listo para empezar" : "Falta información"}</span>
       </h3>
+      <p className="mb-2 text-xs text-ink-faint">
+        Marca lo que ya tienes para este ticket. La lista de ítems es la misma para todos los tickets del proyecto y se edita en{" "}
+        <a href={settingsHref} className="font-semibold text-rust hover:underline">Ajustes del proyecto</a>.
+      </p>
       <ul className="space-y-1.5">
         {items.map((item) => (
           <li key={item}>
@@ -606,7 +641,7 @@ function ReadyChecklist({ items, done, onChange }: { items: string[]; done: stri
 }
 
 // Checklist propio de la tarjeta (pasos chicos que no merecen un ticket).
-function Checklist({ items, onChange }: { items: Array<{ id: string; text: string; done: boolean }>; onChange: (items: Array<{ id: string; text: string; done: boolean }>) => void }) {
+function Checklist({ items, onChange }: { items: ChecklistItem[]; onChange: (items: ChecklistItem[]) => void }) {
   const [draft, setDraft] = useState("");
   const done = items.filter((i) => i.done).length;
 
@@ -632,6 +667,14 @@ function Checklist({ items, onChange }: { items: Array<{ id: string; text: strin
           <li key={it.id} className="group flex items-center gap-2 text-sm">
             <input type="checkbox" className="h-4 w-4 accent-moss" checked={it.done} onChange={() => onChange(items.map((x) => (x.id === it.id ? { ...x, done: !x.done } : x)))} />
             <span className={cn("min-w-0 flex-1 break-words", it.done ? "text-ink-faint line-through" : "text-ink")}>{it.text}</span>
+            <input
+              type="date"
+              className={cn("w-[7.5rem] rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-ink-faint hover:border-line-strong focus:border-line-strong", isOverdue(it) && "font-semibold text-danger")}
+              value={it.due ?? ""}
+              title={isOverdue(it) ? "Vencido" : "Fecha límite de este paso"}
+              aria-label={`Fecha límite de ${it.text}`}
+              onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, due: e.target.value || null } : x)))}
+            />
             <button className="hidden text-xs text-ink-faint hover:text-danger group-hover:inline" onClick={() => onChange(items.filter((x) => x.id !== it.id))} aria-label={`Quitar ${it.text}`}>quitar</button>
           </li>
         ))}
@@ -770,12 +813,14 @@ function Attachments({ issueId, items, onChange }: { issueId: string; items: Att
 }
 
 function Comments({
+  people,
   issueId,
   items,
   currentUserId,
   currentUserRole,
   onChange,
 }: {
+  people: UserRef[];
   issueId: string;
   items: Comment[];
   currentUserId: string;
@@ -817,12 +862,13 @@ function Comments({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <textarea
+        <MentionTextarea
+          people={people}
           rows={3}
           className="field"
-          placeholder="Escribí un comentario…"
+          placeholder="Escribe un comentario… (usa @ para avisar a alguien)"
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={setDraft}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
           }}
@@ -848,14 +894,14 @@ function Comments({
                 </p>
                 {editingId === c.id ? (
                   <div className="mt-1 space-y-2">
-                    <textarea rows={3} className="field" value={editDraft} onChange={(e) => setEditDraft(e.target.value)} autoFocus />
+                    <MentionTextarea people={people} rows={3} className="field" value={editDraft} onChange={setEditDraft} autoFocus />
                     <div className="flex gap-2">
                       <button className="btn-primary btn-sm" onClick={() => saveEdit(c.id)}>Guardar</button>
                       <button className="btn-ghost btn-sm" onClick={() => setEditingId(null)}>Cancelar</button>
                     </div>
                   </div>
                 ) : (
-                  <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink-soft">{c.body}</p>
+                  <Markdown text={c.body} className="mt-0.5 text-sm text-ink-soft" />
                 )}
                 {mine && editingId !== c.id && (
                   <p className="mt-1 flex gap-3 text-[11px]">
@@ -889,5 +935,143 @@ function Activity({ items }: { items: HistoryRow[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+
+// Crea tareas, bugs (y, en una épica, historias) directo desde la card, ya asociados al padre.
+function QuickChild({ projectId, parentId, isEpic, epicId, onCreated }: { projectId: string; parentId: string; isEpic: boolean; epicId: string | null; onCreated: () => void }) {
+  const toast = useToast();
+  const [title, setTitle] = useState("");
+  const [type, setType] = useState<"TASK" | "BUG" | "STORY">("TASK");
+  const [busy, setBusy] = useState(false);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    const t = title.trim();
+    if (!t || busy) return;
+    setBusy(true);
+    // Una historia cuelga de la épica; tareas y bugs, de la historia (y heredan su épica).
+    const body = isEpic ? { title: t, issueType: type, epicId: parentId } : { title: t, issueType: type, parentId, ...(epicId ? { epicId } : {}) };
+    const res = await api(`/api/projects/${projectId}/issues`, "POST", body);
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error);
+    setTitle("");
+    onCreated();
+  }
+
+  return (
+    <form onSubmit={add} className="mb-2 flex gap-2">
+      <select className="field-sm" value={type} onChange={(e) => setType(e.target.value as "TASK" | "BUG" | "STORY")} aria-label="Tipo">
+        <option value="TASK">Tarea</option>
+        <option value="BUG">Bug</option>
+        {isEpic && <option value="STORY">Historia</option>}
+      </select>
+      <input className="field min-w-0 flex-1" placeholder={isEpic ? "Nuevo ticket de la épica… (Enter)" : "Nueva tarea o bug de la historia… (Enter)"} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+      <button className="btn-primary btn-sm" disabled={busy || !title.trim()}>Agregar</button>
+    </form>
+  );
+}
+
+
+// Varias personas involucradas en un ticket (además del responsable): reciben aviso de comentarios y menciones.
+function Involved({ issueId, people, current, onChange }: { issueId: string; people: UserRef[]; current: UserRef[]; onChange: () => void }) {
+  const toast = useToast();
+  async function save(ids: string[]) {
+    const res = await api(`/api/issues/${issueId}/involved`, "PUT", { userIds: ids });
+    if (!res.ok) return toast.error(res.error);
+    onChange();
+  }
+  const ids = current.map((u) => u.id);
+  const available = people.filter((p) => !ids.includes(p.id));
+  return (
+    <div className="space-y-1.5">
+      {current.length > 0 && (
+        <ul className="flex flex-wrap gap-1">
+          {current.map((u) => (
+            <li key={u.id} className="flex items-center gap-1 rounded-full border border-line-strong bg-surface py-0.5 pl-1 pr-2 text-xs text-ink">
+              <Avatar name={u.name} userId={u.id} size={16} />
+              {u.name}
+              <button className="ml-0.5 text-ink-faint hover:text-danger" aria-label={`Quitar a ${u.name}`} onClick={() => save(ids.filter((x) => x !== u.id))}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {available.length > 0 && (
+        <select className="field field-sm" value="" onChange={(e) => e.target.value && save([...ids, e.target.value])} aria-label="Agregar involucrado">
+          <option value="">+ Agregar persona…</option>
+          {available.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
+
+// Enlaces (Drive, Figma…) de este ticket. Se guardan en la sección Archivos del proyecto, asociados al ticket.
+type TicketResource = { id: string; kind: "FILE" | "LINK"; title: string; url: string | null; service: string | null; uploadedBy: { id: string; name: string } | null };
+function TicketLinks({ projectId, issueId, currentUserId, isLead }: { projectId: string; issueId: string; currentUserId: string; isLead: boolean }) {
+  const toast = useToast();
+  const [items, setItems] = useState<TicketResource[]>([]);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await api<TicketResource[]>(`/api/projects/${projectId}/resources?task=${issueId}`);
+    if (res.ok) setItems(res.data);
+  }, [projectId, issueId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function add() {
+    const value = url.trim();
+    if (!value || busy) return;
+    setBusy(true);
+    const res = await api(`/api/projects/${projectId}/resources`, "POST", { url: value, taskId: issueId });
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error);
+    setUrl("");
+    void load();
+  }
+
+  async function remove(id: string) {
+    const res = await api(`/api/resources/${id}`, "DELETE");
+    if (!res.ok) return toast.error(res.error);
+    void load();
+  }
+
+  return (
+    <section>
+      <h3 className="mb-2 font-display text-sm font-bold text-ink">
+        Enlaces y documentos {items.length > 0 && <span className="font-mono text-ink-faint">({items.length})</span>}
+      </h3>
+      {items.length > 0 && (
+        <ul className="mb-2 space-y-1.5">
+          {items.map((r) => (
+            <li key={r.id} className="flex items-center gap-2 rounded-md border border-line-strong px-2.5 py-1.5 text-sm">
+              <span className="shrink-0 rounded border border-blue px-1 text-[10px] font-bold uppercase text-blue">{r.kind === "LINK" ? r.service ?? "Enlace" : "Archivo"}</span>
+              <a href={r.kind === "LINK" ? r.url! : `/api/resources/${r.id}/file`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-medium text-ink hover:text-rust hover:underline">{r.title}</a>
+              {(r.uploadedBy?.id === currentUserId || isLead) && (
+                <button className="text-xs text-ink-faint hover:text-danger" onClick={() => remove(r.id)} aria-label={`Quitar ${r.title}`}>quitar</button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <input
+        className="field field-sm"
+        placeholder="Pega un enlace (Drive, Figma…) y Enter"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void add();
+          }
+        }}
+      />
+      <p className="mt-1 text-[11px] text-ink-faint">Para subir archivos o ver todo con etiquetas, usa la pestaña <a href={`/projects/${projectId}/files`} className="font-semibold text-rust hover:underline">Archivos</a>.</p>
+    </section>
   );
 }

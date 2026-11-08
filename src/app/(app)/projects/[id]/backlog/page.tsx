@@ -4,6 +4,8 @@ import { getProjectIssues, getProjectOptions, getProjectOrNotFound, getProjectSp
 import { sprintPdfEnabled } from "@/lib/features";
 import BacklogView from "./BacklogView";
 
+export const metadata = { title: "Backlog" };
+
 export default async function BacklogPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireSession();

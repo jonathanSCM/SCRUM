@@ -8,6 +8,7 @@ import { DISCORD_COLOR } from "@/lib/discord";
 import { notifyProject } from "@/lib/notify";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { getBaseUrl } from "@/lib/baseUrl";
+import { notifyComment } from "@/lib/commentNotify";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await apiUser({ issue: (await params).id });
@@ -40,6 +41,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       mentionUserIds: [issue.assigneeUserId !== user.id ? issue.assigneeUserId : null, issue.reporterId !== user.id ? issue.reporterId : null],
       url: `${getBaseUrl()}/projects/${issue.projectId}/board?issue=${key}`,
     });
+
+    // Menciones con @ e involucrados del ticket.
+    await notifyComment({ taskId: id, body: parsed.data.body, author: { id: user.id, name: user.name } });
 
     return NextResponse.json(comment, { status: 201 });
   } catch (e) {

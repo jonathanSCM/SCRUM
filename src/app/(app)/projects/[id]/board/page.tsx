@@ -4,6 +4,8 @@ import { getProjectIssues, getProjectOptions, getProjectOrNotFound, getProjectSp
 import EmptyState from "@/components/ui/EmptyState";
 import BoardView from "./BoardView";
 
+export const metadata = { title: "Tablero" };
+
 export default async function BoardPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireSession();

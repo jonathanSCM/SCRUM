@@ -4,6 +4,8 @@ import { channelFilter, ensureChannels } from "@/lib/chatChannels";
 import ChatView from "@/components/chat/ChatView";
 import ChannelTabs from "@/components/chat/ChannelTabs";
 
+export const metadata = { title: "Chat" };
+
 export default async function ChatPage({ searchParams }: { searchParams: Promise<{ canal?: string }> }) {
   const ws = await requireWorkspace();
   const { canal } = await searchParams;

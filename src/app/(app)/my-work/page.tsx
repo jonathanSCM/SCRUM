@@ -5,6 +5,8 @@ import { toIssueCard } from "@/lib/issueView";
 import { compareByRank } from "@/lib/scrum/rank";
 import MyWorkView from "./MyWorkView";
 
+export const metadata = { title: "Mi trabajo" };
+
 export default async function MyWorkPage() {
   const { session, workspaceId } = await requireWorkspace();
   const rows = await prisma.task.findMany({

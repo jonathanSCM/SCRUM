@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { commentSchema, parseBody, readJson } from "@/lib/validation";
+import { mentionedIn, notifyComment } from "@/lib/commentNotify";
 
 // Solo el autor (o un líder) puede editar o borrar un comentario.
 async function loadForWrite(id: string, user: { id: string; role: string }) {
@@ -25,11 +26,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const loaded = await loadForWrite(id, auth.user);
     if ("error" in loaded) return loaded.error;
+    const before = await prisma.comment.findUnique({ where: { id }, select: { taskId: true, body: true } });
     const updated = await prisma.comment.update({
       where: { id },
       data: { body: parsed.data.body },
       include: { author: { select: { id: true, name: true } } },
     });
+    // Al editar solo se avisa a quienes se agregaron como mencionados ahora.
+    if (before) await notifyComment({ taskId: before.taskId, body: parsed.data.body, author: { id: auth.user.id, name: auth.user.name }, skipMentioned: await mentionedIn(before.taskId, before.body) });
     return NextResponse.json(updated);
   } catch (e) {
     return errorResponse(e);

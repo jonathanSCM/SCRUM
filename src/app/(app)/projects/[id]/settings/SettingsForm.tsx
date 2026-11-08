@@ -1,5 +1,6 @@
 "use client";
 
+import ExportPanel from "./ExportPanel";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
@@ -17,6 +18,8 @@ type Props = {
     description: string;
     deployUrl: string;
     stack: string[];
+    labels: string[];
+    memberIds: string[];
     statusId: string;
     leadUserId: string;
     readyItems: string[];
@@ -42,9 +45,21 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
   const [description, setDescription] = useState(project.description);
   const [deployUrl, setDeployUrl] = useState(project.deployUrl);
   const [stack, setStack] = useState(project.stack.join(", "));
+  const [labels, setLabels] = useState(project.labels.join(", "));
   const [statusId, setStatusId] = useState(project.statusId);
   const [leadUserId, setLeadUserId] = useState(project.leadUserId);
   const [saving, setSaving] = useState(false);
+
+  const [memberIds, setMemberIds] = useState<string[]>(project.memberIds);
+  const [savingMembers, setSavingMembers] = useState(false);
+  async function saveMembers() {
+    setSavingMembers(true);
+    const res = await api(`/api/projects/${project.id}/members`, "PUT", { userIds: memberIds });
+    setSavingMembers(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Equipo del proyecto guardado");
+    router.refresh();
+  }
 
   const [readyItems, setReadyItems] = useState<string[]>(project.readyItems);
   const [newReady, setNewReady] = useState("");
@@ -81,6 +96,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
       description,
       deployUrl: deployUrl.trim() || null,
       stack: stack.split(",").map((s) => s.trim()).filter(Boolean),
+      labels: labels.split(",").map((s) => s.trim()).filter(Boolean),
       statusId,
       leadUserId: leadUserId || null,
     });
@@ -231,17 +247,46 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
             <label className="mb-1 block text-xs font-semibold text-ink-soft">Stack (separado por comas)</label>
             <input className="field" placeholder="Next.js, Postgres" value={stack} onChange={(e) => setStack(e.target.value)} />
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-ink-soft">Etiquetas del proyecto (separadas por comas)</label>
+            <input className="field" placeholder="Producto, Cliente, Interno" value={labels} maxLength={200} onChange={(e) => setLabels(e.target.value)} />
+            <p className="mt-1 text-xs text-ink-faint">Sirven para clasificar y filtrar proyectos en la lista de Proyectos (por ejemplo, el tipo: Producto).</p>
+          </div>
         </div>
         <div className="flex justify-end">
           <button className="btn-primary" disabled={saving || !name.trim()}>{saving ? "Guardando…" : "Guardar cambios"}</button>
         </div>
       </form>
 
+      <ExportPanel projectId={project.id} />
+
+      <section className="space-y-3 border border-line bg-card p-5 rounded-lg">
+        <h2 className="font-display text-lg font-extrabold text-ink">Equipo del proyecto</h2>
+        <p className="text-sm text-ink-soft">Las personas del equipo que trabajan en este proyecto. Al agregar a alguien se le avisa. Los tickets se pueden asignar a cualquiera del equipo; aquí defines quién forma parte del proyecto.</p>
+        <div className="flex flex-wrap gap-1.5">
+          {users.map((u) => {
+            const on = memberIds.includes(u.id);
+            return (
+              <label key={u.id} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${isLead ? "cursor-pointer" : "cursor-default"} ${on ? "border-rust bg-chip-tint text-rust" : "border-line-strong text-ink-soft"}`}>
+                <input type="checkbox" className="hidden" disabled={!isLead} checked={on} onChange={() => setMemberIds(on ? memberIds.filter((x) => x !== u.id) : [...memberIds, u.id])} />
+                {u.name}
+              </label>
+            );
+          })}
+        </div>
+        {isLead ? (
+          <div className="flex justify-end"><button className="btn-primary" disabled={savingMembers} onClick={saveMembers}>{savingMembers ? "Guardando…" : "Guardar equipo del proyecto"}</button></div>
+        ) : (
+          <p className="text-xs text-ink-faint">Solo un líder puede cambiarlo.</p>
+        )}
+      </section>
+
       <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
-        <h2 className="font-display text-lg font-extrabold text-ink">Definition of Ready</h2>
+        <h2 className="font-display text-lg font-extrabold text-ink">Definition of Ready (lista para todos los tickets)</h2>
         <p className="text-sm text-ink-soft">
-          Lo que necesitamos tener antes de empezar a trabajar un ticket (por ejemplo: estructura de datos del cliente, accesos, brief, diseño).
-          Cada ticket tiene este checklist y no se puede iniciar un sprint con tickets incompletos, salvo que un líder lo fuerce.
+          Aquí defines la lista de lo que hace falta tener antes de empezar un ticket (por ejemplo: estructura de datos del cliente, accesos, brief, diseño).
+          Cada ticket (historia, tarea o bug) muestra esta misma lista y se marca ticket por ticket; no se puede iniciar un sprint con tickets incompletos, salvo que un líder lo fuerce.
+          Escribe un ítem en el campo de abajo (es texto libre, no un correo) y pulsa Añadir.
         </p>
         {readyItems.length === 0 && <p className="text-xs text-ink-faint">Todavía no hay ítems: sin ellos, el sprint se puede iniciar sin revisar nada.</p>}
         <ul className="space-y-1.5">
@@ -259,6 +304,9 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
         {isLead ? (
           <div className="flex gap-2">
             <input
+              type="text"
+              name="ready-item"
+              autoComplete="off"
               className="field min-w-0 flex-1"
               placeholder="Ej: Estructura de datos que pasa el cliente"
               value={newReady}

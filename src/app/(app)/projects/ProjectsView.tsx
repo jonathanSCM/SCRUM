@@ -23,13 +23,14 @@ export type ProjectCardData = {
   name: string;
   statusId: string;
   lead: string | null;
+  labels: string[];
   activeSprint: { name: string; endDate: string | null } | null;
   done: number;
   total: number;
 };
 type Status = { id: string; name: string; color: string };
 
-export default function ProjectsView({ projects, statuses }: { projects: ProjectCardData[]; statuses: Status[] }) {
+export default function ProjectsView({ projects, statuses, people }: { projects: ProjectCardData[]; statuses: Status[]; people: Array<{ id: string; name: string }> }) {
   const router = useRouter();
   const toast = useToast();
   const [view, setView] = useState<"board" | "table">("board");
@@ -54,10 +55,12 @@ export default function ProjectsView({ projects, statuses }: { projects: Project
 
   const panRef = useDragScroll<HTMLDivElement>();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const [label, setLabel] = useState("");
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? items.filter((p) => `${p.key} ${p.name}`.toLowerCase().includes(q)) : items;
-  }, [items, query]);
+    return items.filter((p) => (!label || p.labels.includes(label)) && (!q || `${p.key} ${p.name} ${p.labels.join(" ")}`.toLowerCase().includes(q)));
+  }, [items, query, label]);
+  const allLabels = useMemo(() => [...new Set(items.flatMap((p) => p.labels))].sort((a, b) => a.localeCompare(b)), [items]);
   const dragged = dragId ? items.find((p) => p.id === dragId) : null;
 
   async function onDragEnd(e: DragEndEvent) {
@@ -80,6 +83,12 @@ export default function ProjectsView({ projects, statuses }: { projects: Project
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Proyectos</h1>
         <input className="field-sm w-full sm:ml-4 sm:w-60" placeholder="Buscar proyecto…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Buscar proyecto" />
+        {allLabels.length > 0 && (
+          <select className="field-sm" value={label} onChange={(e) => setLabel(e.target.value)} aria-label="Filtrar por etiqueta">
+            <option value="">Todas las etiquetas</option>
+            {allLabels.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <div className="flex border border-line rounded-md" role="group" aria-label="Vista">
             {(["board", "table"] as const).map((v) => (
@@ -88,6 +97,7 @@ export default function ProjectsView({ projects, statuses }: { projects: Project
               </button>
             ))}
           </div>
+          <Link href="/projects/import" className="btn-ghost btn-sm">Importar con IA</Link>
           <button className="btn-primary btn-sm" onClick={() => setCreating(true)}>
             <PlusIcon size={14} /> Nuevo proyecto
           </button>
@@ -109,7 +119,7 @@ export default function ProjectsView({ projects, statuses }: { projects: Project
         <ProjectTable projects={filtered} statuses={statuses} />
       )}
 
-      <NewProjectModal open={creating} onClose={() => setCreating(false)} takenKeys={items.map((p) => p.key)} />
+      <NewProjectModal open={creating} onClose={() => setCreating(false)} takenKeys={items.map((p) => p.key)} people={people} />
     </main>
   );
 }
@@ -169,6 +179,9 @@ function ProjectCard({ project, overlay }: { project: ProjectCardData; overlay?:
         <Avatar name={project.lead} size={20} />
       </div>
       <p className="mt-1 font-display text-base font-extrabold leading-tight text-ink">{project.name}</p>
+      {project.labels.length > 0 && (
+        <p className="mt-1 flex flex-wrap gap-1">{project.labels.map((l) => <span key={l} className="lozenge text-ink-soft">{l}</span>)}</p>
+      )}
       <div className="mt-3">
         <ProgressBar value={percent} height={8} />
         <p className="mt-1 flex justify-between font-mono text-[11px] text-ink-faint">
@@ -205,7 +218,7 @@ function ProjectTable({ projects, statuses }: { projects: ProjectCardData[]; sta
           {projects.map((p) => (
             <tr key={p.id} className="border-b border-line-strong last:border-b-0 hover:bg-card-2">
               <td className="px-3 py-2 font-mono text-xs text-moss-ink">{p.key}</td>
-              <td className="px-3 py-2 font-semibold"><Link href={`/projects/${p.id}/board`} className="text-ink hover:underline">{p.name}</Link></td>
+              <td className="px-3 py-2 font-semibold"><Link href={`/projects/${p.id}/board`} className="text-ink hover:underline">{p.name}</Link>{p.labels.map((l) => <span key={l} className="lozenge ml-2 text-ink-soft">{l}</span>)}</td>
               <td className="px-3 py-2"><span className="lozenge" style={{ color: `color-mix(in srgb, ${byId.get(p.statusId)?.color ?? "#6f6a88"} 55%, var(--ink))` }}>{byId.get(p.statusId)?.name}</span></td>
               <td className="px-3 py-2 text-ink-soft">{p.lead ?? "—"}</td>
               <td className="px-3 py-2 text-ink-soft">{p.activeSprint?.name ?? "—"}</td>
@@ -218,7 +231,7 @@ function ProjectTable({ projects, statuses }: { projects: ProjectCardData[]; sta
   );
 }
 
-function NewProjectModal({ open, onClose, takenKeys }: { open: boolean; onClose: () => void; takenKeys: string[] }) {
+function NewProjectModal({ open, onClose, takenKeys, people }: { open: boolean; onClose: () => void; takenKeys: string[]; people: Array<{ id: string; name: string }> }) {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState("");
@@ -226,6 +239,7 @@ function NewProjectModal({ open, onClose, takenKeys }: { open: boolean; onClose:
   const [keyTouched, setKeyTouched] = useState(false);
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
+  const [memberIds, setMemberIds] = useState<string[]>([]);
 
   const suggested = useMemo(() => (name.trim() ? suggestProjectKey(name, takenKeys) : ""), [name, takenKeys]);
   const effectiveKey = keyTouched ? key : suggested;
@@ -233,7 +247,7 @@ function NewProjectModal({ open, onClose, takenKeys }: { open: boolean; onClose:
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const res = await api<{ id: string }>("/api/projects", "POST", { name, key: effectiveKey || undefined, description: description || undefined });
+    const res = await api<{ id: string }>("/api/projects", "POST", { name, key: effectiveKey || undefined, description: description || undefined, memberIds: memberIds.length ? memberIds : undefined });
     setSaving(false);
     if (!res.ok) return toast.error(res.error);
     toast.success("Proyecto creado");
@@ -242,6 +256,7 @@ function NewProjectModal({ open, onClose, takenKeys }: { open: boolean; onClose:
     setKey("");
     setKeyTouched(false);
     setDescription("");
+    setMemberIds([]);
     router.push(`/projects/${res.data.id}/backlog`);
     router.refresh();
   }
@@ -282,6 +297,22 @@ function NewProjectModal({ open, onClose, takenKeys }: { open: boolean; onClose:
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Descripción</label>
           <textarea className="field" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
+        {people.length > 1 && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-ink-soft">Personas del equipo que trabajan en el proyecto (se les avisa)</label>
+            <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
+              {people.map((p) => {
+                const on = memberIds.includes(p.id);
+                return (
+                  <label key={p.id} className={cn("flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs", on ? "border-rust bg-chip-tint text-rust" : "border-line-strong text-ink-soft")}>
+                    <input type="checkbox" className="hidden" checked={on} onChange={() => setMemberIds(on ? memberIds.filter((x) => x !== p.id) : [...memberIds, p.id])} />
+                    {p.name}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </form>
     </Modal>
   );

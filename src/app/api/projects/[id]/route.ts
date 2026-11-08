@@ -26,6 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.description !== undefined) data.description = body.description;
     if (body.deployUrl !== undefined) data.deployUrl = body.deployUrl || null;
     if (body.stack !== undefined) data.stack = JSON.stringify(body.stack);
+    if (body.labels !== undefined) data.labels = JSON.stringify([...new Set(body.labels)]);
 
     if (body.readyItems !== undefined) {
       if (user.role !== "LEAD") return NextResponse.json({ error: "Solo un líder puede cambiar la Definition of Ready" }, { status: 403 });

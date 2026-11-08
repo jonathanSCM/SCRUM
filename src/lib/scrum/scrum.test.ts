@@ -16,7 +16,7 @@ import { parseChecklist, checklistProgress, canHaveParent, storyProgress } from 
 import { buildPushPayload } from "../push";
 import { canChangeRole, invitationState, inviteExpiry, normalizeEmail, maxOwnedTeams, toLegacyRole, roleBadge, normalizeRole, migratedRole, canRemoveOrDemote, slugify, uniqueSlug } from "./roles";
 import { weekWindow, compareLabel, mergeProjectActivity, WEEK_MS } from "./weekly";
-import { isAllowedForToken } from "../aiAccess";
+import { isAllowedForToken, isDeletableByToken } from "../aiAccess";
 import { importSchema, countIssues, matchMember, issueKeyOf } from "./aiImport";
 import { snippetOf, parseRefs, splitMessage, applyInsertedRefs, makeToken, isValidChatColor, plainText } from "./chat";
 import { legacyTypeToStatus, isLegacyType, matchUserByName, sprintStateFromDates } from "./legacyMap";
@@ -459,6 +459,12 @@ describe("token IA", () => {
     ];
     for (const [m, p] of no) expect(isAllowedForToken(m, p), `${m} ${p}`).toBe(false);
   });
+  it("borrados de token: solo tickets, notas y comentarios", () => {
+    for (const p of ["/api/issues/abc123", "/api/notes/abc123", "/api/comments/abc123"]) expect(isDeletableByToken("DELETE", p), p).toBe(true);
+    for (const p of ["/api/projects/abc123", "/api/sprints/abc123", "/api/users/abc123", "/api/workspaces/leave", "/api/issues/abc/comments", "/api/tokens"]) expect(isDeletableByToken("DELETE", p), p).toBe(false);
+    expect(isDeletableByToken("GET", "/api/issues/abc123")).toBe(false);
+    expect(isAllowedForToken("DELETE", "/api/issues/abc123")).toBe(false);
+  });
   it("valida y cuenta una importación", () => {
     const input = importSchema.parse({
       project: { name: "Demo" },
@@ -646,5 +652,97 @@ describe("menciones por código", () => {
     expect(findKeyMentions("correo a#SAI")).toEqual([]);
     expect(findKeyMentions("#SAI-")).toEqual([]);
     expect(findKeyMentions("#TOOLONGKEY")).toEqual([]);
+  });
+});
+
+import { parseMarkdown, parseInline, safeHref } from "./markdown";
+
+describe("markdown seguro", () => {
+  it("enlaces: solo http, https y mailto", () => {
+    expect(safeHref("https://a.com/x?y=1")).toBe("https://a.com/x?y=1");
+    expect(safeHref("javascript:alert(1)")).toBeNull();
+    expect(safeHref("data:text/html,x")).toBeNull();
+    expect(parseInline("[x](javascript:alert(1))").some((n) => n.t === "link")).toBe(false);
+  });
+  it("inline: negrita, cursiva, código, enlaces y enlaces sueltos", () => {
+    expect(parseInline("a **b** *c* `d`")).toEqual([
+      { t: "text", v: "a " }, { t: "bold", c: [{ t: "text", v: "b" }] }, { t: "text", v: " " }, { t: "em", c: [{ t: "text", v: "c" }] }, { t: "text", v: " " }, { t: "code", v: "d" },
+    ]);
+    const l = parseInline("ver https://drive.google.com/file/d/1, ok");
+    expect(l[1]).toEqual({ t: "link", href: "https://drive.google.com/file/d/1", c: [{ t: "text", v: "https://drive.google.com/file/d/1" }] });
+    expect(parseInline("[Doc](https://a.com)")).toEqual([{ t: "link", href: "https://a.com", c: [{ t: "text", v: "Doc" }] }]);
+  });
+  it("bloques: títulos, listas, citas y código; el HTML queda como texto", () => {
+    const b = parseMarkdown("# Título\n\n- uno\n- dos\n\n1. a\n2. b\n\n> cita\n\n```\ncódigo **no negrita**\n```\n<script>alert(1)</script>");
+    expect(b.map((x) => x.t)).toEqual(["h", "ul", "ol", "quote", "pre", "p"]);
+    expect(b[4]).toEqual({ t: "pre", v: "código **no negrita**" });
+    expect(b[5]).toEqual({ t: "p", c: [{ t: "text", v: "<script>alert(1)</script>" }] });
+  });
+});
+
+import { normalizeTags, parseTags, normalizeUrl, linkService } from "./resources";
+
+describe("archivos y enlaces", () => {
+  it("etiquetas: limpia, sin repetidas y con tope", () => {
+    expect(normalizeTags(" Brief , brief, Contrato  final ,, ")).toEqual(["Brief", "Contrato final"]);
+    expect(normalizeTags(["a", "b", 3, "A"])).toEqual(["a", "b"]);
+    expect(normalizeTags(Array.from({ length: 20 }, (_, i) => `t${i}`))).toHaveLength(10);
+    expect(parseTags("no json")).toEqual([]);
+    expect(parseTags('["x","y"]')).toEqual(["x", "y"]);
+  });
+  it("enlaces: solo http/https y se completa el https", () => {
+    expect(normalizeUrl("https://drive.google.com/x")).toBe("https://drive.google.com/x");
+    expect(normalizeUrl("drive.google.com/file/d/1")).toBe("https://drive.google.com/file/d/1");
+    expect(normalizeUrl("javascript:alert(1)")).toBeNull();
+    expect(normalizeUrl("ftp://x.com/a")).toBeNull();
+    expect(normalizeUrl("hola mundo")).toBeNull();
+    expect(linkService("https://docs.google.com/document/d/1")).toBe("Google Drive");
+    expect(linkService("https://www.figma.com/file/x")).toBe("Figma");
+    expect(linkService("https://ejemplo.com/a")).toBe("ejemplo.com");
+  });
+});
+
+import { findMentioned } from "./mentions";
+import { isOverdue } from "./checklist";
+
+describe("menciones en comentarios y fechas del checklist", () => {
+  const gente = [{ id: "1", name: "Ana Pérez" }, { id: "2", name: "Luis Gómez" }, { id: "3", name: "Luisa Ríos" }, { id: "4", name: "Mariana" }];
+  it("encuentra por nombre completo o por primer nombre único", () => {
+    expect(findMentioned("hola @Ana Pérez revisa", gente).map((p) => p.id)).toEqual(["1"]);
+    expect(findMentioned("@ana y @MARIANA", gente).map((p) => p.id)).toEqual(["1", "4"]);
+    expect(findMentioned("@luis", gente).map((p) => p.id)).toEqual(["2"]);
+    expect(findMentioned("@luisa y @luis gómez", gente).map((p) => p.id).sort()).toEqual(["2", "3"]);
+  });
+  it("no confunde correos ni nombres parciales", () => {
+    expect(findMentioned("escribe a x@ana.com", gente)).toEqual([]);
+    expect(findMentioned("@anabel", gente)).toEqual([]);
+    expect(findMentioned("sin menciones", gente)).toEqual([]);
+  });
+  it("paso vencido solo si no está hecho y la fecha ya pasó", () => {
+    expect(isOverdue({ id: "a", text: "x", done: false, due: "2026-01-01" }, "2026-02-01")).toBe(true);
+    expect(isOverdue({ id: "a", text: "x", done: true, due: "2026-01-01" }, "2026-02-01")).toBe(false);
+    expect(isOverdue({ id: "a", text: "x", done: false, due: "2026-02-01" }, "2026-02-01")).toBe(false);
+    expect(isOverdue({ id: "a", text: "x", done: false }, "2026-02-01")).toBe(false);
+  });
+});
+
+import { friendlyTitle, previewUrl } from "./resources";
+
+describe("enlaces de Drive: nombre y vista previa", () => {
+  it("nombre amable según el tipo de enlace", () => {
+    expect(friendlyTitle("https://docs.google.com/document/d/1AbCdEfGhIjK/edit")).toBe("Documento de Google");
+    expect(friendlyTitle("https://docs.google.com/spreadsheets/d/1AbCdEfGhIjK/edit#gid=0")).toBe("Hoja de cálculo de Google");
+    expect(friendlyTitle("https://drive.google.com/drive/folders/1AbCdEfGhIjK")).toBe("Carpeta de Google Drive");
+    expect(friendlyTitle("https://drive.google.com/file/d/1AbCdEfGhIjK/view")).toBe("Archivo de Google Drive");
+    expect(friendlyTitle("https://ejemplo.com/a/b/")).toBe("ejemplo.com/a/b");
+  });
+  it("vista previa: solo direcciones conocidas y con id válido", () => {
+    expect(previewUrl("https://drive.google.com/file/d/1AbCdEfGhIjK/view?usp=sharing")).toBe("https://drive.google.com/file/d/1AbCdEfGhIjK/preview");
+    expect(previewUrl("https://docs.google.com/document/d/1AbCdEfGhIjK/edit")).toBe("https://docs.google.com/document/d/1AbCdEfGhIjK/preview");
+    expect(previewUrl("https://drive.google.com/drive/folders/1AbCdEfGhIjK")).toBe("https://drive.google.com/embeddedfolderview?id=1AbCdEfGhIjK#list");
+    expect(previewUrl("https://docs.google.com/forms/d/1AbCdEfGhIjK/edit")).toBeNull();
+    expect(previewUrl("https://evil.com/file/d/1AbCdEfGhIjK")).toBeNull();
+    expect(previewUrl("https://drive.google.com.evil.com/file/d/1AbCdEfGhIjK")).toBeNull();
+    expect(previewUrl("https://www.figma.com/design/abc/Mi-diseno")).toContain("figma.com/embed");
   });
 });

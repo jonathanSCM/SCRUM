@@ -51,6 +51,9 @@ model User {
   images              UserImage[]
   memberships         Membership[]
   invitationsSent     Invitation[]
+  resourcesUploaded   ProjectResource[] @relation("ResourceUploader")
+  projectMemberships  ProjectMember[]   @relation("ProjectMemberUser")
+  involvedIn          TaskInvolved[]    @relation("TaskInvolvedUser")
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
 }
@@ -89,6 +92,7 @@ model Project {
   deployUrl   String?
   language    String?
   stack       String   @default("[]")
+  labels      String   @default("[]") // etiquetas del proyecto (ej. "Producto"), JSON de strings
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
   taskSeq     Int      @default(0)
@@ -123,6 +127,8 @@ model Project {
   sprints     Sprint[]
   documents   Document[]
   attachments Attachment[]
+  resources   ProjectResource[]
+  members     ProjectMember[]
   history     HistoryEntry[]
   notes       Note[]
   messages    ProjectMessage[]
@@ -217,6 +223,8 @@ model Task {
 
   comments    Comment[]
   attachments Attachment[]
+  resources   ProjectResource[]
+  involved    TaskInvolved[]
 
   @@unique([projectId, number])
   @@index([projectId, sprintId])
@@ -244,6 +252,7 @@ model Sprint {
 
   tasks      Task[]
   retroItems RetroItem[]
+  resources  ProjectResource[]
 
   @@index([projectId, state])
 }
@@ -501,6 +510,7 @@ model ApiToken {
   prefix      String // primeros caracteres, solo para reconocerlo en pantalla
   createdAt   DateTime  @default(now())
   lastUsedAt  DateTime?
+  allowDelete Boolean   @default(false) // opcional: permite borrar tickets, notas y comentarios
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -595,4 +605,56 @@ model Invitation {
 
   @@index([workspaceId])
   @@index([email])
+}
+
+// Archivos y enlaces del proyecto ("Archivos"), con etiquetas. Pueden pertenecer al proyecto, a un sprint o a un ticket.
+// Los archivos se guardan en la base (como los adjuntos); más adelante pasarán a almacenamiento S3.
+model ProjectResource {
+  id        String   @id @default(cuid())
+  kind      String // FILE | LINK
+  title     String
+  url       String? // solo LINK
+  filename  String? // solo FILE
+  mimeType  String?
+  size      Int?
+  data      Bytes?
+  tags      String   @default("[]") // JSON de strings
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprintId  String?
+  sprint    Sprint?  @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  uploadedById String?
+  uploadedBy   User?   @relation("ResourceUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+}
+
+// Personas del equipo asignadas a un proyecto (se les avisa al agregarlas).
+model ProjectMember {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation("ProjectMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+// Involucrados de un ticket (además del responsable): reciben aviso de comentarios y menciones.
+model TaskInvolved {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation("TaskInvolvedUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
 }

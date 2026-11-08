@@ -36,8 +36,8 @@ import { useConfirm } from "@/components/ConfirmDialog";
 
 const BACKLOG = "backlog";
 
-type Filters = { text: string; assignee: string; type: string; epic: string };
-const NO_FILTERS: Filters = { text: "", assignee: "", type: "", epic: "" };
+type Filters = { text: string; assignee: string; type: string; epic: string; creator: string };
+const NO_FILTERS: Filters = { text: "", assignee: "", type: "", epic: "", creator: "" };
 
 function groupIds(issues: IssueCardData[], sprints: SprintData[]): Record<string, string[]> {
   const out: Record<string, string[]> = { [BACKLOG]: [] };
@@ -117,6 +117,7 @@ export default function BacklogView({
       const t = filters.text.trim().toLowerCase();
       if (t && !`${i.key} ${i.title}`.toLowerCase().includes(t)) return false;
       if (filters.assignee === "none" ? i.assignee : filters.assignee && i.assignee?.id !== filters.assignee) return false;
+      if (filters.creator && i.reporterId !== filters.creator) return false;
       if (filters.type && i.issueType !== filters.type) return false;
       if (filters.epic === "none" ? i.epic : filters.epic && i.epic?.id !== filters.epic) return false;
       return true;
@@ -301,6 +302,13 @@ export default function BacklogView({
           <option value="none">Sin asignar</option>
           {options.members.map((m) => (
             <option key={m.id} value={m.id}>{m.name}{m.id === currentUserId ? " (yo)" : ""}</option>
+          ))}
+        </select>
+        <select className="field-sm" value={filters.creator} onChange={(e) => setFilters({ ...filters, creator: e.target.value })} aria-label="Creado por">
+          <option value="">Creado por: cualquiera</option>
+          <option value={currentUserId}>Creados por mí</option>
+          {options.members.filter((m) => m.id !== currentUserId).map((m) => (
+            <option key={m.id} value={m.id}>{`Creado por ${m.name}`}</option>
           ))}
         </select>
         <select className="field-sm" value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })} aria-label="Tipo">

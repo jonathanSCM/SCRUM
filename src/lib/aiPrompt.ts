@@ -1,5 +1,5 @@
 // Instrucciones que la persona le pega a su asistente (Claude) junto con el token.
-export function buildAiAccessPrompt(baseUrl: string, token: string, userName: string): string {
+export function buildAiAccessPrompt(baseUrl: string, token: string, userName: string, allowDelete = false): string {
   return `Tenés acceso a la API de SCRUM ProShop para leer y cargar proyectos en nombre de ${userName}. Todo lo que hagas queda registrado a nombre de ${userName}.
 
 URL base: ${baseUrl}
@@ -42,7 +42,85 @@ CAMBIOS PUNTUALES
 - POST  ${baseUrl}/api/projects/{projectId}/notes     { "title": "…", "body": "…", "kind": "GENERAL" }
 - GET   ${baseUrl}/api/issues/by-key/{CLAVE-12}       detalle de un ticket con comentarios
 
-NO se puede con este token: borrar nada, administrar personas o estados, iniciar o completar sprints, ni cambiar ajustes de integraciones.
+${allowDelete ? `BORRAR (este token lo permite; usalo solo si te lo pido y confirmá antes de borrar)
+- DELETE ${baseUrl}/api/issues/{issueId}     borra un ticket (y lo que cuelga de él)
+- DELETE ${baseUrl}/api/notes/{noteId}       borra una nota
+- DELETE ${baseUrl}/api/comments/{commentId} borra un comentario
+
+NO se puede con este token: borrar proyectos o sprints, administrar personas o estados, iniciar o completar sprints, ni cambiar ajustes de integraciones.` : "NO se puede con este token: borrar nada, administrar personas o estados, iniciar o completar sprints, ni cambiar ajustes de integraciones."}
 
 Antes de cargar algo, si no te pasé el nombre exacto del proyecto, consultá la lista con GET /api/ai/projects. Para asignar, usá /api/ai/users y el nombre o email de la persona.`;
+}
+
+
+// Para quien no puede usar el token (por ejemplo ChatGPT gratis): la IA solo escribe un JSON y la persona lo pega en la app.
+export const IMPORT_JSON_PROMPT = `Quiero que armes la estructura de un proyecto para cargarla en SCRUM ProShop. Si me falta información (nombre, objetivo, módulos, plazos), pregúntamela primero; si no, arma todo con lo que te cuente.
+
+Cuando esté listo, respondé SOLO con un único bloque de código JSON (sin explicaciones) con este formato exacto:
+
+{
+  "project": { "name": "Nombre del proyecto", "description": "…", "stack": ["Next.js"], "deployUrl": "https://…", "readyItems": ["Accesos", "Estructura de datos del cliente"] },
+  "epics": [
+    { "title": "Épica", "description": "…",
+      "stories": [
+        { "title": "Historia", "description": "…", "priority": "ALTA", "storyPoints": 5,
+          "tasks": [ { "title": "Tarea", "type": "TASK", "storyPoints": 2, "checklist": ["paso 1", "paso 2"] } ] }
+      ] }
+  ],
+  "tasks": [ { "title": "Tarea suelta, sin épica", "type": "BUG" } ],
+  "notes": [ { "title": "Brief del cliente", "body": "…", "kind": "BRIEF" } ]
+}
+
+Reglas:
+- Una épica agrupa historias; una historia agrupa tareas y bugs.
+- priority: URGENTE | ALTA | MEDIA | BAJA. type: TASK | BUG. kind de nota: BRIEF | REUNION | PLANNING | REVIEW | GENERAL.
+- Máximo 300 tickets en total. Todo en español. JSON válido: comillas dobles, sin comas finales ni comentarios.
+- Los campos opcionales se pueden omitir.`;
+
+// Prompts para pasar la exportación del proyecto a una IA (junto con el JSON).
+export type ExportPromptKind = "analyze" | "newTickets" | "changes";
+
+export function buildExportPrompt(kind: ExportPromptKind, projectId: string): string {
+  const intro = `Te paso el JSON de un proyecto de SCRUM ProShop (épicas, historias, tareas y bugs con su estado, prioridad, responsables y comentarios; el modo completo suma sprints, notas, retros y archivos). Léelo entero antes de responder y usa las claves (por ejemplo SAI-12) para referirte a los tickets. No inventes datos que no estén en el JSON.`;
+  if (kind === "analyze") {
+    return `${intro}
+
+Quiero que me hagas, en español y de forma concisa:
+1. Un resumen del estado del proyecto (avance, qué está bloqueado o en riesgo).
+2. Los 5 tickets que conviene hacer primero y por qué.
+3. Incoherencias que veas (tickets duplicados, sin responsable, sin puntos, historias sin tareas, épicas vacías).
+4. Sugerencias de mejora para el siguiente sprint.
+
+Al final, espera mis preguntas.`;
+  }
+  if (kind === "changes") {
+    return `${intro}
+
+Quiero que propongas CAMBIOS sobre tickets que YA existen (reordenar prioridades, corregir estados, asignar responsables, ajustar puntos, mover entre sprints, agregar comentarios). Cuando termine la conversación, respóndeme SOLO con un bloque de código JSON en este formato para aplicarlo en la app (Proyectos > Importar con IA):
+
+{
+  "project": { "id": "${projectId}" },
+  "changes": [
+    { "key": "SAI-12", "status": "IN_PROGRESS", "priority": "ALTA", "storyPoints": 5, "assignee": "nombre o email", "sprint": "Sprint 2", "comment": "Motivo del cambio" }
+  ]
+}
+
+Reglas:
+- "key" es obligatorio y debe ser un ticket del JSON que te pasé. Incluye SOLO los campos que cambian.
+- status: TODO | IN_PROGRESS | IN_REVIEW | DONE. priority: URGENTE | ALTA | MEDIA | BAJA.
+- assignee: nombre o email de alguien del proyecto, o null para dejarlo sin responsable. sprint: nombre exacto de un sprint existente, o null para llevarlo al backlog.
+- También se aceptan title, description, labels (lista), dueDate (AAAA-MM-DD) y comment.
+- Máximo 300 cambios. JSON válido (comillas dobles, sin comas finales ni comentarios).`;
+  }
+  return `${intro}
+
+Quiero que propongas tickets NUEVOS que falten (no repitas los que ya existen, ni siquiera con otro nombre). Cuando termine la conversación, respóndeme SOLO con un bloque de código JSON en este formato para importarlo en la app (Proyectos > Importar con IA):
+
+{
+  "project": { "id": "${projectId}" },
+  "epics": [ { "title": "Épica existente o nueva", "stories": [ { "title": "Historia", "description": "…", "priority": "ALTA", "storyPoints": 5, "tasks": [ { "title": "Tarea", "type": "TASK", "storyPoints": 2, "checklist": ["paso 1"] } ] } ] } ],
+  "tasks": [ { "title": "Tarea suelta", "type": "BUG" } ]
+}
+
+Reglas: priority URGENTE | ALTA | MEDIA | BAJA; type TASK | BUG; máximo 300 tickets; JSON válido (comillas dobles, sin comas finales ni comentarios). Si metes tickets en una épica que ya existe, usa exactamente su título.`;
 }

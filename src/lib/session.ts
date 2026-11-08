@@ -51,7 +51,7 @@ export async function requireLead() {
 type Scope = Partial<Record<ResourceKind, string>> & { workspace?: boolean };
 export type ApiOptions = Scope & { lead?: boolean };
 
-const SCOPE_KINDS: ResourceKind[] = ["project", "issue", "sprint", "comment", "attachment", "note", "retro", "contact", "projectMessage", "chatMessage", "chatFile", "status", "invitation", "channel"];
+const SCOPE_KINDS: ResourceKind[] = ["project", "issue", "sprint", "comment", "attachment", "note", "retro", "contact", "projectMessage", "chatMessage", "chatFile", "status", "invitation", "channel", "resource"];
 
 const unauthorized = () => ({ error: NextResponse.json({ error: "No autorizado" }, { status: 401 }) });
 const notFoundRes = () => ({ error: NextResponse.json({ error: "No encontrado" }, { status: 404 }) });
@@ -75,6 +75,10 @@ export async function apiUser(options: ApiOptions = {}): Promise<{ user: Session
   if (authz && /^bearer\s/i.test(authz)) {
     const owner = await resolveApiToken(authz.replace(/^bearer\s+/i, "").trim(), h.get("x-token-route"));
     if (!owner) return { error: NextResponse.json({ error: "Token inválido o revocado" }, { status: 401 }) };
+    // Borrar con un token solo si su dueño lo activó (la ruta la fija el middleware, no se puede falsear).
+    if ((h.get("x-token-route") ?? "").startsWith("DELETE ") && !owner.allowDelete) {
+      return { error: NextResponse.json({ error: "Este token no tiene permiso para borrar. Su dueño puede activarlo en Ajustes > Token de IA." }, { status: 403 }) };
+    }
     identity = { id: owner.id, name: owner.name, email: owner.email };
     tokenWorkspace = owner.workspaceId;
   } else {

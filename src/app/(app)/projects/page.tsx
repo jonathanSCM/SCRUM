@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { requireWorkspace } from "@/lib/session";
+import { membersOf } from "@/lib/workspace";
+import { parseLabels } from "@/lib/scrum/labels";
 import ProjectsView, { type ProjectCardData } from "./ProjectsView";
+
+export const metadata = { title: "Proyectos" };
 
 export default async function ProjectsPage() {
   const { workspaceId } = await requireWorkspace();
@@ -29,9 +33,11 @@ export default async function ProjectsPage() {
     statusId: p.statusId,
     lead: p.lead?.name ?? null,
     activeSprint: p.sprints[0] ? { name: p.sprints[0].name, endDate: p.sprints[0].endDate?.toISOString() ?? null } : null,
+    labels: parseLabels(p.labels),
     done: counts.get(p.id)?.done ?? 0,
     total: counts.get(p.id)?.total ?? 0,
   }));
 
-  return <ProjectsView projects={cards} statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color }))} />;
+  const people = (await membersOf(workspaceId)).map(({ id, name }) => ({ id, name }));
+  return <ProjectsView projects={cards} people={people} statuses={statuses.map((s) => ({ id: s.id, name: s.name, color: s.color }))} />;
 }

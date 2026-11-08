@@ -3,6 +3,8 @@ import { requireWorkspace } from "@/lib/session";
 import { redirect } from "next/navigation";
 import StatusesManager from "./StatusesManager";
 
+export const metadata = { title: "Estados de proyecto" };
+
 export default async function StatusesPage() {
   const ws = await requireWorkspace();
   if (!ws.isLead) redirect("/projects");

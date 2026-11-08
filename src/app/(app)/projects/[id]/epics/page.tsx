@@ -7,6 +7,8 @@ import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { getProjectOptions, getProjectOrNotFound } from "@/lib/projectData";
 import EpicsView, { type EpicRow } from "./EpicsView";
 
+export const metadata = { title: "Épicas" };
+
 export default async function EpicsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireSession();

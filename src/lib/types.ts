@@ -28,6 +28,7 @@ export type IssueCardData = {
   completedAt: string | null;
   sprintId: string | null;
   assignee: UserRef | null;
+  reporterId: string | null; // quién creó el ticket
   epic: EpicRef | null;
   epicColor: string | null; // color propio si el ticket ES una épica
   commentCount: number;
