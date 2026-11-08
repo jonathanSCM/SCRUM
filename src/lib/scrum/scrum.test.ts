@@ -654,3 +654,28 @@ describe("menciones por código", () => {
     expect(findKeyMentions("#TOOLONGKEY")).toEqual([]);
   });
 });
+
+import { parseMarkdown, parseInline, safeHref } from "./markdown";
+
+describe("markdown seguro", () => {
+  it("enlaces: solo http, https y mailto", () => {
+    expect(safeHref("https://a.com/x?y=1")).toBe("https://a.com/x?y=1");
+    expect(safeHref("javascript:alert(1)")).toBeNull();
+    expect(safeHref("data:text/html,x")).toBeNull();
+    expect(parseInline("[x](javascript:alert(1))").some((n) => n.t === "link")).toBe(false);
+  });
+  it("inline: negrita, cursiva, código, enlaces y enlaces sueltos", () => {
+    expect(parseInline("a **b** *c* `d`")).toEqual([
+      { t: "text", v: "a " }, { t: "bold", c: [{ t: "text", v: "b" }] }, { t: "text", v: " " }, { t: "em", c: [{ t: "text", v: "c" }] }, { t: "text", v: " " }, { t: "code", v: "d" },
+    ]);
+    const l = parseInline("ver https://drive.google.com/file/d/1, ok");
+    expect(l[1]).toEqual({ t: "link", href: "https://drive.google.com/file/d/1", c: [{ t: "text", v: "https://drive.google.com/file/d/1" }] });
+    expect(parseInline("[Doc](https://a.com)")).toEqual([{ t: "link", href: "https://a.com", c: [{ t: "text", v: "Doc" }] }]);
+  });
+  it("bloques: títulos, listas, citas y código; el HTML queda como texto", () => {
+    const b = parseMarkdown("# Título\n\n- uno\n- dos\n\n1. a\n2. b\n\n> cita\n\n```\ncódigo **no negrita**\n```\n<script>alert(1)</script>");
+    expect(b.map((x) => x.t)).toEqual(["h", "ul", "ol", "quote", "pre", "p"]);
+    expect(b[4]).toEqual({ t: "pre", v: "código **no negrita**" });
+    expect(b[5]).toEqual({ t: "p", c: [{ t: "text", v: "<script>alert(1)</script>" }] });
+  });
+});

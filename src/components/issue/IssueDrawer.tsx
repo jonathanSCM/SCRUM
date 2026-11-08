@@ -20,6 +20,7 @@ import {
   type Priority,
 } from "@/lib/scrum/constants";
 import Avatar from "@/components/ui/Avatar";
+import Markdown from "@/components/ui/Markdown";
 import { CommentIcon, PaperclipIcon, TrashIcon, XIcon, TypeIcon, PriorityIcon } from "@/components/ui/Icons";
 import { StatusLozenge } from "@/components/ui/Lozenge";
 import { useToast } from "@/components/ui/Toaster";
@@ -579,10 +580,14 @@ function DescriptionEditor({ value, onSave }: { value: string; onSave: (v: strin
         </div>
       ) : (
         <div
-          className="min-h-[3.5rem] cursor-text whitespace-pre-wrap border border-transparent px-2 py-1.5 -mx-2 text-sm leading-relaxed text-ink-soft hover:border-line-strong rounded-md"
-          onClick={() => setEditing(true)}
+          className="min-h-[3.5rem] cursor-text border border-transparent px-2 py-1.5 -mx-2 text-sm leading-relaxed text-ink-soft hover:border-line-strong rounded-md"
+          onClick={(e) => {
+            // Un clic en un enlace lo abre; en cualquier otra parte, edita.
+            if ((e.target as HTMLElement).closest("a")) return;
+            setEditing(true);
+          }}
         >
-          {value || <span className="text-ink-faint">Agregá una descripción…</span>}
+          {value ? <Markdown text={value} /> : <span className="text-ink-faint">Agrega una descripción… (admite **negrita**, listas y enlaces)</span>}
         </div>
       )}
     </section>
@@ -871,7 +876,7 @@ function Comments({
                     </div>
                   </div>
                 ) : (
-                  <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink-soft">{c.body}</p>
+                  <Markdown text={c.body} className="mt-0.5 text-sm text-ink-soft" />
                 )}
                 {mine && editingId !== c.id && (
                   <p className="mt-1 flex gap-3 text-[11px]">
