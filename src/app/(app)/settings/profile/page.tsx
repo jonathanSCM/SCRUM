@@ -3,6 +3,8 @@ import { requireSession } from "@/lib/session";
 import { roleBadge, normalizeRole } from "@/lib/scrum/roles";
 import ProfileForm from "./ProfileForm";
 
+export const metadata = { title: "Editar perfil" };
+
 export default async function ProfilePage() {
   const session = await requireSession();
   const mine = await prisma.membership.findMany({ where: { userId: session.user.id }, orderBy: { createdAt: "asc" }, select: { role: true, workspace: { select: { name: true } } } });

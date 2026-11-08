@@ -5,6 +5,8 @@ import { formatDateTime, timeAgo } from "@/lib/ui";
 import Avatar from "@/components/ui/Avatar";
 import EmptyState from "@/components/ui/EmptyState";
 
+export const metadata = { title: "Actividad" };
+
 export default async function ActivityPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   await getProjectOrNotFound(id);

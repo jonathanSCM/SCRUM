@@ -243,6 +243,18 @@ function DrawerBody({
               <h3 className="mb-2 font-display text-sm font-bold text-ink">
                 {isEpic ? "Tickets de la épica" : "Tareas de la historia"} <span className="font-mono text-ink-faint">({done}/{data.children.length})</span>
               </h3>
+              {data.project && (
+                <QuickChild
+                  projectId={data.project.id}
+                  parentId={issue.id}
+                  isEpic={isEpic}
+                  epicId={isEpic ? issue.id : issue.epicId}
+                  onCreated={() => {
+                    void load();
+                    router.refresh();
+                  }}
+                />
+              )}
               {data.children.length === 0 ? (
                 <p className="text-sm text-ink-faint">{isEpic ? "Todavía no hay tickets en esta épica. Elegí la épica desde cualquier ticket." : "Todavía no hay tareas en esta historia. Elegí la historia desde una tarea o un bug."}</p>
               ) : (
@@ -889,5 +901,40 @@ function Activity({ items }: { items: HistoryRow[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+
+// Crea tareas, bugs (y, en una épica, historias) directo desde la card, ya asociados al padre.
+function QuickChild({ projectId, parentId, isEpic, epicId, onCreated }: { projectId: string; parentId: string; isEpic: boolean; epicId: string | null; onCreated: () => void }) {
+  const toast = useToast();
+  const [title, setTitle] = useState("");
+  const [type, setType] = useState<"TASK" | "BUG" | "STORY">("TASK");
+  const [busy, setBusy] = useState(false);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    const t = title.trim();
+    if (!t || busy) return;
+    setBusy(true);
+    // Una historia cuelga de la épica; tareas y bugs, de la historia (y heredan su épica).
+    const body = isEpic ? { title: t, issueType: type, epicId: parentId } : { title: t, issueType: type, parentId, ...(epicId ? { epicId } : {}) };
+    const res = await api(`/api/projects/${projectId}/issues`, "POST", body);
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error);
+    setTitle("");
+    onCreated();
+  }
+
+  return (
+    <form onSubmit={add} className="mb-2 flex gap-2">
+      <select className="field-sm" value={type} onChange={(e) => setType(e.target.value as "TASK" | "BUG" | "STORY")} aria-label="Tipo">
+        <option value="TASK">Tarea</option>
+        <option value="BUG">Bug</option>
+        {isEpic && <option value="STORY">Historia</option>}
+      </select>
+      <input className="field min-w-0 flex-1" placeholder={isEpic ? "Nuevo ticket de la épica… (Enter)" : "Nueva tarea o bug de la historia… (Enter)"} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+      <button className="btn-primary btn-sm" disabled={busy || !title.trim()}>Agregar</button>
+    </form>
   );
 }

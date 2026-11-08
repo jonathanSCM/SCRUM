@@ -40,8 +40,8 @@ const mono = localFont({
 export const metadata: Metadata = {
   applicationName: "SCRUM ProShop",
   appleWebApp: { capable: true, title: "SCRUM ProShop", statusBarStyle: "default" },
-  icons: { apple: "/icons/apple-touch-icon.png" },
-  title: { default: "SCRUM ProShop", template: "%s · SCRUM ProShop" },
+  icons: { icon: [{ url: "/favicon.ico", sizes: "any" }, { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }, { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }], shortcut: "/favicon.ico", apple: "/icons/apple-touch-icon.png" },
+  title: { default: "Scrum", template: "%s | Scrum" },
   description: "Backlog, sprints y tablero para los proyectos de ProShop",
 };
 

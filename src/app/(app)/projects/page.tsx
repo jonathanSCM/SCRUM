@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { requireWorkspace } from "@/lib/session";
 import ProjectsView, { type ProjectCardData } from "./ProjectsView";
 
+export const metadata = { title: "Proyectos" };
+
 export default async function ProjectsPage() {
   const { workspaceId } = await requireWorkspace();
   const [projects, statuses, taskCounts] = await Promise.all([

@@ -5,6 +5,8 @@ import { loadMessages } from "@/lib/chatData";
 import ChatView from "@/components/chat/ChatView";
 import { cn } from "@/lib/ui";
 
+export const metadata = { title: "Chat del proyecto" };
+
 // Dos pestañas: "Del proyecto" (mensajes que mencionan este proyecto) y "Del equipo" (avisos generales y
 // convocatorias hechas con comandos, solo para leer).
 export default async function ProjectChatPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {

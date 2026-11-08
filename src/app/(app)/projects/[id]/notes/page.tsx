@@ -3,6 +3,8 @@ import { requireSession } from "@/lib/session";
 import { getProjectOrNotFound } from "@/lib/projectData";
 import NotesView, { type NoteRow } from "./NotesView";
 
+export const metadata = { title: "Notas" };
+
 export default async function NotesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireSession();

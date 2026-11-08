@@ -5,6 +5,8 @@ import { computeVelocity } from "@/lib/scrum/velocity";
 import EmptyState from "@/components/ui/EmptyState";
 import ReportsView from "./ReportsView";
 
+export const metadata = { title: "Reportes" };
+
 export default async function ReportsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ sprint?: string }> }) {
   const { id } = await params;
   const { sprint: sprintParam } = await searchParams;

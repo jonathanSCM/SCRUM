@@ -35,6 +35,7 @@ export function toIssueCard(task: IssueWithRefs, projectKey: string | null): Iss
     completedAt: iso(task.completedAt),
     sprintId: task.sprintId,
     assignee: task.assignee,
+    reporterId: task.reporterId,
     epic: task.epic ? { id: task.epic.id, key: formatIssueKey(projectKey, task.epic.number), title: task.epic.title, color: task.epic.epicColor } : null,
     epicColor: task.epicColor,
     commentCount: task._count.comments,
