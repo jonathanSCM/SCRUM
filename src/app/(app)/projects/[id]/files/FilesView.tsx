@@ -131,7 +131,7 @@ export default function FilesView({ projectId, initial, sprints, tickets, curren
 function ResourceForm({ mode, projectId, resource, sprints, tickets, knownTags, onClose, onSaved }: { mode: "file" | "link" | "edit"; projectId: string; resource: ResourceDTO | null; sprints: Array<{ id: string; name: string }>; tickets: Array<{ id: string; label: string }>; knownTags: string[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [url, setUrl] = useState(resource?.url ?? "");
   const [title, setTitle] = useState(resource?.title ?? "");
   const [tags, setTags] = useState((resource?.tags ?? []).join(", "));
@@ -149,23 +149,32 @@ function ResourceForm({ mode, projectId, resource, sprints, tickets, knownTags, 
     if (mode === "edit") {
       res = await api(`/api/resources/${resource!.id}`, "PATCH", { title: title.trim() || undefined, ...(kind === "link" ? { url } : {}), tags: tags.split(","), sprintId, taskId });
     } else if (mode === "file") {
-      if (!file) { setBusy(false); return toast.error("Elige un archivo"); }
-      if (file.size > MAX_RESOURCE_BYTES) { setBusy(false); return toast.error(`Máximo ${MAX_RESOURCE_BYTES / (1024 * 1024)} MB por archivo`); }
-      const form = new FormData();
-      form.append("file", file);
-      form.append("title", title);
-      form.append("tags", tags);
-      if (sprintId) form.append("sprintId", sprintId);
-      if (taskId) form.append("taskId", taskId);
-      const r = await fetch(`/api/projects/${projectId}/resources`, { method: "POST", body: form }).catch(() => null);
-      const json = await r?.json().catch(() => null);
-      res = r?.ok ? { ok: true as const } : { ok: false as const, error: json?.error ?? "No se pudo subir" };
+      if (files.length === 0) { setBusy(false); return toast.error("Elige al menos un archivo"); }
+      // Varios archivos de una vez: cada uno se sube por separado con las mismas etiquetas y destino.
+      let ok = 0;
+      const errors: string[] = [];
+      for (const file of files) {
+        if (file.size > MAX_RESOURCE_BYTES) { errors.push(`${file.name}: máximo ${MAX_RESOURCE_BYTES / (1024 * 1024)} MB`); continue; }
+        const form = new FormData();
+        form.append("file", file);
+        if (files.length === 1 && title.trim()) form.append("title", title);
+        form.append("tags", tags);
+        if (sprintId) form.append("sprintId", sprintId);
+        if (taskId) form.append("taskId", taskId);
+        const r = await fetch(`/api/projects/${projectId}/resources`, { method: "POST", body: form }).catch(() => null);
+        if (r?.ok) ok++;
+        else errors.push(`${file.name}: ${(await r?.json().catch(() => null))?.error ?? "no se pudo subir"}`);
+      }
+      errors.forEach((m) => toast.error(m));
+      if (ok === 0) { setBusy(false); return; }
+      res = { ok: true as const };
+      if (ok > 1) toast.success(`${ok} archivos subidos`);
     } else {
       res = await api(`/api/projects/${projectId}/resources`, "POST", { url, title, tags, sprintId, taskId });
     }
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
-    toast.success(mode === "edit" ? "Cambios guardados" : mode === "file" ? "Archivo subido" : "Enlace agregado");
+    if (!(mode === "file" && files.length > 1)) toast.success(mode === "edit" ? "Cambios guardados" : mode === "file" ? "Archivo subido" : "Enlace agregado");
     onSaved();
   }
 
@@ -175,8 +184,8 @@ function ResourceForm({ mode, projectId, resource, sprints, tickets, knownTags, 
       <h3 className="font-display text-sm font-bold text-ink">{mode === "edit" ? "Editar" : mode === "file" ? "Subir archivo" : "Agregar enlace"}</h3>
       {mode === "file" && (
         <div>
-          <input ref={fileRef} type="file" className="block w-full text-sm text-ink-soft" onChange={(e) => { const f = e.target.files?.[0] ?? null; setFile(f); if (f && !title) setTitle(f.name); }} />
-          <p className="mt-1 text-xs text-ink-faint">Hasta {MAX_RESOURCE_BYTES / (1024 * 1024)} MB. Para archivos grandes, súbelos a Drive y agrega el enlace.</p>
+          <input ref={fileRef} type="file" multiple className="block w-full text-sm text-ink-soft" onChange={(e) => { const fs = Array.from(e.target.files ?? []); setFiles(fs); if (fs.length === 1 && !title) setTitle(fs[0].name); }} />
+          <p className="mt-1 text-xs text-ink-faint">Puedes elegir varios a la vez. Hasta {MAX_RESOURCE_BYTES / (1024 * 1024)} MB cada uno. Para archivos grandes, súbelos a Drive y agrega el enlace.</p>
         </div>
       )}
       {kind === "link" && (

@@ -740,25 +740,31 @@ function Attachments({ issueId, items, onChange }: { issueId: string; items: Att
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
 
-  async function upload(file: File) {
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      toast.error(`El archivo supera el máximo de ${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MB`);
-      return;
-    }
+  // Sube varios archivos de una vez (uno tras otro): un error en uno no frena a los demás.
+  async function uploadMany(files: File[]) {
+    if (files.length === 0) return;
     setBusy(true);
-    const form = new FormData();
-    form.append("file", file);
-    try {
-      const res = await fetch(`/api/issues/${issueId}/attachments`, { method: "POST", body: form });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) toast.error(json.error || "No se pudo subir el archivo");
-      else {
-        toast.success(`${file.name} adjuntado`);
-        onChange();
-        router.refresh();
+    let ok = 0;
+    for (const file of files) {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        toast.error(`${file.name}: supera el máximo de ${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MB`);
+        continue;
       }
-    } catch {
-      toast.error("No hay conexión con el servidor");
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const res = await fetch(`/api/issues/${issueId}/attachments`, { method: "POST", body: form });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) toast.error(`${file.name}: ${json.error || "no se pudo subir"}`);
+        else ok++;
+      } catch {
+        toast.error(`${file.name}: no hay conexión con el servidor`);
+      }
+    }
+    if (ok > 0) {
+      toast.success(ok === 1 ? "Archivo adjuntado" : `${ok} archivos adjuntados`);
+      onChange();
+      router.refresh();
     }
     setBusy(false);
   }
@@ -781,16 +787,16 @@ function Attachments({ issueId, items, onChange }: { issueId: string; items: Att
         <button className="btn-ghost btn-sm" disabled={busy} onClick={() => inputRef.current?.click()}>
           <PaperclipIcon size={14} /> {busy ? "Subiendo…" : "Adjuntar"}
         </button>
-        <input ref={inputRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
+        <input ref={inputRef} type="file" multiple className="hidden" onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; void uploadMany(fs); }} />
       </div>
       <div
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files?.[0]; if (f) upload(f); }}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); void uploadMany(Array.from(e.dataTransfer.files)); }}
         className={cn("border border-dashed p-2 transition-colors rounded-md", dragging ? "border-rust bg-card" : "border-line-strong")}
       >
         {items.length === 0 ? (
-          <p className="px-1 py-2 text-center text-xs text-ink-faint">Arrastrá un archivo acá o usá “Adjuntar” (máx. 5 MB).</p>
+          <p className="px-1 py-2 text-center text-xs text-ink-faint">Arrastra uno o varios archivos aquí o usa “Adjuntar” (máx. 5 MB cada uno).</p>
         ) : (
           <ul className="space-y-1">
             {items.map((a) => (
