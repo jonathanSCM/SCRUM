@@ -10,6 +10,7 @@ const TABS = [
   { slug: "epics", label: "Épicas" },
   { slug: "ceremonies", label: "Ceremonias" },
   { slug: "notes", label: "Notas" },
+  { slug: "files", label: "Archivos" },
   { slug: "chat", label: "Chat" },
   { slug: "reports", label: "Reportes" },
   { slug: "activity", label: "Actividad" },

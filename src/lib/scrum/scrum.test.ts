@@ -679,3 +679,25 @@ describe("markdown seguro", () => {
     expect(b[5]).toEqual({ t: "p", c: [{ t: "text", v: "<script>alert(1)</script>" }] });
   });
 });
+
+import { normalizeTags, parseTags, normalizeUrl, linkService } from "./resources";
+
+describe("archivos y enlaces", () => {
+  it("etiquetas: limpia, sin repetidas y con tope", () => {
+    expect(normalizeTags(" Brief , brief, Contrato  final ,, ")).toEqual(["Brief", "Contrato final"]);
+    expect(normalizeTags(["a", "b", 3, "A"])).toEqual(["a", "b"]);
+    expect(normalizeTags(Array.from({ length: 20 }, (_, i) => `t${i}`))).toHaveLength(10);
+    expect(parseTags("no json")).toEqual([]);
+    expect(parseTags('["x","y"]')).toEqual(["x", "y"]);
+  });
+  it("enlaces: solo http/https y se completa el https", () => {
+    expect(normalizeUrl("https://drive.google.com/x")).toBe("https://drive.google.com/x");
+    expect(normalizeUrl("drive.google.com/file/d/1")).toBe("https://drive.google.com/file/d/1");
+    expect(normalizeUrl("javascript:alert(1)")).toBeNull();
+    expect(normalizeUrl("ftp://x.com/a")).toBeNull();
+    expect(normalizeUrl("hola mundo")).toBeNull();
+    expect(linkService("https://docs.google.com/document/d/1")).toBe("Google Drive");
+    expect(linkService("https://www.figma.com/file/x")).toBe("Figma");
+    expect(linkService("https://ejemplo.com/a")).toBe("ejemplo.com");
+  });
+});

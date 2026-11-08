@@ -51,6 +51,7 @@ model User {
   images              UserImage[]
   memberships         Membership[]
   invitationsSent     Invitation[]
+  resourcesUploaded   ProjectResource[] @relation("ResourceUploader")
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
 }
@@ -124,6 +125,7 @@ model Project {
   sprints     Sprint[]
   documents   Document[]
   attachments Attachment[]
+  resources   ProjectResource[]
   history     HistoryEntry[]
   notes       Note[]
   messages    ProjectMessage[]
@@ -218,6 +220,7 @@ model Task {
 
   comments    Comment[]
   attachments Attachment[]
+  resources   ProjectResource[]
 
   @@unique([projectId, number])
   @@index([projectId, sprintId])
@@ -245,6 +248,7 @@ model Sprint {
 
   tasks      Task[]
   retroItems RetroItem[]
+  resources  ProjectResource[]
 
   @@index([projectId, state])
 }
@@ -597,4 +601,30 @@ model Invitation {
 
   @@index([workspaceId])
   @@index([email])
+}
+
+// Archivos y enlaces del proyecto ("Archivos"), con etiquetas. Pueden pertenecer al proyecto, a un sprint o a un ticket.
+// Los archivos se guardan en la base (como los adjuntos); más adelante pasarán a almacenamiento S3.
+model ProjectResource {
+  id        String   @id @default(cuid())
+  kind      String // FILE | LINK
+  title     String
+  url       String? // solo LINK
+  filename  String? // solo FILE
+  mimeType  String?
+  size      Int?
+  data      Bytes?
+  tags      String   @default("[]") // JSON de strings
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprintId  String?
+  sprint    Sprint?  @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  uploadedById String?
+  uploadedBy   User?   @relation("ResourceUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
 }

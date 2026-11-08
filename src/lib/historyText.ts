@@ -38,6 +38,9 @@ export const HISTORY_LABEL: Record<string, string> = {
   nota_eliminada: "Nota eliminada",
   nota_a_tickets: "Tickets creados desde una nota",
   slack_webhook: "Webhook de Slack",
+  archivo_agregado: "Archivo agregado",
+  enlace_agregado: "Enlace agregado",
+  archivo_eliminado_proyecto: "Archivo o enlace eliminado",
   // v1
   tarea_creada: "Tarea creada",
   tipo_tarea: "Estado de la tarea",
