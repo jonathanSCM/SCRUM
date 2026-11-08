@@ -2,7 +2,7 @@
 // con el mensaje que mandó la API (o uno genérico si no hubo respuesta).
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
-export async function api<T = unknown>(url: string, method: "GET" | "POST" | "PATCH" | "DELETE" = "GET", body?: unknown): Promise<ApiResult<T>> {
+export async function api<T = unknown>(url: string, method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" = "GET", body?: unknown): Promise<ApiResult<T>> {
   try {
     const res = await fetch(url, {
       method,

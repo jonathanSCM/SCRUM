@@ -7,6 +7,7 @@ export type Inline =
   | { t: "bold"; c: Inline[] }
   | { t: "em"; c: Inline[] }
   | { t: "code"; v: string }
+  | { t: "mention"; v: string }
   | { t: "link"; href: string; c: Inline[] };
 
 export type Block =
@@ -22,7 +23,7 @@ export function safeHref(raw: string): string | null {
   return /^(https?:\/\/|mailto:)[^\s<>"']+$/i.test(href) ? href : null;
 }
 
-const INLINE = /(\*\*([^*\n]+)\*\*)|(\*([^*\n]+)\*)|(`([^`\n]+)`)|(\[([^\]\n]+)\]\(([^)\s]+)\))|(https?:\/\/[^\s<>"')\]]+[^\s<>"').,;:!?\]])/g;
+const INLINE = /(\*\*([^*\n]+)\*\*)|(\*([^*\n]+)\*)|(`([^`\n]+)`)|(\[([^\]\n]+)\]\(([^)\s]+)\))|(https?:\/\/[^\s<>"')\]]+[^\s<>"').,;:!?\]])|((?<=^|\s)@[\p{L}\p{N}_]+)/gu;
 
 export function parseInline(text: string): Inline[] {
   const out: Inline[] = [];
@@ -36,6 +37,8 @@ export function parseInline(text: string): Inline[] {
     else if (m[7]) {
       const href = safeHref(m[9]);
       out.push(href ? { t: "link", href, c: parseInline(m[8]) } : { t: "text", v: m[0] });
+    } else if (m[11]) {
+      out.push({ t: "mention", v: m[11] });
     } else if (m[10]) {
       const href = safeHref(m[10]);
       out.push(href ? { t: "link", href, c: [{ t: "text", v: m[10] }] } : { t: "text", v: m[0] });

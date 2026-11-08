@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getProjectOrNotFound } from "@/lib/projectData";
 import { daysRemaining } from "@/lib/scrum/sprintLifecycle";
+import { listProjectMembers } from "@/lib/projectMembers";
 import { parseLabels } from "@/lib/scrum/labels";
 import Avatar from "@/components/ui/Avatar";
 import ProjectTabs from "./ProjectTabs";
@@ -14,6 +15,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
   const activeSprint = await prisma.sprint.findFirst({ where: { projectId: id, state: "ACTIVE" }, select: { name: true, endDate: true } });
   const active = await activeAccess(project.access.session.user.id);
   const wrongTeam = project.workspaceId && active?.workspaceId !== project.workspaceId;
+  const members = await listProjectMembers(id);
   const left = activeSprint ? daysRemaining(activeSprint.endDate) : null;
 
   return (
@@ -31,6 +33,12 @@ export default async function ProjectLayout({ children, params }: { children: Re
           <Avatar name={project.lead?.name} userId={project.lead?.id} size={22} />
           {project.lead?.name ?? "Sin encargado"}
         </div>
+        {members.length > 0 && (
+          <div className="flex items-center -space-x-1.5" title={`Equipo del proyecto: ${members.map((m) => m.name).join(", ")}`}>
+            {members.slice(0, 6).map((m) => <Avatar key={m.id} name={m.name} userId={m.id} size={22} />)}
+            {members.length > 6 && <span className="pl-2.5 text-xs text-ink-faint">+{members.length - 6}</span>}
+          </div>
+        )}
         {activeSprint && (
           <span className="lozenge text-moss-ink">
             {activeSprint.name}

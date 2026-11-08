@@ -701,3 +701,27 @@ describe("archivos y enlaces", () => {
     expect(linkService("https://ejemplo.com/a")).toBe("ejemplo.com");
   });
 });
+
+import { findMentioned } from "./mentions";
+import { isOverdue } from "./checklist";
+
+describe("menciones en comentarios y fechas del checklist", () => {
+  const gente = [{ id: "1", name: "Ana Pérez" }, { id: "2", name: "Luis Gómez" }, { id: "3", name: "Luisa Ríos" }, { id: "4", name: "Mariana" }];
+  it("encuentra por nombre completo o por primer nombre único", () => {
+    expect(findMentioned("hola @Ana Pérez revisa", gente).map((p) => p.id)).toEqual(["1"]);
+    expect(findMentioned("@ana y @MARIANA", gente).map((p) => p.id)).toEqual(["1", "4"]);
+    expect(findMentioned("@luis", gente).map((p) => p.id)).toEqual(["2"]);
+    expect(findMentioned("@luisa y @luis gómez", gente).map((p) => p.id).sort()).toEqual(["2", "3"]);
+  });
+  it("no confunde correos ni nombres parciales", () => {
+    expect(findMentioned("escribe a x@ana.com", gente)).toEqual([]);
+    expect(findMentioned("@anabel", gente)).toEqual([]);
+    expect(findMentioned("sin menciones", gente)).toEqual([]);
+  });
+  it("paso vencido solo si no está hecho y la fecha ya pasó", () => {
+    expect(isOverdue({ id: "a", text: "x", done: false, due: "2026-01-01" }, "2026-02-01")).toBe(true);
+    expect(isOverdue({ id: "a", text: "x", done: true, due: "2026-01-01" }, "2026-02-01")).toBe(false);
+    expect(isOverdue({ id: "a", text: "x", done: false, due: "2026-02-01" }, "2026-02-01")).toBe(false);
+    expect(isOverdue({ id: "a", text: "x", done: false }, "2026-02-01")).toBe(false);
+  });
+});

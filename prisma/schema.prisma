@@ -52,6 +52,8 @@ model User {
   memberships         Membership[]
   invitationsSent     Invitation[]
   resourcesUploaded   ProjectResource[] @relation("ResourceUploader")
+  projectMemberships  ProjectMember[]   @relation("ProjectMemberUser")
+  involvedIn          TaskInvolved[]    @relation("TaskInvolvedUser")
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
 }
@@ -126,6 +128,7 @@ model Project {
   documents   Document[]
   attachments Attachment[]
   resources   ProjectResource[]
+  members     ProjectMember[]
   history     HistoryEntry[]
   notes       Note[]
   messages    ProjectMessage[]
@@ -221,6 +224,7 @@ model Task {
   comments    Comment[]
   attachments Attachment[]
   resources   ProjectResource[]
+  involved    TaskInvolved[]
 
   @@unique([projectId, number])
   @@index([projectId, sprintId])
@@ -627,4 +631,30 @@ model ProjectResource {
   uploadedBy   User?   @relation("ResourceUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@index([projectId, createdAt])
+}
+
+// Personas del equipo asignadas a un proyecto (se les avisa al agregarlas).
+model ProjectMember {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation("ProjectMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+// Involucrados de un ticket (además del responsable): reciben aviso de comentarios y menciones.
+model TaskInvolved {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation("TaskInvolvedUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
 }

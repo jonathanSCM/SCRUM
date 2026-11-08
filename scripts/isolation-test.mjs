@@ -493,6 +493,30 @@ async function main() {
   const tkr = await tk.req("GET", `/api/projects/${A.project.id}/resources`);
   check("el token IA no accede a archivos (403)", tkr.status === 403, `dio ${tkr.status}`);
 
+  console.log("13) Sprint 2: miembros del proyecto, involucrados, menciones y fechas del checklist");
+  const mem1 = await cPlain.req("PUT", `/api/projects/${A.project.id}/members`, { userIds: [aMember.id] });
+  check("un miembro no define el equipo del proyecto (403)", mem1.status === 403, `dio ${mem1.status}`);
+  const mem2 = await cAOwner.req("PUT", `/api/projects/${A.project.id}/members`, { userIds: [aMember.id, plain.id, bOwner.id, bOnly.id] });
+  check("el líder define el equipo (solo personas de su equipo)", mem2.status === 200, `dio ${mem2.status}`);
+  const memRows = await prisma.projectMember.findMany({ where: { projectId: A.project.id } });
+  check("quedan Aldo y Pablo, y NO alguien que solo es de B", memRows.some((r) => r.userId === aMember.id) && memRows.some((r) => r.userId === plain.id) && !memRows.some((r) => r.userId === bOnly.id), `${memRows.length} filas`);
+  const mem3 = await cBOnly.req("PUT", `/api/projects/${A.project.id}/members`, { userIds: [bOnly.id] });
+  check("alguien de otro equipo no toca el equipo del proyecto (404)", mem3.status === 404, `dio ${mem3.status}`);
+  const inv1 = await cPlain.req("PUT", `/api/issues/${A.task.id}/involved`, { userIds: [aOwner.id, bOnly.id] });
+  check("un miembro agrega involucrados; los de otro equipo se ignoran", inv1.status === 200 && inv1.json.involved.length === 1 && inv1.json.involved[0].id === aOwner.id, `dio ${inv1.status} ${inv1.text.slice(0, 100)}`);
+  const inv2 = await cBOnly.req("PUT", `/api/issues/${A.task.id}/involved`, { userIds: [bOnly.id] });
+  check("alguien de otro equipo no toca los involucrados (404)", inv2.status === 404, `dio ${inv2.status}`);
+  const bkey = await cPlain.req("GET", `/api/issues/by-key/SAI-1`);
+  check("el detalle del ticket trae los involucrados", bkey.status === 200 && bkey.json.involved?.some((u) => u.id === aOwner.id), `dio ${bkey.status}`);
+  const cmt = await cPlain.req("POST", `/api/issues/${A.task.id}/comments`, { body: "hola @Ana Dueña A y @Bruno Solo B, revisen" });
+  check("comentar con menciones funciona", cmt.status === 201, `dio ${cmt.status}`);
+  const chk = await cPlain.req("PATCH", `/api/issues/${A.task.id}`, { checklist: [{ id: "a1", text: "paso uno", done: false, due: "2026-12-31" }, { id: "a2", text: "paso dos", done: false, due: null }] });
+  check("la checklist guarda fechas", chk.status === 200, `dio ${chk.status}`);
+  const chkRow = await prisma.task.findUnique({ where: { id: A.task.id } });
+  check("queda la fecha del primer paso y el segundo sin fecha", chkRow.checklist.includes('"due":"2026-12-31"') && !chkRow.checklist.includes('"due":null'), chkRow.checklist);
+  const chkBad = await cPlain.req("PATCH", `/api/issues/${A.task.id}`, { checklist: [{ id: "a1", text: "x", done: false, due: "mañana" }] });
+  check("una fecha inválida se rechaza (400)", chkBad.status === 400, `dio ${chkBad.status}`);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

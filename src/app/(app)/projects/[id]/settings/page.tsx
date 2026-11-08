@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/session";
 import { getProjectOrNotFound } from "@/lib/projectData";
 import { parseStringList } from "@/lib/scrum/ready";
 import { parseLabels } from "@/lib/scrum/labels";
+import { listProjectMembers } from "@/lib/projectMembers";
 import { slackBotTokenFor } from "@/lib/teamIntegrations";
 import { sprintPdfEnabled } from "@/lib/features";
 import SettingsForm from "./SettingsForm";
@@ -40,6 +41,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
         deployUrl: project.deployUrl ?? "",
         stack,
         labels,
+        memberIds: (await listProjectMembers(project.id)).map((m) => m.id),
         statusId: project.statusId,
         leadUserId: project.leadUserId ?? "",
         readyItems: parseStringList(project.readyItems),

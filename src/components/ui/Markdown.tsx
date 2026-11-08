@@ -12,6 +12,8 @@ function inline(nodes: Inline[]): React.ReactNode {
         return <em key={i}>{inline(n.c)}</em>;
       case "code":
         return <code key={i} className="rounded bg-paper-deep px-1 font-mono text-[0.85em] text-ink">{n.v}</code>;
+      case "mention":
+        return <span key={i} className="rounded bg-chip-tint px-1 font-semibold text-rust">{n.v}</span>;
       case "link":
         return (
           <a key={i} href={n.href} target="_blank" rel="noopener noreferrer" className="font-medium text-rust underline underline-offset-2 hover:opacity-80">

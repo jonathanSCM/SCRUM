@@ -101,6 +101,7 @@ export const createProjectSchema = z.object({
   name: z.string().trim().min(1, "Nombre requerido").max(200),
   key: projectKeySchema.optional(),
   description: z.string().trim().max(5000).optional(),
+  memberIds: z.array(z.string().min(1).max(40)).max(100).optional(),
 });
 
 export const updateProjectSchema = z.object({
@@ -145,7 +146,7 @@ export const createIssueSchema = z.object({
   storyPoints: storyPoints.optional(),
   labels: labels.optional(),
   readyDone: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
-  checklist: z.array(z.object({ id: z.string().min(1).max(40), text: z.string().trim().min(1).max(200), done: z.boolean() })).max(50).optional(),
+  checklist: z.array(z.object({ id: z.string().min(1).max(40), text: z.string().trim().min(1).max(200), done: z.boolean(), due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish().transform((v) => v ?? undefined) })).max(50).optional(),
   parentId: z.string().min(1).nullable().optional(),
   assigneeUserId: z.string().min(1).nullable().optional(),
   sprintId: z.string().min(1).nullable().optional(),
@@ -163,7 +164,7 @@ export const updateIssueSchema = z.object({
   storyPoints: storyPoints.optional(),
   labels: labels.optional(),
   readyDone: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
-  checklist: z.array(z.object({ id: z.string().min(1).max(40), text: z.string().trim().min(1).max(200), done: z.boolean() })).max(50).optional(),
+  checklist: z.array(z.object({ id: z.string().min(1).max(40), text: z.string().trim().min(1).max(200), done: z.boolean(), due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish().transform((v) => v ?? undefined) })).max(50).optional(),
   parentId: z.string().min(1).nullable().optional(),
   assigneeUserId: z.string().min(1).nullable().optional(),
   sprintId: z.string().min(1).nullable().optional(),

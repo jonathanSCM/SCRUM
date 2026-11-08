@@ -20,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
     const issue = await findIssueByKey(key, auth.user.workspaceId!);
     if (!issue) return notFound("Ticket no encontrado");
 
-    const [project, comments, attachments, history, members, sprints, epics, stories] = await Promise.all([
+    const [project, comments, attachments, history, members, sprints, epics, stories, involvedRows] = await Promise.all([
       prisma.project.findUnique({ where: { id: issue.projectId }, select: { id: true, key: true, name: true, readyItems: true } }),
       prisma.comment.findMany({
         where: { taskId: issue.id },
@@ -49,6 +49,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
         orderBy: { number: "asc" },
         select: { id: true, number: true, title: true },
       }),
+      prisma.taskInvolved.findMany({ where: { taskId: issue.id }, select: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } }),
     ]);
 
     const children =
@@ -64,6 +65,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
       children,
       issue: { ...issue, labels: parseLabels(issue.labels), readyDone: parseStringList(issue.readyDone), checklist: parseChecklist(issue.checklist) },
       project,
+      involved: involvedRows.map((r) => r.user),
       comments,
       attachments,
       history,

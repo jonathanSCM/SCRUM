@@ -5,6 +5,7 @@ import { errorResponse } from "@/lib/api";
 import { createProjectSchema, parseBody, readJson } from "@/lib/validation";
 import { suggestProjectKey } from "@/lib/scrum/issueKey";
 import { logHistory } from "@/lib/history";
+import { setProjectMembers } from "@/lib/projectMembers";
 
 export async function POST(req: Request) {
   const auth = await apiUser({ workspace: true });
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
       include: { status: true },
     });
     await logHistory({ projectId: project.id, field: "proyecto_creado", newValue: project.name, actor: user });
+    if (parsed.data.memberIds?.length) await setProjectMembers(project.id, user.workspaceId!, parsed.data.memberIds, user.name);
     return NextResponse.json(project, { status: 201 });
   } catch (e) {
     return errorResponse(e);

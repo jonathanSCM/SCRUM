@@ -18,6 +18,7 @@ type Props = {
     deployUrl: string;
     stack: string[];
     labels: string[];
+    memberIds: string[];
     statusId: string;
     leadUserId: string;
     readyItems: string[];
@@ -47,6 +48,17 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
   const [statusId, setStatusId] = useState(project.statusId);
   const [leadUserId, setLeadUserId] = useState(project.leadUserId);
   const [saving, setSaving] = useState(false);
+
+  const [memberIds, setMemberIds] = useState<string[]>(project.memberIds);
+  const [savingMembers, setSavingMembers] = useState(false);
+  async function saveMembers() {
+    setSavingMembers(true);
+    const res = await api(`/api/projects/${project.id}/members`, "PUT", { userIds: memberIds });
+    setSavingMembers(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Equipo del proyecto guardado");
+    router.refresh();
+  }
 
   const [readyItems, setReadyItems] = useState<string[]>(project.readyItems);
   const [newReady, setNewReady] = useState("");
@@ -244,6 +256,27 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
           <button className="btn-primary" disabled={saving || !name.trim()}>{saving ? "Guardando…" : "Guardar cambios"}</button>
         </div>
       </form>
+
+      <section className="space-y-3 border border-line bg-card p-5 rounded-lg">
+        <h2 className="font-display text-lg font-extrabold text-ink">Equipo del proyecto</h2>
+        <p className="text-sm text-ink-soft">Las personas del equipo que trabajan en este proyecto. Al agregar a alguien se le avisa. Los tickets se pueden asignar a cualquiera del equipo; aquí defines quién forma parte del proyecto.</p>
+        <div className="flex flex-wrap gap-1.5">
+          {users.map((u) => {
+            const on = memberIds.includes(u.id);
+            return (
+              <label key={u.id} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${isLead ? "cursor-pointer" : "cursor-default"} ${on ? "border-rust bg-chip-tint text-rust" : "border-line-strong text-ink-soft"}`}>
+                <input type="checkbox" className="hidden" disabled={!isLead} checked={on} onChange={() => setMemberIds(on ? memberIds.filter((x) => x !== u.id) : [...memberIds, u.id])} />
+                {u.name}
+              </label>
+            );
+          })}
+        </div>
+        {isLead ? (
+          <div className="flex justify-end"><button className="btn-primary" disabled={savingMembers} onClick={saveMembers}>{savingMembers ? "Guardando…" : "Guardar equipo del proyecto"}</button></div>
+        ) : (
+          <p className="text-xs text-ink-faint">Solo un líder puede cambiarlo.</p>
+        )}
+      </section>
 
       <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
         <h2 className="font-display text-lg font-extrabold text-ink">Definition of Ready (lista para todos los tickets)</h2>

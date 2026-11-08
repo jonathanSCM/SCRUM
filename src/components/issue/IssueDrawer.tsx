@@ -21,6 +21,8 @@ import {
 } from "@/lib/scrum/constants";
 import Avatar from "@/components/ui/Avatar";
 import Markdown from "@/components/ui/Markdown";
+import MentionTextarea from "@/components/ui/MentionTextarea";
+import { isOverdue, type ChecklistItem } from "@/lib/scrum/checklist";
 import { CommentIcon, PaperclipIcon, TrashIcon, XIcon, TypeIcon, PriorityIcon } from "@/components/ui/Icons";
 import { StatusLozenge } from "@/components/ui/Lozenge";
 import { useToast } from "@/components/ui/Toaster";
@@ -43,7 +45,7 @@ type IssueDetail = {
   storyPoints: number | null;
   labels: string[];
   readyDone: string[];
-  checklist: Array<{ id: string; text: string; done: boolean }>;
+  checklist: ChecklistItem[];
   parentId: string | null;
   dueDate: string | null;
   createdAt: string;
@@ -68,6 +70,7 @@ type Payload = {
   attachments: Attachment[];
   history: HistoryRow[];
   children: Child[];
+  involved: UserRef[];
   options: { members: UserRef[]; sprints: SprintOption[]; epics: EpicOption[]; stories: Array<{ id: string; number: number | null; title: string }>; readyItems: string[] };
 };
 
@@ -307,7 +310,7 @@ function DrawerBody({
               ))}
             </div>
             {tab === "comments" ? (
-              <Comments issueId={issue.id} items={data.comments} currentUserId={currentUserId} currentUserRole={currentUserRole} onChange={() => { load(); router.refresh(); }} />
+              <Comments people={data.options.members} issueId={issue.id} items={data.comments} currentUserId={currentUserId} currentUserRole={currentUserRole} onChange={() => { load(); router.refresh(); }} />
             ) : (
               <Activity items={data.history} />
             )}
@@ -357,6 +360,15 @@ function DrawerBody({
                 Asignármelo
               </button>
             )}
+          </Field>
+
+          <Field label="Involucrados">
+            <Involved
+              issueId={issue.id}
+              people={data.options.members}
+              current={data.involved ?? []}
+              onChange={load}
+            />
           </Field>
 
           <Field label="Reportado por">
@@ -627,7 +639,7 @@ function ReadyChecklist({ items, done, onChange, settingsHref }: { items: string
 }
 
 // Checklist propio de la tarjeta (pasos chicos que no merecen un ticket).
-function Checklist({ items, onChange }: { items: Array<{ id: string; text: string; done: boolean }>; onChange: (items: Array<{ id: string; text: string; done: boolean }>) => void }) {
+function Checklist({ items, onChange }: { items: ChecklistItem[]; onChange: (items: ChecklistItem[]) => void }) {
   const [draft, setDraft] = useState("");
   const done = items.filter((i) => i.done).length;
 
@@ -653,6 +665,14 @@ function Checklist({ items, onChange }: { items: Array<{ id: string; text: strin
           <li key={it.id} className="group flex items-center gap-2 text-sm">
             <input type="checkbox" className="h-4 w-4 accent-moss" checked={it.done} onChange={() => onChange(items.map((x) => (x.id === it.id ? { ...x, done: !x.done } : x)))} />
             <span className={cn("min-w-0 flex-1 break-words", it.done ? "text-ink-faint line-through" : "text-ink")}>{it.text}</span>
+            <input
+              type="date"
+              className={cn("w-[7.5rem] rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-ink-faint hover:border-line-strong focus:border-line-strong", isOverdue(it) && "font-semibold text-danger")}
+              value={it.due ?? ""}
+              title={isOverdue(it) ? "Vencido" : "Fecha límite de este paso"}
+              aria-label={`Fecha límite de ${it.text}`}
+              onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, due: e.target.value || null } : x)))}
+            />
             <button className="hidden text-xs text-ink-faint hover:text-danger group-hover:inline" onClick={() => onChange(items.filter((x) => x.id !== it.id))} aria-label={`Quitar ${it.text}`}>quitar</button>
           </li>
         ))}
@@ -791,12 +811,14 @@ function Attachments({ issueId, items, onChange }: { issueId: string; items: Att
 }
 
 function Comments({
+  people,
   issueId,
   items,
   currentUserId,
   currentUserRole,
   onChange,
 }: {
+  people: UserRef[];
   issueId: string;
   items: Comment[];
   currentUserId: string;
@@ -838,12 +860,13 @@ function Comments({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <textarea
+        <MentionTextarea
+          people={people}
           rows={3}
           className="field"
-          placeholder="Escribí un comentario…"
+          placeholder="Escribe un comentario… (usa @ para avisar a alguien)"
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={setDraft}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
           }}
@@ -869,7 +892,7 @@ function Comments({
                 </p>
                 {editingId === c.id ? (
                   <div className="mt-1 space-y-2">
-                    <textarea rows={3} className="field" value={editDraft} onChange={(e) => setEditDraft(e.target.value)} autoFocus />
+                    <MentionTextarea people={people} rows={3} className="field" value={editDraft} onChange={setEditDraft} autoFocus />
                     <div className="flex gap-2">
                       <button className="btn-primary btn-sm" onClick={() => saveEdit(c.id)}>Guardar</button>
                       <button className="btn-ghost btn-sm" onClick={() => setEditingId(null)}>Cancelar</button>
@@ -945,5 +968,39 @@ function QuickChild({ projectId, parentId, isEpic, epicId, onCreated }: { projec
       <input className="field min-w-0 flex-1" placeholder={isEpic ? "Nuevo ticket de la épica… (Enter)" : "Nueva tarea o bug de la historia… (Enter)"} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
       <button className="btn-primary btn-sm" disabled={busy || !title.trim()}>Agregar</button>
     </form>
+  );
+}
+
+
+// Varias personas involucradas en un ticket (además del responsable): reciben aviso de comentarios y menciones.
+function Involved({ issueId, people, current, onChange }: { issueId: string; people: UserRef[]; current: UserRef[]; onChange: () => void }) {
+  const toast = useToast();
+  async function save(ids: string[]) {
+    const res = await api(`/api/issues/${issueId}/involved`, "PUT", { userIds: ids });
+    if (!res.ok) return toast.error(res.error);
+    onChange();
+  }
+  const ids = current.map((u) => u.id);
+  const available = people.filter((p) => !ids.includes(p.id));
+  return (
+    <div className="space-y-1.5">
+      {current.length > 0 && (
+        <ul className="flex flex-wrap gap-1">
+          {current.map((u) => (
+            <li key={u.id} className="flex items-center gap-1 rounded-full border border-line-strong bg-surface py-0.5 pl-1 pr-2 text-xs text-ink">
+              <Avatar name={u.name} userId={u.id} size={16} />
+              {u.name}
+              <button className="ml-0.5 text-ink-faint hover:text-danger" aria-label={`Quitar a ${u.name}`} onClick={() => save(ids.filter((x) => x !== u.id))}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {available.length > 0 && (
+        <select className="field field-sm" value="" onChange={(e) => e.target.value && save([...ids, e.target.value])} aria-label="Agregar involucrado">
+          <option value="">+ Agregar persona…</option>
+          {available.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      )}
+    </div>
   );
 }
