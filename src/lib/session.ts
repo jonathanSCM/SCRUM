@@ -51,7 +51,7 @@ export async function requireLead() {
 type Scope = Partial<Record<ResourceKind, string>> & { workspace?: boolean };
 export type ApiOptions = Scope & { lead?: boolean };
 
-const SCOPE_KINDS: ResourceKind[] = ["project", "issue", "sprint", "comment", "attachment", "note", "retro", "contact", "projectMessage", "chatMessage", "chatFile", "status", "invitation", "channel", "resource"];
+const SCOPE_KINDS: ResourceKind[] = ["project", "issue", "sprint", "comment", "attachment", "note", "retro", "contact", "projectMessage", "chatMessage", "chatFile", "status", "invitation", "channel", "resource", "fileCard", "fileCardItem"];
 
 const unauthorized = () => ({ error: NextResponse.json({ error: "No autorizado" }, { status: 401 }) });
 const notFoundRes = () => ({ error: NextResponse.json({ error: "No encontrado" }, { status: 404 }) });

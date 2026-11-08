@@ -54,6 +54,8 @@ model User {
   resourcesUploaded   ProjectResource[] @relation("ResourceUploader")
   projectMemberships  ProjectMember[]   @relation("ProjectMemberUser")
   involvedIn          TaskInvolved[]    @relation("TaskInvolvedUser")
+  fileCardsCreated    FileCard[]        @relation("FileCardCreator")
+  fileCardItemsUploaded FileCardItem[]  @relation("FileCardItemUploader")
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
 }
@@ -129,6 +131,7 @@ model Project {
   attachments Attachment[]
   resources   ProjectResource[]
   members     ProjectMember[]
+  fileCards   FileCard[]
   history     HistoryEntry[]
   notes       Note[]
   messages    ProjectMessage[]
@@ -566,6 +569,7 @@ model Workspace {
   statuses    StatusOption[]
   chat        ChatMessage[]
   channels    ChatChannel[]
+  fileCards   FileCard[]
   invitations Invitation[]
 }
 
@@ -657,4 +661,46 @@ model TaskInvolved {
   user   User   @relation("TaskInvolvedUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, userId])
+}
+
+// Biblioteca del equipo: tarjetas que agrupan varios archivos y enlaces (por ejemplo "Resolución de la reunión del 5 de nov").
+// Pertenecen al equipo y, si se quiere, a un proyecto. Los archivos se guardan en la base (como los adjuntos).
+model FileCard {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @default("")
+  category    String   @default("OTRO") // RESOLUCION_REUNION | ACTA | CONTRATO | ENTREGABLE | REFERENCIA | OTRO
+  tags        String   @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdById String?
+  createdBy   User?     @relation("FileCardCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  items FileCardItem[]
+
+  @@index([workspaceId, createdAt])
+}
+
+model FileCardItem {
+  id        String   @id @default(cuid())
+  kind      String // FILE | LINK
+  title     String
+  url       String?
+  filename  String?
+  mimeType  String?
+  size      Int?
+  data      Bytes?
+  createdAt DateTime @default(now())
+
+  cardId String
+  card   FileCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  uploadedById String?
+  uploadedBy   User?   @relation("FileCardItemUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([cardId])
 }

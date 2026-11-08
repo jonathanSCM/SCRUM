@@ -30,7 +30,7 @@ function routes(dir: string): string[] {
   });
 }
 
-const SCOPE = /apiUser\(\{[^)]*\b(workspace|project|issue|sprint|comment|attachment|note|retro|contact|projectMessage|chatMessage|chatFile|status|invitation|channel|resource)\b/;
+const SCOPE = /apiUser\(\{[^)]*\b(workspace|project|issue|sprint|comment|attachment|note|retro|contact|projectMessage|chatMessage|chatFile|status|invitation|channel|resource|fileCard|fileCardItem)\b/;
 
 describe("guardia de aislamiento entre equipos", () => {
   const files = routes(ROOT);

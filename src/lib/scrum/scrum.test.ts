@@ -746,3 +746,19 @@ describe("enlaces de Drive: nombre y vista previa", () => {
     expect(previewUrl("https://www.figma.com/design/abc/Mi-diseno")).toContain("figma.com/embed");
   });
 });
+
+import { categoryLabel, normalizeCategory, checkCardCapacity, MAX_CARD_ITEMS, MAX_CARD_BYTES } from "./library";
+
+describe("biblioteca: tarjetas de archivos", () => {
+  it("categorías", () => {
+    expect(categoryLabel("RESOLUCION_REUNION")).toBe("Resolución de reunión");
+    expect(categoryLabel("loquesea")).toBe("Otro");
+    expect(normalizeCategory("ACTA")).toBe("ACTA");
+    expect(normalizeCategory("x")).toBe("OTRO");
+  });
+  it("capacidad de una tarjeta", () => {
+    expect(checkCardCapacity({ items: 0, bytes: 0 }, [{ size: 1000 }, { size: 2000 }])).toBeNull();
+    expect(checkCardCapacity({ items: MAX_CARD_ITEMS - 1, bytes: 0 }, [{ size: 1 }, { size: 1 }])).toMatch(/hasta 30/);
+    expect(checkCardCapacity({ items: 1, bytes: MAX_CARD_BYTES - 10 }, [{ size: 20 }])).toMatch(/MB/);
+  });
+});

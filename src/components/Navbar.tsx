@@ -15,6 +15,7 @@ const LINKS = [
   { href: "/projects", label: "Proyectos" },
   { href: "/my-work", label: "Mi trabajo" },
   { href: "/chat", label: "Chat" },
+  { href: "/library", label: "Biblioteca" },
   { href: "/people", label: "Equipo" },
 ];
 
