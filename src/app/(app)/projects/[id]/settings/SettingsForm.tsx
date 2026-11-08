@@ -1,5 +1,6 @@
 "use client";
 
+import ExportPanel from "./ExportPanel";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
@@ -256,6 +257,8 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
           <button className="btn-primary" disabled={saving || !name.trim()}>{saving ? "Guardando…" : "Guardar cambios"}</button>
         </div>
       </form>
+
+      <ExportPanel projectId={project.id} />
 
       <section className="space-y-3 border border-line bg-card p-5 rounded-lg">
         <h2 className="font-display text-lg font-extrabold text-ink">Equipo del proyecto</h2>

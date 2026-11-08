@@ -517,6 +517,29 @@ async function main() {
   const chkBad = await cPlain.req("PATCH", `/api/issues/${A.task.id}`, { checklist: [{ id: "a1", text: "x", done: false, due: "mañana" }] });
   check("una fecha inválida se rechaza (400)", chkBad.status === 400, `dio ${chkBad.status}`);
 
+  console.log("14) Exportar el proyecto en JSON para IA");
+  await prisma.project.update({ where: { id: A.project.id }, data: { slackWebhookUrl: "https://hooks.slack.com/services/T000/B000/SECRETOSECRETO", discordWebhookUrl: "https://discord.com/api/webhooks/1/SECRETODISCORD", telegramBotToken: "123:SECRETOTELEGRAM" } });
+  const ex1 = await cPlain.req("GET", `/api/projects/${A.project.id}/export-json?scope=full&comments=5`);
+  check("un miembro exporta el proyecto completo", ex1.status === 200 && ex1.json?._meta?.format === "scrum-proshop-export" && ex1.json.project.id === A.project.id, `dio ${ex1.status}`);
+  check("trae tickets, sprints, notas y archivos", ex1.json.epics !== undefined && ex1.json.sprints?.length >= 1 && ex1.json.notes?.length >= 1 && Array.isArray(ex1.json.archivos));
+  check("NO incluye webhooks, tokens ni claves", !/SECRETO|hooks\.slack|discord\.com\/api|geminiKey|tokenHash|passwordHash/i.test(ex1.text));
+  check("NO incluye correos de personas", !ex1.text.includes("@a.test") && !ex1.text.includes("@b.test"));
+  check("no mezcla datos de otro equipo", !ex1.text.includes("Chat secreto B") && !ex1.text.includes("Proyecto B") && !ex1.text.includes("Ticket B"));
+  const ex2 = await cPlain.req("GET", `/api/projects/${A.project.id}/export-json?scope=tasks&anonymize=1`);
+  check("modo tareas es más corto y no trae sprints ni notas", ex2.status === 200 && ex2.json.sprints === undefined && ex2.json.notes === undefined && ex2.text.length < ex1.text.length);
+  check("anonimizar quita los nombres de las personas", !/Ana Dueña|Aldo Miembro|Pablo Plano|Marta Multi/.test(ex2.text) && ex2.json._meta.anonimizado === true);
+  const ex3 = await cBOnly.req("GET", `/api/projects/${A.project.id}/export-json`);
+  check("alguien solo de B no exporta el proyecto de A (404)", ex3.status === 404, `dio ${ex3.status}`);
+  const ex4 = await tk.req("GET", `/api/projects/${A.project.id}/export-json?scope=tasks`);
+  check("el token IA sí puede leer la exportación de su equipo", ex4.status === 200, `dio ${ex4.status}`);
+  const ex5 = await tk.req("GET", `/api/projects/${B.project.id}/export-json`);
+  check("pero no la de otro equipo (404)", ex5.status === 404, `dio ${ex5.status}`);
+  // Ida y vuelta: lo exportado se puede importar como un proyecto nuevo.
+  const rt = await cAOwner.req("POST", "/api/ai/import", { project: { name: `Copia ${stamp}` }, epics: ex1.json.epics, stories: ex1.json.stories, tasks: ex1.json.tasks });
+  check("el JSON exportado se importa tal cual como proyecto nuevo", rt.status === 200 && rt.json?.project?.created === true, `dio ${rt.status} ${rt.text.slice(0, 200)}`);
+  const rt2 = await cAOwner.req("POST", "/api/ai/import", { project: { id: rt.json.project.id }, epics: ex1.json.epics, stories: ex1.json.stories, tasks: ex1.json.tasks });
+  check("y repetirlo no duplica nada", rt2.status === 200 && (rt2.json.created.tasks.length + rt2.json.created.stories.length + rt2.json.created.epics.length) === 0, `dio ${rt2.status} ${rt2.text.slice(0, 200)}`);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

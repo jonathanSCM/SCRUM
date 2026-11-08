@@ -9,6 +9,7 @@ const RULES: Array<{ method: string; path: RegExp }> = [
   { method: "GET", path: new RegExp(`^/api/ai/(projects|users)(/${ID})?$`) },
   { method: "GET", path: new RegExp(`^/api/issues/by-key/[^/]+$`) },
   { method: "GET", path: /^\/api\/search$/ },
+  { method: "GET", path: new RegExp(`^/api/projects/${ID}/export-json$`) },
   // Crear proyectos, sprints (sin iniciar), tickets y notas; mover; comentar
   { method: "POST", path: /^\/api\/ai\/import$/ },
   { method: "POST", path: /^\/api\/projects$/ },

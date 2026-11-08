@@ -11,7 +11,8 @@ const base = {
   storyPoints: z.number().int().min(0).max(100).nullable().optional(),
   assignee: z.string().trim().max(200).optional(), // nombre o email de una persona del equipo
   labels: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
-  checklist: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+  // Pasos como texto, o como objetos {text, done?, due?} (formato de la exportación del proyecto).
+  checklist: z.array(z.union([z.string().trim().min(1).max(200), z.object({ text: z.string().trim().min(1).max(200), done: z.boolean().optional(), due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish() })])).max(50).optional(),
   dueDate: z.string().trim().refine((v) => !Number.isNaN(Date.parse(v)), "Fecha inválida").optional(),
 };
 

@@ -76,3 +76,32 @@ Reglas:
 - priority: URGENTE | ALTA | MEDIA | BAJA. type: TASK | BUG. kind de nota: BRIEF | REUNION | PLANNING | REVIEW | GENERAL.
 - Máximo 300 tickets en total. Todo en español. JSON válido: comillas dobles, sin comas finales ni comentarios.
 - Los campos opcionales se pueden omitir.`;
+
+// Prompts para pasar la exportación del proyecto a una IA (junto con el JSON).
+export type ExportPromptKind = "analyze" | "newTickets";
+
+export function buildExportPrompt(kind: ExportPromptKind, projectId: string): string {
+  const intro = `Te paso el JSON de un proyecto de SCRUM ProShop (épicas, historias, tareas y bugs con su estado, prioridad, responsables y comentarios; el modo completo suma sprints, notas, retros y archivos). Léelo entero antes de responder y usa las claves (por ejemplo SAI-12) para referirte a los tickets. No inventes datos que no estén en el JSON.`;
+  if (kind === "analyze") {
+    return `${intro}
+
+Quiero que me hagas, en español y de forma concisa:
+1. Un resumen del estado del proyecto (avance, qué está bloqueado o en riesgo).
+2. Los 5 tickets que conviene hacer primero y por qué.
+3. Incoherencias que veas (tickets duplicados, sin responsable, sin puntos, historias sin tareas, épicas vacías).
+4. Sugerencias de mejora para el siguiente sprint.
+
+Al final, espera mis preguntas.`;
+  }
+  return `${intro}
+
+Quiero que propongas tickets NUEVOS que falten (no repitas los que ya existen, ni siquiera con otro nombre). Cuando termine la conversación, respóndeme SOLO con un bloque de código JSON en este formato para importarlo en la app (Proyectos > Importar con IA):
+
+{
+  "project": { "id": "${projectId}" },
+  "epics": [ { "title": "Épica existente o nueva", "stories": [ { "title": "Historia", "description": "…", "priority": "ALTA", "storyPoints": 5, "tasks": [ { "title": "Tarea", "type": "TASK", "storyPoints": 2, "checklist": ["paso 1"] } ] } ] } ],
+  "tasks": [ { "title": "Tarea suelta", "type": "BUG" } ]
+}
+
+Reglas: priority URGENTE | ALTA | MEDIA | BAJA; type TASK | BUG; máximo 300 tickets; JSON válido (comillas dobles, sin comas finales ni comentarios). Si metes tickets en una épica que ya existe, usa exactamente su título.`;
+}
