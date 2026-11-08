@@ -278,7 +278,7 @@ function DrawerBody({
           )}
 
           {!isEpic && data.options.readyItems.length > 0 && (
-            <ReadyChecklist items={data.options.readyItems} done={issue.readyDone} onChange={(readyDone) => patch({ readyDone })} />
+            <ReadyChecklist items={data.options.readyItems} done={issue.readyDone} onChange={(readyDone) => patch({ readyDone })} settingsHref={`/projects/${issue.projectId}/settings`} />
           )}
 
           {!isEpic && <Checklist items={issue.checklist} onChange={(checklist) => patch({ checklist })} />}
@@ -590,7 +590,7 @@ function DescriptionEditor({ value, onSave }: { value: string; onSave: (v: strin
 }
 
 // Definition of Ready: qué falta para poder empezar este ticket.
-function ReadyChecklist({ items, done, onChange }: { items: string[]; done: string[]; onChange: (done: string[]) => void }) {
+function ReadyChecklist({ items, done, onChange, settingsHref }: { items: string[]; done: string[]; onChange: (done: string[]) => void; settingsHref: string }) {
   const covered = items.filter((i) => done.includes(i)).length;
   const ready = covered === items.length;
   function toggle(item: string) {
@@ -603,6 +603,10 @@ function ReadyChecklist({ items, done, onChange }: { items: string[]; done: stri
         Definition of Ready <span className="font-mono text-ink-faint">({covered}/{items.length})</span>
         <span className={`lozenge ${ready ? "text-moss-ink" : "text-warn"}`}>{ready ? "Listo para empezar" : "Falta información"}</span>
       </h3>
+      <p className="mb-2 text-xs text-ink-faint">
+        Marca lo que ya tienes para este ticket. La lista de ítems es la misma para todos los tickets del proyecto y se edita en{" "}
+        <a href={settingsHref} className="font-semibold text-rust hover:underline">Ajustes del proyecto</a>.
+      </p>
       <ul className="space-y-1.5">
         {items.map((item) => (
           <li key={item}>

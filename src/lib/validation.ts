@@ -110,6 +110,7 @@ export const updateProjectSchema = z.object({
   description: z.string().max(5000).optional(),
   deployUrl: z.string().trim().max(500).nullable().optional(),
   stack: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+  labels: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
   readyItems: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
 });
 

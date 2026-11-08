@@ -89,6 +89,7 @@ model Project {
   deployUrl   String?
   language    String?
   stack       String   @default("[]")
+  labels      String   @default("[]") // etiquetas del proyecto (ej. "Producto"), JSON de strings
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
   taskSeq     Int      @default(0)

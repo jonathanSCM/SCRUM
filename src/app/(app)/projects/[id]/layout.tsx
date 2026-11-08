@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getProjectOrNotFound } from "@/lib/projectData";
 import { daysRemaining } from "@/lib/scrum/sprintLifecycle";
+import { parseLabels } from "@/lib/scrum/labels";
 import Avatar from "@/components/ui/Avatar";
 import ProjectTabs from "./ProjectTabs";
 import WorkspaceSync from "./WorkspaceSync";
@@ -25,6 +26,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
         <span className="tag border" style={{ background: `${project.status.color}22`, borderColor: `${project.status.color}77`, color: `color-mix(in srgb, ${project.status.color} 55%, var(--ink))` }}>
           {project.status.name}
         </span>
+        {parseLabels(project.labels).map((l) => <span key={l} className="lozenge text-ink-soft">{l}</span>)}
         <div className="flex items-center gap-2 text-xs text-ink-faint" title="Encargado del proyecto">
           <Avatar name={project.lead?.name} userId={project.lead?.id} size={22} />
           {project.lead?.name ?? "Sin encargado"}

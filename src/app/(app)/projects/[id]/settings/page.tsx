@@ -3,6 +3,7 @@ import { membersOf } from "@/lib/workspace";
 import { requireSession } from "@/lib/session";
 import { getProjectOrNotFound } from "@/lib/projectData";
 import { parseStringList } from "@/lib/scrum/ready";
+import { parseLabels } from "@/lib/scrum/labels";
 import { slackBotTokenFor } from "@/lib/teamIntegrations";
 import { sprintPdfEnabled } from "@/lib/features";
 import SettingsForm from "./SettingsForm";
@@ -24,6 +25,8 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
     if (Array.isArray(parsed)) stack = parsed.filter((s): s is string => typeof s === "string");
   } catch {}
 
+  const labels = parseLabels(project.labels);
+
   return (
     <SettingsForm
       isLead={project.access.isLead}
@@ -36,6 +39,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
         description: project.description,
         deployUrl: project.deployUrl ?? "",
         stack,
+        labels,
         statusId: project.statusId,
         leadUserId: project.leadUserId ?? "",
         readyItems: parseStringList(project.readyItems),
