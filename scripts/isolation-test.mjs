@@ -10,6 +10,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "node:crypto";
+import http from "node:http";
 
 // Mismo formato que src/lib/apiToken.ts (ese archivo es "server-only" y no se puede importar acá).
 const generateToken = () => `scrum_${randomBytes(24).toString("hex")}`;
@@ -667,6 +668,84 @@ async function main() {
   let lastStatusk = 201;
   while (createdk < 11 && lastStatusk === 201) { lastStatusk = (await cMulti.req("POST", "/api/tokens", { name: `t${createdk}` })).status; createdk++; }
   check("hay un tope de 10 tokens por persona", lastStatusk === 400, `dio ${lastStatusk}`);
+
+  console.log("19) Avisos al teléfono (ntfy), con un servidor ntfy simulado");
+  const nt0 = await cAOwner.req("GET", "/api/ntfy");
+  if (!nt0.json?.configured) {
+    console.log("  (omitido: el servidor de la prueba no tiene NTFY_BASE_URL; ver scripts/isolation-test.mjs)");
+  } else {
+    const got = [];
+    const failTopics = new Set();
+    const mock = http.createServer((req, res) => {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        let json = null;
+        try { json = JSON.parse(body); } catch {}
+        got.push({ auth: req.headers.authorization, json });
+        res.statusCode = json && failTopics.has(json.topic) ? 401 : 200;
+        res.end("{}");
+      });
+    });
+    await new Promise((r) => mock.listen(Number(new URL(process.env.NTFY_MOCK_URL ?? "http://localhost:3999").port), r));
+    const wait = (ms = 700) => new Promise((r) => setTimeout(r, ms));
+    try {
+      const nAna = await cAOwner.req("POST", "/api/ntfy");
+      const nAna2 = await cAOwner.req("POST", "/api/ntfy");
+      check("activar crea un tema secreto con el formato esperado y repetirlo no lo cambia", nAna.status === 201 && /^scrum-[0-9a-f]{32}$/.test(nAna.json.channel.topic) && nAna2.json.channel.topic === nAna.json.channel.topic && nAna.json.channel.minimal === true, `${nAna.status} ${nAna.text.slice(0, 120)}`);
+      const nAldo = await cAMember.req("POST", "/api/ntfy");
+      const nPlain = await cPlain.req("POST", "/api/ntfy");
+      const nBOnly = await cBOnly.req("POST", "/api/ntfy");
+      check("cada persona tiene su propio tema", new Set([nAna, nAldo, nPlain, nBOnly].map((x) => x.json.channel.topic)).size === 4);
+      const nSee = await cAOwner.req("GET", "/api/ntfy");
+      check("cada quien solo ve su tema (no aparece el de otros)", nSee.json.channel.topic === nAna.json.channel.topic && !nSee.text.includes(nAldo.json.channel.topic) && !nSee.text.includes(nBOnly.json.channel.topic));
+      const ntk = await tk.req("GET", "/api/ntfy");
+      check("un token IA no accede a los avisos del teléfono (403)", ntk.status === 403, `dio ${ntk.status}`);
+
+      got.length = 0;
+      const nTest = await cAOwner.req("POST", "/api/ntfy/test");
+      await wait();
+      check("la prueba publica en el tema de Ana con el token del servidor y prioridad normal", nTest.status === 200 && got.length === 1 && got[0].auth === `Bearer ${process.env.NTFY_PUBLISH_TOKEN}` && got[0].json.topic === nAna.json.channel.topic && got[0].json.priority === 3, JSON.stringify(got[0]));
+
+      // Mención en un comentario: contenido mínimo (sin el texto) y luego completo
+      got.length = 0;
+      await cPlain.req("POST", `/api/issues/${A.task.id}/comments`, { body: "hola @Ana Dueña A, revisa el SECRETO del cliente" });
+      await wait();
+      const mention = got.find((g) => g.json?.topic === nAna.json.channel.topic);
+      check("mencionar a Ana le avisa a su teléfono con el enlace al ticket", !!mention && /te mencionó/.test(mention.json.title) && mention.json.click?.includes("issue=SAI-1"), JSON.stringify(mention));
+      check("en contenido mínimo el aviso NO lleva el texto del comentario", mention && !JSON.stringify(mention.json).includes("SECRETO"));
+      await cAOwner.req("PATCH", "/api/ntfy", { minimal: false });
+      got.length = 0;
+      await cPlain.req("POST", `/api/issues/${A.task.id}/comments`, { body: "otra vez @Ana Dueña A con SECRETO2" });
+      await wait();
+      check("con el contenido completo sí lleva el texto", got.some((g) => g.json?.topic === nAna.json.channel.topic && g.json.message.includes("SECRETO2")));
+
+      // /urgente: prioridad máxima, a los de su equipo con canal; no a otro equipo
+      got.length = 0;
+      await cAOwner.req("POST", "/api/chat/command", { body: "/urgente servidor caído" });
+      await wait(1000);
+      const topicsHit = got.map((g) => g.json.topic);
+      check("/urgente avisa con prioridad 5 a Aldo y a Pablo", got.filter((g) => g.json.priority === 5).length >= 2 && topicsHit.includes(nAldo.json.channel.topic) && topicsHit.includes(nPlain.json.channel.topic));
+      check("no se avisa a quien envía el comando ni a alguien solo de otro equipo", !topicsHit.includes(nAna.json.channel.topic) && !topicsHit.includes(nBOnly.json.channel.topic));
+
+      // Pausar, fallos permanentes y borrar
+      await cAMember.req("PATCH", "/api/ntfy", { enabled: false });
+      got.length = 0;
+      await cAOwner.req("POST", "/api/chat/command", { body: "/ayuda necesito ayuda" });
+      await wait();
+      check("con los avisos pausados no se publica en su tema", !got.some((g) => g.json?.topic === nAldo.json.channel.topic));
+      failTopics.add(nPlain.json.channel.topic);
+      for (let i = 0; i < 4; i++) { await cAOwner.req("POST", "/api/chat/command", { body: `/noti persona Pablo: intento ${i}` }); await wait(500); }
+      const chPlain = await prisma.ntfyChannel.findUnique({ where: { userId: plain.id } });
+      check("tras 3 errores permanentes seguidos el canal se desactiva solo y guarda el motivo", chPlain.enabled === false && chPlain.failures >= 3 && !!chPlain.lastError, JSON.stringify(chPlain));
+      const nShow = await cPlain.req("GET", "/api/ntfy");
+      check("y se le avisa en pantalla", nShow.json.channel.disabledByErrors === true);
+      const nDel = await cAOwner.req("DELETE", "/api/ntfy");
+      check("quitar el canal borra el tema", nDel.status === 200 && (await prisma.ntfyChannel.count({ where: { userId: aOwner.id } })) === 0);
+    } finally {
+      mock.close();
+    }
+  }
 
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();

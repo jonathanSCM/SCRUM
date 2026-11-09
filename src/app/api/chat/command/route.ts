@@ -87,7 +87,7 @@ export async function POST(req: Request) {
       const channelId = channels.find((ch) => ch.kind === (c.kind === "reunion" ? "REUNIONES" : "GENERAL"))?.id;
       await prisma.chatMessage.create({ data: { body: chatText, workspaceId, authorId: me.id, channelId, announce: true, level: level === "normal" ? null : level.toUpperCase() } });
     }
-    const pushed = await sendPush(targets, { title, body: text.slice(0, 160), url: "/chat", tag: "aviso" });
+    const pushed = await sendPush(targets, { title, body: text.slice(0, 160), url: "/chat", tag: "aviso", priority: level === "urgente" ? "urgent" : level === "ayuda" ? "high" : "default" });
     return NextResponse.json({ ok: true, summary: `Aviso a ${label}${pushed ? ` · ${pushed} dispositivo(s) con push` : ""}${toSlack ? " · enviado a Slack" : ""}` });
   } catch (e) {
     return errorResponse(e);

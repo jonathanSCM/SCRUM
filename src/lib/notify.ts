@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { resolveDiscordMention, sendToDiscordWebhook, type DiscordMessage } from "@/lib/discord";
 import { buildPushPayload, pushConfigured, sendPush } from "@/lib/push";
+import { ntfyConfigured } from "@/lib/ntfy";
 import { resolveSlackMention, sendToSlackWebhook } from "@/lib/slack";
 import { resolveTelegramMention, sendToTelegram } from "@/lib/telegram";
 
@@ -37,7 +38,7 @@ export async function notifyProject(projectId: string, message: ProjectNotificat
       const url = project.slackWebhookUrl;
       jobs.push(resolveSlackMention(...ids).then((mentionSlackId) => sendToSlackWebhook(url, { ...message, mentionSlackId })));
     }
-    if (pushConfigured()) {
+    if (pushConfigured() || ntfyConfigured()) {
       const targets = message.pushAll ? null : ids.filter((id): id is string => !!id && id !== message.excludeUserId);
       const payload = buildPushPayload(message, `/projects/${projectId}/board`);
       jobs.push(
