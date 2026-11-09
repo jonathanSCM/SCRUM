@@ -4,6 +4,8 @@ import { isAllowedForToken, isDeletableByToken } from "@/lib/aiAccess";
 // Las peticiones con "Authorization: Bearer …" (tokens IA) solo pasan por las rutas
 // de la lista cerrada de src/lib/aiAccess.ts. Las de navegador (cookie de sesión) no se tocan.
 export function middleware(req: NextRequest) {
+  // Las tareas programadas (cron) se validan con su propio secreto dentro de la ruta.
+  if (req.nextUrl.pathname.startsWith("/api/cron/")) return NextResponse.next();
   const authz = req.headers.get("authorization");
   if (!authz || !/^bearer\s/i.test(authz)) return NextResponse.next();
 

@@ -26,6 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.description !== undefined) data.description = body.description;
     if (body.deployUrl !== undefined) data.deployUrl = body.deployUrl || null;
     if (body.stack !== undefined) data.stack = JSON.stringify(body.stack);
+    if (body.feedDigestMinutes !== undefined) data.feedDigestMinutes = body.feedDigestMinutes;
     if (body.labels !== undefined) data.labels = JSON.stringify([...new Set(body.labels)]);
 
     if (body.readyItems !== undefined) {
@@ -55,6 +56,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         title: `Proyecto ${updated.name}`,
         description: `El proyecto pasó de «${current.status.name}» a «${newStatus.name}»`,
         color: DISCORD_COLOR.status,
+        kind: "PROJECT_UPDATE",
+        groupKey: `project-${id}`,
+        excludeUserId: user.id,
         mentionUserIds: [updated.leadUserId],
       });
     }

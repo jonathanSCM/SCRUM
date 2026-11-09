@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { membersOf } from "@/lib/workspace";
-import { sendPush } from "@/lib/push";
+import { notifyUsers } from "@/lib/notifications";
 import { findMentioned } from "@/lib/scrum/mentions";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 
@@ -22,11 +22,11 @@ export async function notifyComment(opts: { taskId: string; body: string; author
     const text = opts.body.replace(/\s+/g, " ").slice(0, 140);
 
     const fresh = mentioned.filter((id) => !opts.skipMentioned?.has(id));
-    if (fresh.length) await sendPush(fresh, { title: `${opts.author.name} te mencionó en ${key}`, body: text, url, tag: `mention-${key}` });
+    if (fresh.length) await notifyUsers(fresh, { kind: "MENTION", title: `${opts.author.name} te mencionó en ${key}`, body: text, url, groupKey: `mention-${key}`, workspaceId: task.project.workspaceId });
     // Los involucrados que no fueron mencionados reciben el aviso de comentario (solo en comentarios nuevos).
     if (!opts.skipMentioned) {
       const others = task.involved.map((i) => i.userId).filter((id) => id !== opts.author.id && !mentioned.includes(id));
-      if (others.length) await sendPush(others, { title: `Comentario en ${key}`, body: `${opts.author.name}: ${text}`, url, tag: `comment-${key}` });
+      if (others.length) await notifyUsers(others, { kind: "COMMENT", title: `Comentario en ${key}`, body: `${opts.author.name}: ${text}`, url, groupKey: `comment-${key}`, workspaceId: task.project.workspaceId });
     }
     return mentioned;
   } catch (err) {

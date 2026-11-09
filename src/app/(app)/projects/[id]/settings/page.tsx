@@ -41,6 +41,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
         deployUrl: project.deployUrl ?? "",
         stack,
         labels,
+        feedDigestMinutes: project.feedDigestMinutes,
         memberIds: (await listProjectMembers(project.id)).map((m) => m.id),
         statusId: project.statusId,
         leadUserId: project.leadUserId ?? "",

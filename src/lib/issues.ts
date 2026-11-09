@@ -160,6 +160,8 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
       }`,
       color: DISCORD_COLOR.created,
       excludeUserId: actor.id,
+      kind: created.assigneeUserId ? "ASSIGNED" : "CREATED",
+      groupKey: `created-${key}`,
       mentionUserIds: [created.assigneeUserId],
       url: issueUrl(projectId, key),
     });
@@ -353,6 +355,8 @@ export async function updateIssue(
         description: `**${actor.name}** completó «${updated.title}»`,
         color: DISCORD_COLOR.done,
         excludeUserId: actor.id,
+        kind: "COMPLETED",
+        groupKey: `completed-${key}`,
         mentionUserIds: [updated.assigneeUserId, project.leadUserId],
         url: issueUrl(project.id, key),
       });
@@ -363,6 +367,8 @@ export async function updateIssue(
         description: `**${actor.name}** asignó «${updated.title}» a ${newAssignee.name}`,
         color: DISCORD_COLOR.assigned,
         excludeUserId: actor.id,
+        kind: "ASSIGNED",
+        groupKey: `assigned-${key}`,
         mentionUserIds: [newAssignee.id],
         url: issueUrl(project.id, key),
       });

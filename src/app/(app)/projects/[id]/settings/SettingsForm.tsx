@@ -19,6 +19,7 @@ type Props = {
     deployUrl: string;
     stack: string[];
     labels: string[];
+    feedDigestMinutes: number;
     memberIds: string[];
     statusId: string;
     leadUserId: string;
@@ -50,6 +51,13 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
   const [leadUserId, setLeadUserId] = useState(project.leadUserId);
   const [saving, setSaving] = useState(false);
 
+  const [feedMinutes, setFeedMinutes] = useState(project.feedDigestMinutes);
+  async function saveFeed(minutes: number) {
+    setFeedMinutes(minutes);
+    const res = await api(`/api/projects/${project.id}`, "PATCH", { feedDigestMinutes: minutes });
+    if (!res.ok) return toast.error(res.error);
+    toast.success(minutes === 0 ? "Los canales recibirán cada aviso al instante" : `Los canales recibirán un resumen ${minutes === 60 ? "cada hora" : minutes === 120 ? "cada 2 horas" : `cada ${minutes} minutos`}`);
+  }
   const [memberIds, setMemberIds] = useState<string[]>(project.memberIds);
   const [savingMembers, setSavingMembers] = useState(false);
   async function saveMembers() {
@@ -333,6 +341,19 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
           <span className="text-ink-faint transition-transform group-open:rotate-90" aria-hidden>›</span>
         </summary>
         <div className="space-y-4 border-t border-line p-4">
+          <section className="space-y-2 border border-line bg-card p-5 rounded-lg">
+            <h2 className="font-display text-lg font-extrabold text-ink">Frecuencia de los avisos a Discord, Telegram y Slack</h2>
+            <p className="text-sm text-ink-soft">Para no llenar el canal, los avisos del proyecto (tickets nuevos o completados, comentarios, cambios) se juntan en un solo mensaje. El inicio y el cierre de un sprint siempre salen al instante.</p>
+            <select className="field max-w-xs" value={feedMinutes} disabled={!isLead} onChange={(e) => saveFeed(Number(e.target.value))}>
+              <option value={0}>Cada aviso al instante</option>
+              <option value={15}>Resumen cada 15 minutos</option>
+              <option value={30}>Resumen cada 30 minutos (recomendado)</option>
+              <option value={60}>Resumen cada hora</option>
+              <option value={120}>Resumen cada 2 horas</option>
+            </select>
+            {!isLead && <p className="text-xs text-ink-faint">Solo un líder puede cambiarlo.</p>}
+          </section>
+
           <ExportPanel projectId={project.id} />
         <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
           <h2 className="font-display text-lg font-extrabold text-ink">Discord</h2>

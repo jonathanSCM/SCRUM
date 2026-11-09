@@ -56,6 +56,8 @@ model User {
   involvedIn          TaskInvolved[]    @relation("TaskInvolvedUser")
   fileCardsCreated    FileCard[]        @relation("FileCardCreator")
   ntfyChannel         NtfyChannel?      @relation("NtfyChannelUser")
+  notifications       Notification[]    @relation("NotificationUser")
+  notifPrefs          NotifPrefs?       @relation("NotifPrefsUser")
   fileCardItemsUploaded FileCardItem[]  @relation("FileCardItemUploader")
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
@@ -95,6 +97,8 @@ model Project {
   deployUrl   String?
   language    String?
   stack       String   @default("[]")
+  feedDigestMinutes Int @default(30) // los avisos a Discord/Telegram/Slack van juntos cada X minutos (0 = al instante)
+  feedItems   ProjectFeedItem[]
   labels      String   @default("[]") // etiquetas del proyecto (ej. "Producto"), JSON de strings
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
@@ -723,4 +727,59 @@ model NtfyChannel {
 
   userId String @unique
   user   User   @relation("NtfyChannelUser", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Bandeja de avisos de cada persona. Todo aviso queda aquí; además puede llegar al navegador o al teléfono al instante
+// (instante), agrupado en un resumen (pendiente hasta deliverAfter) o no avisar (silencio).
+model Notification {
+  id           String    @id @default(cuid())
+  kind         String // MENTION | ASSIGNED | COMMENT … (ver src/lib/scrum/notifPolicy.ts)
+  title        String
+  body         String    @default("")
+  url          String?
+  priority     String    @default("default") // low | default | high | urgent
+  groupKey     String? // los pendientes con la misma clave se juntan (ej. todos los cambios de SAI-12)
+  count        Int       @default(1)
+  createdAt    DateTime  @default(now())
+  deliverAfter DateTime? // cuándo sale en un resumen (null: no espera)
+  deliveredAt  DateTime? // null = pendiente de resumen
+  pushed       Boolean   @default(false) // se mandó al navegador / teléfono
+  readAt       DateTime?
+  workspaceId  String?
+
+  userId String
+  user   User   @relation("NotificationUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([deliveredAt, deliverAfter])
+}
+
+// Preferencias de avisos de cada persona.
+model NotifPrefs {
+  id            String  @id @default(cuid())
+  digestMinutes Int     @default(30) // 0 = sin resumen (solo bandeja)
+  quietEnabled  Boolean @default(false)
+  quietStart    String  @default("22:00")
+  quietEnd      String  @default("07:00")
+  tz            String  @default("America/La_Paz")
+  muted         String  @default("[]") // categorías silenciadas: tickets | assignments | team | sprints
+
+  userId String @unique
+  user   User   @relation("NotifPrefsUser", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Avisos de proyecto que esperan para ir juntos, en un solo mensaje, a Discord / Telegram / Slack.
+model ProjectFeedItem {
+  id          String    @id @default(cuid())
+  kind        String
+  title       String
+  description String    @default("")
+  url         String?
+  createdAt   DateTime  @default(now())
+  sentAt      DateTime?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, sentAt])
 }

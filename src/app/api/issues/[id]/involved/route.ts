@@ -5,7 +5,7 @@ import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { parseBody, readJson } from "@/lib/validation";
 import { membersOf } from "@/lib/workspace";
-import { sendPush } from "@/lib/push";
+import { notifyUsers } from "@/lib/notifications";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 
 // Involucrados de un ticket (además del responsable). A los nuevos se les avisa por push.
@@ -30,7 +30,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     ]);
     const key = formatIssueKey(task.project.key, task.number);
     const toTell = added.filter((u) => u !== auth.user.id);
-    if (toTell.length) void sendPush(toTell, { title: `${auth.user.name} te sumó a ${key}`, body: task.title.slice(0, 120), url: `/projects/${task.projectId}/board?issue=${key}`, tag: `involved-${key}` });
+    if (toTell.length) void notifyUsers(toTell, { kind: "INVOLVED_ADDED", title: `${auth.user.name} te sumó a ${key}`, body: task.title.slice(0, 120), url: `/projects/${task.projectId}/board?issue=${key}`, groupKey: `involved-${key}`, workspaceId: task.project.workspaceId });
     return NextResponse.json({ involved: people.filter((p) => wanted.includes(p.id)).map(({ id: pid, name }) => ({ id: pid, name })) });
   } catch (e) {
     return errorResponse(e);

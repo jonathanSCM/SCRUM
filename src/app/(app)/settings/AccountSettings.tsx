@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/Toaster";
 import { PwaCard } from "@/components/PwaControls";
 import AiTokenCard from "@/components/AiTokenCard";
 import NtfyCard from "@/components/NtfyCard";
+import NotifPrefsCard from "@/components/NotifPrefsCard";
 
 function Section({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
   return (
@@ -43,6 +44,7 @@ export default function AccountSettings({ userName }: { userName: string }) {
     <div className="space-y-3">
       <Section title="Notificaciones" hint="Avisos en este dispositivo y app instalable">
         <div className="space-y-6">
+          <NotifPrefsCard />
           <PwaCard />
           <NtfyCard />
         </div>

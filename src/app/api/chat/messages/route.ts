@@ -5,7 +5,7 @@ import { errorResponse } from "@/lib/api";
 import { chatMessageSchema, parseBody, readJson } from "@/lib/validation";
 import { loadMessages, messageInclude, resolveRefs, toDTOs } from "@/lib/chatData";
 import { findKeyMentions, makeToken, parseRefs, plainText } from "@/lib/scrum/chat";
-import { sendPush } from "@/lib/push";
+import { notifyUsers } from "@/lib/notifications";
 import { channelFilter, ensureChannels } from "@/lib/chatChannels";
 
 // ?after=<ISO> devuelve solo los nuevos; ?project=<id> solo los que mencionan ese proyecto.
@@ -112,7 +112,7 @@ export async function POST(req: Request) {
     const mentioned = found.filter((r) => r.kind === "user" && r.id !== auth.user.id).map((r) => r.id);
     if (mentioned.length) {
       const text = plainText(body, (r) => resolved.get(`${r.kind.toUpperCase()}:${r.id}`)?.label ?? "");
-      void sendPush(mentioned, { title: `${auth.user.name} te mencionó en el chat`, body: text.slice(0, 160) || "Archivo adjunto", url: "/chat", tag: "chat" });
+      void notifyUsers(mentioned, { kind: "MENTION", title: `${auth.user.name} te mencionó en el chat`, body: text.slice(0, 160) || "Archivo adjunto", url: "/chat", workspaceId, groupKey: `chat-${auth.user.id}` });
     }
 
     return NextResponse.json(dto, { status: 201 });

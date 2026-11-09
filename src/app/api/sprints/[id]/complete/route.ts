@@ -57,6 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       description: `**${auth.user.name}** cerró el sprint en ${sprint.project.name}.`,
       color: DISCORD_COLOR.sprintCompleted,
       pushAll: true,
+      kind: "SPRINT_COMPLETE",
       excludeUserId: auth.user.id,
       fields: [
         { name: "Completados", value: `${plan.completedCount}/${tasks.length}`, inline: true },

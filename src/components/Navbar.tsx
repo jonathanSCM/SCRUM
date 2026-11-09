@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import { AnimatePresence, motion } from "motion/react";
 import CommandPalette from "./CommandPalette";
 import ThemeToggle from "./ThemeToggle";
+import NotificationBell from "./NotificationBell";
 import TeamSwitcher, { type TeamOption } from "./TeamSwitcher";
 import Avatar from "@/components/ui/Avatar";
 
@@ -77,6 +78,7 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
 
           <div className="flex shrink-0 items-center gap-3 sm:gap-4">
             <CommandPalette />
+            <NotificationBell />
             <ThemeToggle />
             <div className="relative" ref={menuRef}>
               <button onClick={() => setMenuOpen((v) => !v)} aria-haspopup="menu" aria-expanded={menuOpen} aria-label="Menú de usuario" className="flex items-center gap-2">
