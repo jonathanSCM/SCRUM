@@ -43,7 +43,7 @@ export default function AccountSettings({ userName }: { userName: string }) {
       <Section title="Notificaciones" hint="Avisos en este dispositivo y app instalable">
         <PwaCard />
       </Section>
-      <Section title="Token de IA" hint="Para conectar un asistente externo a tu cuenta">
+      <Section title="Tokens de IA" hint="Para conectar un asistente externo a tu cuenta (puedes tener varios)">
         <AiTokenCard userName={userName} />
       </Section>
       <Section title="Cambiar contraseña" hint="Actualiza tu contraseña de acceso">
