@@ -26,20 +26,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (tooBig) return NextResponse.json({ error: `"${tooBig.name}" supera el máximo de ${MAX_RESOURCE_BYTES / (1024 * 1024)} MB` }, { status: 400 });
       const bad = checkCardCapacity(await cardUsage(id), files);
       if (bad) return NextResponse.json({ error: bad }, { status: 400 });
+      const note = typeof form?.get("note") === "string" ? (form!.get("note") as string).trim().slice(0, 1000) : "";
       for (const f of files) {
         const filename = f.name.slice(0, 200) || "archivo";
         await prisma.fileCardItem.create({
-          data: { cardId: id, kind: "FILE", title: filename, filename, mimeType: f.type || "application/octet-stream", size: f.size, data: new Uint8Array(await f.arrayBuffer()), uploadedById: auth.user.id },
+          data: { cardId: id, kind: "FILE", title: filename, note, filename, mimeType: f.type || "application/octet-stream", size: f.size, data: new Uint8Array(await f.arrayBuffer()), uploadedById: auth.user.id },
         });
       }
     } else {
-      const body = (await req.json().catch(() => null)) as { url?: unknown; title?: unknown } | null;
+      const body = (await req.json().catch(() => null)) as { url?: unknown; title?: unknown; note?: unknown } | null;
       const url = typeof body?.url === "string" ? normalizeUrl(body.url) : null;
       if (!url) return NextResponse.json({ error: "Pega un enlace válido (http o https)" }, { status: 400 });
       const bad = checkCardCapacity(await cardUsage(id), [{ size: 0 }]);
       if (bad) return NextResponse.json({ error: bad }, { status: 400 });
       const title = typeof body?.title === "string" && body.title.trim() ? body.title.trim().slice(0, 200) : friendlyTitle(url);
-      await prisma.fileCardItem.create({ data: { cardId: id, kind: "LINK", title, url, uploadedById: auth.user.id } });
+      await prisma.fileCardItem.create({ data: { cardId: id, kind: "LINK", title, url, note: typeof body?.note === "string" ? body.note.trim().slice(0, 1000) : "", uploadedById: auth.user.id } });
     }
     await prisma.fileCard.update({ where: { id }, data: { updatedAt: new Date() } });
     return NextResponse.json(await cardById(id), { status: 201 });

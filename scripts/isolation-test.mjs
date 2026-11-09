@@ -843,6 +843,51 @@ async function main() {
     check("el token IA no accede a la bandeja de avisos (403)", tkn.status === 403, `dio ${tkn.status}`);
   }
 
+  console.log("21) Biblioteca: tarjetas de proyecto automáticas y notas por archivo");
+  const bl1 = await cPlain.req("GET", "/api/library/cards");
+  const autoA = bl1.json.find((c) => c.id === `project:${A.project.id}`);
+  check("el proyecto con archivos tiene su tarjeta automática en la Biblioteca", bl1.status === 200 && !!autoA && autoA.auto === true && autoA.title === "Archivos de Proyecto A" && autoA.items.length >= 2, JSON.stringify(autoA?.title));
+  const before = autoA.items.length;
+  const upf = new FormData();
+  upf.append("file", new File([new Uint8Array([9, 8, 7])], "plano.pdf", { type: "application/pdf" }));
+  const upr = await fetch(`${BASE}/api/projects/${A.project.id}/resources`, { method: "POST", headers: { Cookie: cPlain.header() }, body: upf });
+  const uprj = await upr.json();
+  const bl2 = await cPlain.req("GET", "/api/library/cards");
+  const autoA2 = bl2.json.find((c) => c.id === `project:${A.project.id}`);
+  const it = autoA2.items.find((i) => i.filename === "plano.pdf");
+  check("lo que se sube en la pestaña Archivos del proyecto aparece solo en esa tarjeta", upr.status === 201 && autoA2.items.length === before + 1 && !!it && it.fileUrl === `/api/resources/${uprj.id}/file` && it.uploadedBy === "Pablo Plano", JSON.stringify(it));
+  const dlAuto = await fetch(`${BASE}${it.fileUrl}`, { headers: { Cookie: cAOwner.header() } });
+  check("y se descarga desde ahí", dlAuto.status === 200 && (await dlAuto.arrayBuffer()).byteLength === 3);
+  check("los enlaces de la tarjeta de proyecto traen su vista previa y nombre", autoA2.items.some((i) => i.kind === "LINK" && i.title.length > 0));
+  const blB = await cBOnly.req("GET", "/api/library/cards");
+  check("otro equipo no ve la tarjeta automática de A", blB.status === 200 && !blB.json.some((c) => c.id === `project:${A.project.id}`));
+  check("un proyecto sin archivos no tiene tarjeta (el de B)", !blB.json.some((c) => c.id === `project:${B.project.id}`));
+  const pa = await cAOwner.req("PATCH", `/api/library/cards/project:${A.project.id}`, { title: "hack" });
+  const da = await cAOwner.req("DELETE", `/api/library/cards/project:${A.project.id}`);
+  check("la tarjeta automática no se edita ni se borra como una tarjeta normal (404)", pa.status === 404 && da.status === 404, `${pa.status}/${da.status}`);
+  await cPlain.req("DELETE", `/api/resources/${uprj.id}`);
+  const bl3 = await cPlain.req("GET", "/api/library/cards");
+  check("al borrar el archivo del proyecto desaparece de la tarjeta", bl3.json.find((c) => c.id === `project:${A.project.id}`).items.length === before);
+  // Notas por archivo
+  const nc = await cPlain.req("POST", "/api/library/cards", { title: "Contrato cliente (se va actualizando)", category: "CONTRATO" });
+  const nfd = new FormData();
+  nfd.append("file", new File([new Uint8Array([1, 2])], "borrador.pdf", { type: "application/pdf" }));
+  nfd.append("note", "primer borrador sin firmar");
+  const nup = await fetch(`${BASE}/api/library/cards/${nc.json.id}/items`, { method: "POST", headers: { Cookie: cPlain.header() }, body: nfd });
+  const nupj = await nup.json();
+  check("un archivo se sube con su nota", nup.status === 201 && nupj.items[0].note === "primer borrador sin firmar");
+  const nlk = await cPlain.req("POST", `/api/library/cards/${nc.json.id}/items`, { url: "https://docs.google.com/document/d/1AbCdEfGhIjKlMn/edit", note: "versión de legal" });
+  check("un enlace también, y la tarjeta se va actualizando con el tiempo (2 elementos)", nlk.status === 201 && nlk.json.items.length === 2 && nlk.json.items.some((i) => i.note === "versión de legal"));
+  const nid = nupj.items[0].id;
+  const npt = await cPlain.req("PATCH", `/api/library/items/${nid}`, { title: "Contrato firmado v2", note: "ya firmado por ambos" });
+  check("se cambia el título y la nota de un archivo", npt.status === 200 && npt.json.items.find((i) => i.id === nid).title === "Contrato firmado v2" && npt.json.items.find((i) => i.id === nid).note === "ya firmado por ambos", npt.text.slice(0, 200));
+  const nptEmpty = await cPlain.req("PATCH", `/api/library/items/${nid}`, { title: "" });
+  check("un título vacío se rechaza (400)", nptEmpty.status === 400, `dio ${nptEmpty.status}`);
+  const nptOther = await cBOnly.req("PATCH", `/api/library/items/${nid}`, { note: "hack" });
+  check("alguien de otro equipo no cambia notas (404)", nptOther.status === 404, `dio ${nptOther.status}`);
+  const nlist = await cAOwner.req("GET", "/api/library/cards");
+  check("la lista trae las notas, quién lo subió y cuándo", nlist.json.find((c) => c.id === nc.json.id).items.every((i) => typeof i.note === "string" && i.uploadedBy === "Pablo Plano" && !!i.createdAt));
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);
