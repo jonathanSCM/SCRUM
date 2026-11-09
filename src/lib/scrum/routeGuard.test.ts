@@ -14,6 +14,7 @@ const IDENTITY_ONLY = [
   "auth/", // login, registro de la primera cuenta, recuperar contraseña
   "invite/", // aceptar una invitación: se valida con el enlace secreto, sin sesión previa
   "push/", // suscripciones del navegador de la propia persona
+  "ntfy/", // el canal de avisos al teléfono de la propia persona
   "tokens/", // su propio token IA
   "users/me/", // su propio perfil
   "users/[id]/image/", // imágenes: la ruta comprueba por dentro que se comparte equipo

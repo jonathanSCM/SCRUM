@@ -808,3 +808,26 @@ describe("exportación editada: actualizar y agregar con el mismo JSON", () => {
     expect(solo.changes).toHaveLength(1);
   });
 });
+
+import { toNtfyMessage, topicFrom, TOPIC_PATTERN, isPermanentFailure, NTFY_PRIORITY } from "./ntfyFormat";
+
+describe("avisos al teléfono (ntfy)", () => {
+  it("tema secreto con el formato esperado", () => {
+    expect(TOPIC_PATTERN.test(topicFrom("a".repeat(32)))).toBe(true);
+    expect(TOPIC_PATTERN.test("scrum-corto")).toBe(false);
+  });
+  it("arma el mensaje: prioridad, enlace absoluto y contenido mínimo", () => {
+    const base = { title: "Ana te mencionó en SAI-12", body: "revisa el PR de login", url: "/projects/p1/board?issue=SAI-12" };
+    const full = toNtfyMessage("t", base, { minimal: false, baseUrl: "https://scrum.proshop.lat" });
+    expect(full).toMatchObject({ topic: "t", title: base.title, message: "revisa el PR de login", priority: NTFY_PRIORITY.default, click: "https://scrum.proshop.lat/projects/p1/board?issue=SAI-12" });
+    const min = toNtfyMessage("t", base, { minimal: true, baseUrl: "https://scrum.proshop.lat" });
+    expect(min.message).not.toContain("PR de login");
+    expect(toNtfyMessage("t", { ...base, priority: "urgent" }, { minimal: false, baseUrl: "https://x" }).priority).toBe(5);
+    expect(toNtfyMessage("t", { title: "x", body: "y", url: "https://otro.com/a" }, { minimal: false, baseUrl: "https://x" }).click).toBe("https://otro.com/a");
+    expect(toNtfyMessage("t", { title: "x", body: "y".repeat(900) }, { minimal: false, baseUrl: "https://x" }).message.length).toBeLessThanOrEqual(500);
+  });
+  it("errores permanentes", () => {
+    expect([401, 403, 404].every(isPermanentFailure)).toBe(true);
+    expect([0, 429, 500, 502].some(isPermanentFailure)).toBe(false);
+  });
+});

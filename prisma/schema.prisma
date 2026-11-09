@@ -55,6 +55,7 @@ model User {
   projectMemberships  ProjectMember[]   @relation("ProjectMemberUser")
   involvedIn          TaskInvolved[]    @relation("TaskInvolvedUser")
   fileCardsCreated    FileCard[]        @relation("FileCardCreator")
+  ntfyChannel         NtfyChannel?      @relation("NtfyChannelUser")
   fileCardItemsUploaded FileCardItem[]  @relation("FileCardItemUploader")
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
@@ -707,4 +708,19 @@ model FileCardItem {
   uploadedBy   User?   @relation("FileCardItemUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@index([cardId])
+}
+
+// Canal de avisos al teléfono con la app ntfy (Android / iOS). Una persona = un tema secreto.
+model NtfyChannel {
+  id        String    @id @default(cuid())
+  topic     String    @unique // aleatorio e imposible de adivinar: quien lo sabe puede leer los avisos
+  enabled   Boolean   @default(true)
+  minimal   Boolean   @default(true) // true: avisa sin el texto del mensaje (solo "te mencionaron en SAI-12")
+  failures  Int       @default(0) // fallos seguidos; a los 3 se desactiva solo
+  lastOkAt  DateTime?
+  lastError String?
+  createdAt DateTime  @default(now())
+
+  userId String @unique
+  user   User   @relation("NtfyChannelUser", fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -12,7 +12,8 @@ type Result = { project: { id: string; key: string; name: string; created: boole
 // Quita las vallas de código ```json … ``` que suelen agregar los asistentes.
 const clean = (t: string) => t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
-export default function ImportFromAi() {
+// projectId: dentro de un proyecto, todo lo que se pegue se aplica a ESE proyecto (no se crean proyectos nuevos).
+export default function ImportFromAi({ projectId }: { projectId?: string } = {}) {
   const toast = useToast();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,6 +27,13 @@ export default function ImportFromAi() {
       json = JSON.parse(clean(text));
     } catch (e) {
       return { ok: false as const, error: `No es un JSON válido (${e instanceof Error ? e.message : "error"}). Pídele al asistente que lo corrija.` };
+    }
+    // Dentro de un proyecto: el JSON se aplica a ese proyecto (si trae otro project.id, se rechaza).
+    if (projectId && json && typeof json === "object" && !Array.isArray(json)) {
+      const j = json as Record<string, unknown>;
+      const pid = j.project && typeof j.project === "object" ? (j.project as Record<string, unknown>).id : undefined;
+      if (typeof pid === "string" && pid !== projectId) return { ok: false as const, error: "Este JSON es de otro proyecto. Impórtalo desde ese proyecto o desde Proyectos > Importar con IA." };
+      json = { ...j, project: { ...(j.project && typeof j.project === "object" ? (j.project as Record<string, unknown>) : {}), id: projectId } };
     }
     // La exportación del proyecto (editada): los tickets con "key" se actualizan, los que no la traen se crean.
     const split = splitExport(json);
@@ -99,14 +107,16 @@ export default function ImportFromAi() {
 
   return (
     <div className="space-y-6">
+      {!projectId && (
       <section className="space-y-2 rounded-lg border border-line bg-card p-5">
         <h2 className="font-display text-base font-extrabold text-ink">1. Pídele el JSON a tu asistente (para proyectos nuevos)</h2>
         <p className="text-sm text-ink-soft">Copia este prompt, pégalo en ChatGPT (o el que uses), cuéntale tu proyecto y pídele el JSON. Para <b>editar tickets que ya existen</b>, usa Ajustes del proyecto &gt; Exportar para IA &gt; «Proponer cambios»: la IA te devolverá un JSON de cambios que también se pega aquí.</p>
         <button className="btn-primary btn-sm" onClick={copyPrompt}>Copiar prompt</button>
       </section>
+      )}
 
       <section className="space-y-2 rounded-lg border border-line bg-card p-5">
-        <h2 className="font-display text-base font-extrabold text-ink">2. Pega el JSON aquí</h2>
+        <h2 className="font-display text-base font-extrabold text-ink">{projectId ? "Pega aquí el JSON" : "2. Pega el JSON aquí"}</h2>
         <textarea className="field min-h-[14rem] font-mono text-xs" placeholder='{ "project": { "name": "…" }, "epics": [ … ] }' value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
         {check && !check.ok && <p className="text-sm font-medium text-danger">{check.error}</p>}
         {check?.ok && check.kind === "sync" && (

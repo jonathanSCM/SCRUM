@@ -258,8 +258,6 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
         </div>
       </form>
 
-      <ExportPanel projectId={project.id} />
-
       <section className="space-y-3 border border-line bg-card p-5 rounded-lg">
         <h2 className="font-display text-lg font-extrabold text-ink">Equipo del proyecto</h2>
         <p className="text-sm text-ink-soft">Las personas del equipo que trabajan en este proyecto. Al agregar a alguien se le avisa. Los tickets se pueden asignar a cualquiera del equipo; aquí defines quién forma parte del proyecto.</p>
@@ -326,106 +324,118 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
         )}
       </section>
 
-      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
-        <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Discord</h2>
-        <p className="text-sm text-ink-soft">
-          Avisa en un canal cuando se crea un ticket, pasa a Hecho, se asigna o se comenta, y cuando un sprint empieza o termina.
-          Cada persona puede cargar su ID de Discord en <b>Mi perfil</b> para recibir la mención.
-        </p>
-        {isLead ? (
-          <>
-            <p className="text-xs text-ink-faint">
-              {configured ? <>Webhook configurado (termina en <span className="font-mono text-ink">…{hint}</span>).</> : "Todavía no hay webhook configurado."}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <input className="field min-w-0 flex-1" type="password" autoComplete="off" placeholder="https://discord.com/api/webhooks/…" value={webhook} onChange={(e) => setWebhook(e.target.value)} />
-              <button className="btn-primary" disabled={savingHook || !webhook.trim()} onClick={() => saveWebhook(webhook.trim())}>Guardar</button>
-            </div>
-            {configured && (
-              <div className="flex gap-2">
-                <button className="btn-ghost btn-sm" disabled={testing} onClick={testWebhook}>{testing ? "Enviando…" : "Enviar mensaje de prueba"}</button>
-                <button className="btn-ghost btn-sm text-danger" disabled={savingHook} onClick={() => saveWebhook(null)}>Quitar webhook</button>
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="text-xs text-ink-faint">Solo un líder puede configurar el webhook. {configured ? "Está activo." : "Todavía no está configurado."}</p>
-        )}
-      </section>
-
-      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
-        <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Telegram</h2>
-        <p className="text-sm text-ink-soft">
-          Los mismos avisos que Discord, en un chat o grupo de Telegram. Se pueden usar los dos canales a la vez; funciona el que esté configurado.
-          Cada persona puede cargar su usuario de Telegram en <b>Mi perfil</b> para recibir la mención.
-        </p>
-        {isLead ? (
-          <>
-            <p className="text-xs text-ink-faint">
-              {tgConfigured ? <>Telegram configurado (token termina en <span className="font-mono text-ink">…{tgHint}</span>, chat <span className="font-mono text-ink">{tgChat}</span>).</> : "Todavía no hay Telegram configurado."}
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input className="field font-mono" type="password" autoComplete="off" placeholder="Token del bot (de @BotFather)" value={tgToken} onChange={(e) => setTgToken(e.target.value)} />
-              <input className="field font-mono" placeholder="Chat: -1001234567890 o @canal" value={tgChat} onChange={(e) => setTgChat(e.target.value)} />
-            </div>
-            <p className="text-xs text-ink-faint">
-              Crea el bot con @BotFather, añádelo al grupo y usa el id del grupo (empieza con -). El token solo se guarda, no se vuelve a mostrar.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button className="btn-primary" disabled={savingTg || !tgToken.trim() || !tgChat.trim()} onClick={() => saveTelegram()}>Guardar</button>
-              {tgConfigured && (
-                <>
-                  <button className="btn-ghost btn-sm" disabled={testingTg} onClick={testTelegram}>{testingTg ? "Enviando…" : "Enviar mensaje de prueba"}</button>
-                  <button className="btn-ghost btn-sm text-danger" disabled={savingTg} onClick={() => saveTelegram(true)}>Quitar Telegram</button>
-                </>
-              )}
-            </div>
-          </>
-        ) : (
-          <p className="text-xs text-ink-faint">Solo un líder puede configurar Telegram. {tgConfigured ? "Está activo." : "Todavía no está configurado."}</p>
-        )}
-      </section>
-
-      <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
-        <h2 className="font-display text-lg font-extrabold text-ink">Integraciones · Slack</h2>
-        <p className="text-sm text-ink-soft">
-          Los mismos avisos en un canal de Slack, con un Incoming Webhook. Cada persona puede cargar su ID de miembro en <b>Mi perfil</b> para recibir la mención.
-        </p>
-        {isLead ? (
-          <>
-            <p className="text-xs text-ink-faint">
-              {slackConfigured ? <>Webhook configurado (termina en <span className="font-mono text-ink">…{slackHint}</span>).</> : "Todavía no hay webhook de Slack configurado."}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <input className="field min-w-0 flex-1" type="password" autoComplete="off" placeholder="https://hooks.slack.com/services/…" value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} />
-              <button className="btn-primary" disabled={savingSlack || !slackUrl.trim()} onClick={() => saveSlack(slackUrl.trim())}>Guardar</button>
-            </div>
-            {project.pdfEnabled && (
-            <div className="space-y-2 border-t border-line-strong pt-3">
-              <p className="text-sm font-semibold text-ink">PDF al iniciar cada sprint</p>
-              <p className="text-xs text-ink-soft">
-                Al iniciar un sprint se genera un PDF con todos sus tickets y sugerencias de Gemini y se manda a Slack. Para <b>adjuntar el PDF</b> hace falta
-                un bot de Slack (permisos <span className="font-mono">files:write</span>) agregado al canal, cuyo token se guarda en <b>Integraciones</b> del equipo (menú de tu cuenta), y acá el <b>ID del canal</b>.
-                Sin eso se manda un mensaje con el enlace de descarga por el webhook.
+      <details className="group rounded-lg border border-line bg-card">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+          <span>
+            <span className="block font-display text-lg font-extrabold text-ink">Integraciones</span>
+            <span className="block text-xs text-ink-soft">Discord, Telegram, Slack y JSON para IA (exportar e importar)</span>
+          </span>
+          <span className="text-ink-faint transition-transform group-open:rotate-90" aria-hidden>›</span>
+        </summary>
+        <div className="space-y-4 border-t border-line p-4">
+          <ExportPanel projectId={project.id} />
+        <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
+          <h2 className="font-display text-lg font-extrabold text-ink">Discord</h2>
+          <p className="text-sm text-ink-soft">
+            Avisa en un canal cuando se crea un ticket, pasa a Hecho, se asigna o se comenta, y cuando un sprint empieza o termina.
+            Cada persona puede cargar su ID de Discord en <b>Mi perfil</b> para recibir la mención.
+          </p>
+          {isLead ? (
+            <>
+              <p className="text-xs text-ink-faint">
+                {configured ? <>Webhook configurado (termina en <span className="font-mono text-ink">…{hint}</span>).</> : "Todavía no hay webhook configurado."}
               </p>
-              <p className="text-xs text-ink-faint">Bot del equipo: {project.slackBot ? "configurado" : "falta cargar el token en Integraciones"}.</p>
               <div className="flex flex-wrap gap-2">
-                <input className="field min-w-0 flex-1 font-mono" placeholder="ID del canal: C01ABCDE2F3" value={channelId} onChange={(e) => setChannelId(e.target.value)} />
-                <button className="btn-primary" disabled={savingChannel} onClick={saveChannel}>Guardar canal</button>
+                <input className="field min-w-0 flex-1" type="password" autoComplete="off" placeholder="https://discord.com/api/webhooks/…" value={webhook} onChange={(e) => setWebhook(e.target.value)} />
+                <button className="btn-primary" disabled={savingHook || !webhook.trim()} onClick={() => saveWebhook(webhook.trim())}>Guardar</button>
               </div>
-            </div>
-            )}
-            {slackConfigured && (
-              <div className="flex gap-2">
-                <button className="btn-ghost btn-sm" disabled={testingSlack} onClick={testSlack}>{testingSlack ? "Enviando…" : "Enviar mensaje de prueba"}</button>
-                <button className="btn-ghost btn-sm text-danger" disabled={savingSlack} onClick={() => saveSlack(null)}>Quitar webhook</button>
+              {configured && (
+                <div className="flex gap-2">
+                  <button className="btn-ghost btn-sm" disabled={testing} onClick={testWebhook}>{testing ? "Enviando…" : "Enviar mensaje de prueba"}</button>
+                  <button className="btn-ghost btn-sm text-danger" disabled={savingHook} onClick={() => saveWebhook(null)}>Quitar webhook</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-ink-faint">Solo un líder puede configurar el webhook. {configured ? "Está activo." : "Todavía no está configurado."}</p>
+          )}
+        </section>
+
+        <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
+          <h2 className="font-display text-lg font-extrabold text-ink">Telegram</h2>
+          <p className="text-sm text-ink-soft">
+            Los mismos avisos que Discord, en un chat o grupo de Telegram. Se pueden usar los dos canales a la vez; funciona el que esté configurado.
+            Cada persona puede cargar su usuario de Telegram en <b>Mi perfil</b> para recibir la mención.
+          </p>
+          {isLead ? (
+            <>
+              <p className="text-xs text-ink-faint">
+                {tgConfigured ? <>Telegram configurado (token termina en <span className="font-mono text-ink">…{tgHint}</span>, chat <span className="font-mono text-ink">{tgChat}</span>).</> : "Todavía no hay Telegram configurado."}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input className="field font-mono" type="password" autoComplete="off" placeholder="Token del bot (de @BotFather)" value={tgToken} onChange={(e) => setTgToken(e.target.value)} />
+                <input className="field font-mono" placeholder="Chat: -1001234567890 o @canal" value={tgChat} onChange={(e) => setTgChat(e.target.value)} />
               </div>
-            )}
-          </>
-        ) : (
-          <p className="text-xs text-ink-faint">Solo un líder puede configurar Slack. {slackConfigured ? "Está activo." : "Todavía no está configurado."}</p>
-        )}
-      </section>
+              <p className="text-xs text-ink-faint">
+                Crea el bot con @BotFather, añádelo al grupo y usa el id del grupo (empieza con -). El token solo se guarda, no se vuelve a mostrar.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-primary" disabled={savingTg || !tgToken.trim() || !tgChat.trim()} onClick={() => saveTelegram()}>Guardar</button>
+                {tgConfigured && (
+                  <>
+                    <button className="btn-ghost btn-sm" disabled={testingTg} onClick={testTelegram}>{testingTg ? "Enviando…" : "Enviar mensaje de prueba"}</button>
+                    <button className="btn-ghost btn-sm text-danger" disabled={savingTg} onClick={() => saveTelegram(true)}>Quitar Telegram</button>
+                  </>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-ink-faint">Solo un líder puede configurar Telegram. {tgConfigured ? "Está activo." : "Todavía no está configurado."}</p>
+          )}
+        </section>
+
+        <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
+          <h2 className="font-display text-lg font-extrabold text-ink">Slack</h2>
+          <p className="text-sm text-ink-soft">
+            Los mismos avisos en un canal de Slack, con un Incoming Webhook. Cada persona puede cargar su ID de miembro en <b>Mi perfil</b> para recibir la mención.
+          </p>
+          {isLead ? (
+            <>
+              <p className="text-xs text-ink-faint">
+                {slackConfigured ? <>Webhook configurado (termina en <span className="font-mono text-ink">…{slackHint}</span>).</> : "Todavía no hay webhook de Slack configurado."}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <input className="field min-w-0 flex-1" type="password" autoComplete="off" placeholder="https://hooks.slack.com/services/…" value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} />
+                <button className="btn-primary" disabled={savingSlack || !slackUrl.trim()} onClick={() => saveSlack(slackUrl.trim())}>Guardar</button>
+              </div>
+              {project.pdfEnabled && (
+              <div className="space-y-2 border-t border-line-strong pt-3">
+                <p className="text-sm font-semibold text-ink">PDF al iniciar cada sprint</p>
+                <p className="text-xs text-ink-soft">
+                  Al iniciar un sprint se genera un PDF con todos sus tickets y sugerencias de Gemini y se manda a Slack. Para <b>adjuntar el PDF</b> hace falta
+                  un bot de Slack (permisos <span className="font-mono">files:write</span>) agregado al canal, cuyo token se guarda en <b>Integraciones</b> del equipo (menú de tu cuenta), y acá el <b>ID del canal</b>.
+                  Sin eso se manda un mensaje con el enlace de descarga por el webhook.
+                </p>
+                <p className="text-xs text-ink-faint">Bot del equipo: {project.slackBot ? "configurado" : "falta cargar el token en Integraciones"}.</p>
+                <div className="flex flex-wrap gap-2">
+                  <input className="field min-w-0 flex-1 font-mono" placeholder="ID del canal: C01ABCDE2F3" value={channelId} onChange={(e) => setChannelId(e.target.value)} />
+                  <button className="btn-primary" disabled={savingChannel} onClick={saveChannel}>Guardar canal</button>
+                </div>
+              </div>
+              )}
+              {slackConfigured && (
+                <div className="flex gap-2">
+                  <button className="btn-ghost btn-sm" disabled={testingSlack} onClick={testSlack}>{testingSlack ? "Enviando…" : "Enviar mensaje de prueba"}</button>
+                  <button className="btn-ghost btn-sm text-danger" disabled={savingSlack} onClick={() => saveSlack(null)}>Quitar webhook</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-ink-faint">Solo un líder puede configurar Slack. {slackConfigured ? "Está activo." : "Todavía no está configurado."}</p>
+          )}
+        </section>
+        </div>
+      </details>
 
       {isLead && (
         <section className="space-y-3 border border-danger bg-card p-5 rounded-lg overflow-hidden">

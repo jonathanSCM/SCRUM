@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import { useToast } from "@/components/ui/Toaster";
 import { PwaCard } from "@/components/PwaControls";
 import AiTokenCard from "@/components/AiTokenCard";
+import NtfyCard from "@/components/NtfyCard";
 
 function Section({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
   return (
@@ -41,7 +42,10 @@ export default function AccountSettings({ userName }: { userName: string }) {
   return (
     <div className="space-y-3">
       <Section title="Notificaciones" hint="Avisos en este dispositivo y app instalable">
-        <PwaCard />
+        <div className="space-y-6">
+          <PwaCard />
+          <NtfyCard />
+        </div>
       </Section>
       <Section title="Tokens de IA" hint="Para conectar un asistente externo a tu cuenta (puedes tener varios)">
         <AiTokenCard userName={userName} />

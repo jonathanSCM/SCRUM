@@ -1,11 +1,13 @@
 import webpush from "web-push";
 import { prisma } from "@/lib/prisma";
+import { notifyNtfy } from "@/lib/ntfy";
+import type { NtfyPriority } from "@/lib/scrum/ntfyFormat";
 
 // Notificaciones push del navegador (Web Push + VAPID). Se activan solo si
 // están VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY; si no, todo esto es un no-op.
 // NUNCA lanza: un push caído no puede romper la acción que lo disparó.
 
-export type PushPayload = { title: string; body: string; url?: string; tag?: string };
+export type PushPayload = { title: string; body: string; url?: string; tag?: string; priority?: NtfyPriority };
 
 export function pushConfigured(): boolean {
   return !!process.env.VAPID_PUBLIC_KEY && !!process.env.VAPID_PRIVATE_KEY;
@@ -36,6 +38,8 @@ export function buildPushPayload(message: { title: string; description: string; 
 
 // Manda el push a los dispositivos de esos usuarios (o de todos si userIds es null).
 export async function sendPush(userIds: string[] | null, payload: PushPayload): Promise<number> {
+  // El teléfono (ntfy) recibe el mismo aviso, aunque el push del navegador no esté configurado.
+  void notifyNtfy(userIds, payload);
   try {
     if (!setup()) return 0;
     if (userIds && userIds.length === 0) return 0;
