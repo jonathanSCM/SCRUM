@@ -85,3 +85,9 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - `/reunion` se guarda en Reuniones; `/noti general`, `/urgente` y `/ayuda`, en General. Todos quedan marcados como avisos.
 - Chat de proyecto: pestaña "Del proyecto" (mensajes que lo mencionan) y "Del equipo" (avisos, solo lectura).
 - Esquema: tabla nueva `ChatChannel` y columnas opcionales `channelId`/`announce` en `ChatMessage` (`db push` sin tocar datos).
+
+## Avisos agrupados (bandeja, resumen y silencio)
+- Todo aviso queda en la **bandeja** de cada persona (campana y `/notifications`). Llegan **al instante** al navegador y al teléfono: menciones, mensajes directos (`/noti persona`), `/urgente`, `/ayuda`, `/reunion`, avisos del equipo, asignaciones (si llegan varias seguidas, las siguientes se juntan) e inicio de sprint. Lo demás (cambios y comentarios en tus tickets, tickets completados o nuevos, cambios del proyecto, cierre de sprint) se junta en **un resumen** (30 min por defecto; cada persona elige 15/30/60/120 min o solo bandeja, horas de silencio y categorías).
+- Los canales de Discord, Telegram y Slack de cada proyecto también reciben un resumen (configurable en Ajustes del proyecto > Integraciones); inicio y cierre de sprint salen al instante.
+- Los resúmenes los envía el propio servidor **cada minuto** (`src/instrumentation-node.ts`; se apaga con `DISABLE_NOTIF_TIMER=1`). Opcional, como respaldo: una tarea programada de Coolify cada minuto con `POST /api/cron/notifications` y la cabecera `Authorization: Bearer $CRON_SECRET` (define `CRON_SECRET`).
+- Esquema: tablas nuevas `Notification`, `NotifPrefs` y `ProjectFeedItem`, y la columna `Project.feedDigestMinutes` (`db push` sin tocar datos). Backup de PostgreSQL antes de desplegar.

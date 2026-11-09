@@ -831,3 +831,56 @@ describe("avisos al teléfono (ntfy)", () => {
     expect([0, 429, 500, 502].some(isPermanentFailure)).toBe(false);
   });
 });
+
+import { planDelivery, digestMessage, isQuiet, quietEndsAt, normalizePrefs, DEFAULT_PREFS, KIND_META, KINDS } from "./notifPolicy";
+
+describe("política de avisos: instante, resumen y silencio", () => {
+  const now = new Date("2026-11-10T15:00:00Z"); // 11:00 en La Paz (UTC-4)
+  const p = DEFAULT_PREFS;
+  const none = { recentAssigned: 0 };
+  it("lo importante va al instante", () => {
+    for (const k of ["MENTION", "DIRECT", "URGENT", "HELP", "ANNOUNCE", "REUNION", "ASSIGNED", "SPRINT_START", "TEAM_ADDED", "INVOLVED_ADDED"] as const) expect(planDelivery(k, now, p, none).tier, k).toBe("instant");
+  });
+  it("lo demás espera el resumen (30 min por defecto) y se puede cambiar o apagar", () => {
+    const plan = planDelivery("STATUS", now, p, none);
+    expect(plan).toMatchObject({ tier: "pending", reason: "digest" });
+    expect((plan as { deliverAfter: Date }).deliverAfter.getTime() - now.getTime()).toBe(30 * 60_000);
+    expect((planDelivery("COMMENT", now, { ...p, digestMinutes: 15 }, none) as { deliverAfter: Date }).deliverAfter.getTime() - now.getTime()).toBe(15 * 60_000);
+    expect(planDelivery("COMMENT", now, { ...p, digestMinutes: 0 }, none).tier).toBe("silent");
+  });
+  it("asignaciones seguidas se juntan; la primera es inmediata", () => {
+    expect(planDelivery("ASSIGNED", now, p, { recentAssigned: 0 }).tier).toBe("instant");
+    expect(planDelivery("ASSIGNED", now, p, { recentAssigned: 2 })).toMatchObject({ tier: "pending", reason: "batch" });
+  });
+  it("categorías silenciadas quedan solo en la bandeja, pero menciones y urgentes nunca", () => {
+    const muted = { ...p, muted: ["tickets", "assignments", "team"] };
+    expect(planDelivery("STATUS", now, muted, none).tier).toBe("silent");
+    expect(planDelivery("ASSIGNED", now, muted, none).tier).toBe("silent");
+    expect(planDelivery("REUNION", now, muted, none).tier).toBe("silent");
+    expect(planDelivery("MENTION", now, muted, none).tier).toBe("instant");
+    expect(planDelivery("URGENT", now, muted, none).tier).toBe("instant");
+  });
+  it("horas de silencio (cruzan la medianoche); solo lo urgente las atraviesa", () => {
+    const q = { ...p, quietEnabled: true, quietStart: "22:00", quietEnd: "07:00" };
+    const night = new Date("2026-11-11T03:30:00Z"); // 23:30 en La Paz
+    expect(isQuiet(night, q)).toBe(true);
+    expect(isQuiet(now, q)).toBe(false);
+    expect(isQuiet(night, { ...q, quietEnabled: false })).toBe(false);
+    expect(planDelivery("MENTION", night, q, none)).toMatchObject({ tier: "pending", reason: "quiet" });
+    expect(planDelivery("URGENT", night, q, none).tier).toBe("instant");
+    const end = quietEndsAt(night, q);
+    expect(end.toISOString()).toBe("2026-11-11T11:00:00.000Z"); // 07:00 en La Paz
+    expect((planDelivery("STATUS", night, q, none) as { deliverAfter: Date }).deliverAfter.getTime()).toBe(end.getTime());
+  });
+  it("el mensaje del resumen junta todo", () => {
+    expect(digestMessage([{ kind: "ASSIGNED", title: "SAI-1 asignado", count: 1 }, { kind: "ASSIGNED", title: "SAI-2 asignado", count: 1 }]).title).toBe("Te asignaron 2 tickets");
+    const m = digestMessage([{ kind: "STATUS", title: "SAI-1 cambió", count: 3 }, { kind: "COMMENT", title: "Comentario en SAI-2", count: 1 }]);
+    expect(m.title).toBe("Resumen: 4 novedades");
+    expect(m.body).toContain("cambios en tus tickets");
+    expect(digestMessage([{ kind: "STATUS", title: "SAI-1 cambió", count: 3 }]).title).toContain("3 veces");
+  });
+  it("preferencias: valores inválidos vuelven al valor por defecto", () => {
+    expect(normalizePrefs({ digestMinutes: 7, quietStart: "25:99", muted: ["tickets", "inventada"] as never })).toMatchObject({ digestMinutes: 30, quietStart: "22:00", muted: ["tickets"] });
+    expect(Object.keys(KIND_META).sort()).toEqual([...KINDS].sort());
+  });
+});

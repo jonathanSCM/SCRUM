@@ -112,6 +112,7 @@ export const updateProjectSchema = z.object({
   deployUrl: z.string().trim().max(500).nullable().optional(),
   stack: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
   labels: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
+  feedDigestMinutes: z.number().int().refine((n) => [0, 15, 30, 60, 120].includes(n), "Intervalo no válido").optional(),
   readyItems: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
 });
 

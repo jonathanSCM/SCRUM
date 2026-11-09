@@ -15,6 +15,8 @@ const IDENTITY_ONLY = [
   "invite/", // aceptar una invitación: se valida con el enlace secreto, sin sesión previa
   "push/", // suscripciones del navegador de la propia persona
   "ntfy/", // el canal de avisos al teléfono de la propia persona
+  "notifications/", // bandeja y preferencias de avisos de la propia persona
+  "cron/", // tareas programadas: se validan con CRON_SECRET
   "tokens/", // su propio token IA
   "users/me/", // su propio perfil
   "users/[id]/image/", // imágenes: la ruta comprueba por dentro que se comparte equipo

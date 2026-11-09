@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { membersOf } from "@/lib/workspace";
-import { sendPush } from "@/lib/push";
+import { notifyUsers } from "@/lib/notifications";
 
 // Reemplaza las personas asignadas a un proyecto. Solo entran personas del mismo equipo.
 // Devuelve a quiénes se agregó de nuevo (a ellas se les avisa por push).
@@ -18,7 +18,7 @@ export async function setProjectMembers(projectId: string, workspaceId: string, 
   ]);
   if (added.length) {
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } });
-    void sendPush(added, { title: `${actorName} te agregó al proyecto ${project?.name ?? ""}`.trim(), body: "Ahora eres parte del equipo de este proyecto.", url: `/projects/${projectId}/board`, tag: `project-${projectId}` });
+    void notifyUsers(added, { kind: "TEAM_ADDED", title: `${actorName} te agregó al proyecto ${project?.name ?? ""}`.trim(), body: "Ahora eres parte del equipo de este proyecto.", url: `/projects/${projectId}/board`, groupKey: `project-${projectId}`, workspaceId });
   }
   return { members: people.filter((p) => wanted.includes(p.id)).map(({ id, name }) => ({ id, name })), added };
 }

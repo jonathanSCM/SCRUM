@@ -33,17 +33,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await logHistory({ projectId: issue.projectId, taskId: id, taskTitle: issue.title, field: "comentario", newValue: parsed.data.body.slice(0, 120), actor: user });
 
     const key = formatIssueKey(issue.project.key, issue.number);
+    // Primero las menciones con @ (instantáneas) y los involucrados; a quien ya se mencionó no se le repite el aviso de comentario.
+    const mentioned = new Set(await notifyComment({ taskId: id, body: parsed.data.body, author: { id: user.id, name: user.name } }));
+    const forComment = [issue.assigneeUserId, issue.reporterId].map((u) => (u && u !== user.id && !mentioned.has(u) ? u : null));
     await notifyProject(issue.projectId, {
       title: `Comentario en ${key}`,
       description: `**${user.name}** comentó en «${issue.title}»: ${parsed.data.body}`,
       color: DISCORD_COLOR.comment,
       excludeUserId: user.id,
-      mentionUserIds: [issue.assigneeUserId !== user.id ? issue.assigneeUserId : null, issue.reporterId !== user.id ? issue.reporterId : null],
+      kind: "COMMENT",
+      groupKey: `comment-${key}`,
+      mentionUserIds: forComment,
       url: `${getBaseUrl()}/projects/${issue.projectId}/board?issue=${key}`,
     });
-
-    // Menciones con @ e involucrados del ticket.
-    await notifyComment({ taskId: id, body: parsed.data.body, author: { id: user.id, name: user.name } });
 
     return NextResponse.json(comment, { status: 201 });
   } catch (e) {

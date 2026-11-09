@@ -6,7 +6,8 @@ import { membersOf } from "@/lib/workspace";
 import { errorResponse } from "@/lib/api";
 import { parseBody, readJson } from "@/lib/validation";
 import { parseCommand, matchNames } from "@/lib/scrum/chatCommands";
-import { sendPush } from "@/lib/push";
+import { notifyUsers } from "@/lib/notifications";
+import type { NoticeKind } from "@/lib/scrum/notifPolicy";
 import { sendToSlackWebhook } from "@/lib/slack";
 import { ensureChannels } from "@/lib/chatChannels";
 import { teamSlackWebhookFor } from "@/lib/teamIntegrations";
@@ -82,13 +83,18 @@ export async function POST(req: Request) {
 
     // Avisos al equipo: quedan también en el chat, resaltados según el nivel.
     // /reunion va al canal "Reuniones"; el resto de avisos al canal "General".
+    let chatUrl = "/chat";
     if (chatText) {
       const channels = await ensureChannels(workspaceId);
       const channelId = channels.find((ch) => ch.kind === (c.kind === "reunion" ? "REUNIONES" : "GENERAL"))?.id;
+      if (c.kind === "reunion" && channelId) chatUrl = `/chat?canal=${channelId}`;
       await prisma.chatMessage.create({ data: { body: chatText, workspaceId, authorId: me.id, channelId, announce: true, level: level === "normal" ? null : level.toUpperCase() } });
     }
-    const pushed = await sendPush(targets, { title, body: text.slice(0, 160), url: "/chat", tag: "aviso", priority: level === "urgente" ? "urgent" : level === "ayuda" ? "high" : "default" });
-    return NextResponse.json({ ok: true, summary: `Aviso a ${label}${pushed ? ` · ${pushed} dispositivo(s) con push` : ""}${toSlack ? " · enviado a Slack" : ""}` });
+    // Todos estos avisos son instantáneos (no esperan el resumen): persona, general, urgente, ayuda y reunión.
+    const noticeKind: NoticeKind = level === "urgente" ? "URGENT" : level === "ayuda" ? "HELP" : c.kind === "persona" ? "DIRECT" : c.kind === "reunion" ? "REUNION" : "ANNOUNCE";
+    const priority = level === "urgente" ? "urgent" : level === "ayuda" || c.kind === "reunion" ? "high" : "default";
+    const notified = await notifyUsers(targets, { kind: noticeKind, title, body: text.slice(0, 160), url: chatUrl, priority, workspaceId });
+    return NextResponse.json({ ok: true, summary: `Aviso a ${label}${notified ? ` · ${notified} ${notified === 1 ? "persona" : "personas"} (bandeja, navegador y teléfono)` : ""}${toSlack ? " · enviado a Slack" : ""}` });
   } catch (e) {
     return errorResponse(e);
   }

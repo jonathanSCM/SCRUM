@@ -747,6 +747,102 @@ async function main() {
     }
   }
 
+  console.log("20) Avisos: bandeja, resumen, instantáneos, silencio y /reunion");
+  const CRON = process.env.CRON_SECRET;
+  if (!CRON) {
+    console.log("  (omitido: el servidor de la prueba no tiene CRON_SECRET)");
+  } else {
+    const flush = (auth) => fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: auth ? { Authorization: `Bearer ${auth}` } : {} });
+    const nu = await mkUser("Nuevo Avisos", `avisos-${stamp}@a.test`);
+    await member(nu.id, A.ws.id, "MEMBER");
+    const cNu = await new Client("Nuevo (miembro A)").login(nu.email);
+    const minutesFromNow = (d) => Math.round((d.getTime() - Date.now()) / 60000);
+
+    const np0 = await cNu.req("GET", "/api/notifications/prefs");
+    check("preferencias por defecto: resumen cada 30 min, sin silencio, nada silenciado", np0.status === 200 && np0.json.digestMinutes === 30 && np0.json.quietEnabled === false && np0.json.muted.length === 0, np0.text);
+    // Asignaciones: la primera avisa ya; la segunda se junta
+    const tA = await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, { title: `Avisos 1 ${stamp}`, assigneeUserId: nu.id });
+    const tB = await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, { title: `Avisos 2 ${stamp}`, assigneeUserId: nu.id });
+    const asg = await prisma.notification.findMany({ where: { userId: nu.id, kind: "ASSIGNED" }, orderBy: { createdAt: "asc" } });
+    check("la primera asignación llega al instante (entregada y avisada)", asg.length === 2 && asg[0].deliveredAt !== null && asg[0].pushed === true, JSON.stringify(asg.map((a) => [a.deliveredAt, a.pushed])));
+    check("la segunda, dentro de 2 minutos, queda pendiente para juntarse", asg[1].deliveredAt === null && minutesFromNow(asg[1].deliverAfter) <= 2, `${asg[1].deliverAfter}`);
+    // Menciones: instantáneas
+    await cPlain.req("POST", `/api/issues/${tA.json.id}/comments`, { body: "hola @Nuevo Avisos, mira esto" });
+    const men = await prisma.notification.findFirst({ where: { userId: nu.id, kind: "MENTION" } });
+    check("una mención llega al instante", !!men && men.deliveredAt !== null && men.pushed === true && men.url?.includes("issue="));
+    // Cambios repetidos: se juntan en una línea
+    for (let i = 0; i < 3; i++) await cPlain.req("POST", `/api/issues/${tA.json.id}/comments`, { body: `comentario ${i}` });
+    const cms = await prisma.notification.findMany({ where: { userId: nu.id, kind: "COMMENT" } });
+    check("tres comentarios en el mismo ticket son UNA línea pendiente con contador", cms.length === 1 && cms[0].count === 3 && cms[0].deliveredAt === null, JSON.stringify(cms.map((c) => [c.count, c.deliveredAt])));
+    const done = await cAOwner.req("PATCH", `/api/issues/${tA.json.id}`, { status: "DONE" });
+    check("completar el ticket queda pendiente de resumen (no suena)", done.status === 200 && (await prisma.notification.count({ where: { userId: nu.id, kind: "COMPLETED", deliveredAt: null } })) === 1);
+    // Bandeja
+    const inbox = await cNu.req("GET", "/api/notifications");
+    check("la bandeja muestra todo (instantáneo y pendiente) con los sin leer", inbox.status === 200 && inbox.json.unread >= 5 && inbox.json.items.some((i) => i.pending) && inbox.json.items.some((i) => !i.pending));
+    const otherMark = await cAOwner.req("POST", "/api/notifications/read", { ids: inbox.json.items.map((i) => i.id) });
+    check("otra persona no puede marcar como leídos mis avisos", otherMark.status === 200 && otherMark.json.marked === 0 || (await prisma.notification.count({ where: { userId: nu.id, readAt: { not: null } } })) === 0);
+    // Resumen: sin secreto no, con secreto sí, y repetirlo no duplica
+    check("el resumen programado exige el secreto (401 sin él o con uno malo)", (await flush(null)).status === 401 && (await flush("malo")).status === 401);
+    check("un token IA tampoco puede lanzar el resumen (401)", (await fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: { Authorization: `Bearer ${rawToken}` } })).status === 401);
+    await prisma.notification.updateMany({ where: { userId: nu.id, deliveredAt: null }, data: { deliverAfter: new Date(Date.now() - 1000) } });
+    const f1 = await flush(CRON);
+    const f1j = await f1.json();
+    const left = await prisma.notification.count({ where: { userId: nu.id, deliveredAt: null } });
+    check("al cumplirse la ventana se envía UN resumen con todo lo pendiente", f1.status === 200 && f1j.people.users >= 1 && f1j.people.items >= 3 && left === 0, JSON.stringify(f1j));
+    const f2j = await (await flush(CRON)).json();
+    check("repetir el resumen no vuelve a enviar nada", f2j.people.items === 0, JSON.stringify(f2j));
+    // Preferencias
+    await cNu.req("PUT", "/api/notifications/prefs", { digestMinutes: 60 });
+    await cPlain.req("POST", `/api/issues/${tB.json.id}/comments`, { body: "otro comentario" });
+    const c60 = await prisma.notification.findFirst({ where: { userId: nu.id, kind: "COMMENT", groupKey: { contains: "comment-" }, deliveredAt: null } });
+    check("con resumen cada hora, lo nuevo espera ~60 minutos", !!c60 && minutesFromNow(c60.deliverAfter) >= 58 && minutesFromNow(c60.deliverAfter) <= 61, `${c60?.deliverAfter}`);
+    await prisma.notification.deleteMany({ where: { userId: nu.id, deliveredAt: null } });
+    await cNu.req("PUT", "/api/notifications/prefs", { muted: ["tickets"], digestMinutes: 30 });
+    await cPlain.req("POST", `/api/issues/${tB.json.id}/comments`, { body: "comentario silenciado" });
+    const silent = await prisma.notification.findFirst({ where: { userId: nu.id, kind: "COMMENT" }, orderBy: { createdAt: "desc" } });
+    check("una categoría silenciada queda solo en la bandeja (sin aviso)", silent.deliveredAt !== null && silent.pushed === false);
+    await cNu.req("PUT", "/api/notifications/prefs", { muted: [] });
+    const bad = await cNu.req("PUT", "/api/notifications/prefs", { digestMinutes: 7 });
+    check("un intervalo inválido se rechaza (400)", bad.status === 400, `dio ${bad.status}`);
+    // Horas de silencio: solo lo urgente atraviesa
+    const hh = (d) => `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+    await cNu.req("PUT", "/api/notifications/prefs", { quietEnabled: true, tz: "UTC", quietStart: hh(new Date(Date.now() - 3600_000)), quietEnd: hh(new Date(Date.now() + 3600_000)) });
+    await cPlain.req("POST", `/api/issues/${tB.json.id}/comments`, { body: "hola de nuevo @Nuevo Avisos" });
+    const qm = await prisma.notification.findFirst({ where: { userId: nu.id, kind: "MENTION" }, orderBy: { createdAt: "desc" } });
+    check("en horas de silencio una mención espera al fin del silencio", qm.deliveredAt === null && minutesFromNow(qm.deliverAfter) > 30, `${qm.deliverAfter}`);
+    await cAOwner.req("POST", "/api/chat/command", { body: "/urgente servidor caído otra vez" });
+    const qu = await prisma.notification.findFirst({ where: { userId: nu.id, kind: "URGENT" } });
+    check("pero lo urgente sí avisa al instante", !!qu && qu.deliveredAt !== null && qu.pushed === true);
+    await cNu.req("PUT", "/api/notifications/prefs", { quietEnabled: false });
+    // /reunion: aviso instantáneo a todo el equipo
+    await prisma.notification.deleteMany({ where: { kind: "REUNION" } });
+    const ru = await cAOwner.req("POST", "/api/chat/command", { body: "/reunion viernes 10:00: retro del sprint" });
+    const ruRows = await prisma.notification.findMany({ where: { kind: "REUNION" } });
+    const ruUsers = ruRows.map((r) => r.userId);
+    check("/reunion avisa al instante a todo el equipo menos a quien la convoca", ru.status === 200 && ruRows.length >= 3 && ruRows.every((r) => r.deliveredAt !== null && r.pushed === true) && ruUsers.includes(nu.id) && ruUsers.includes(plain.id) && !ruUsers.includes(aOwner.id), `${ru.status} ${ru.text.slice(0, 160)} filas=${ruRows.length}`);
+    check("y no a alguien que solo es de otro equipo", !ruUsers.includes(bOnly.id));
+    const ruInbox = await cPlain.req("GET", "/api/notifications");
+    check("aparece en la bandeja con su etiqueta y con enlace al canal Reuniones", ruInbox.json.items.some((i) => i.kind === "REUNION" && i.label === "Reuniones" && i.url?.includes("canal=")), JSON.stringify(ruInbox.json.items.filter((i) => i.kind === "REUNION")));
+    const ru2 = await cAOwner.req("POST", "/api/chat/command", { body: "/noti persona Pablo: te toca" });
+    check("/noti persona también es instantáneo (mensaje directo)", ru2.status === 200 && (await prisma.notification.count({ where: { userId: plain.id, kind: "DIRECT", deliveredAt: { not: null }, pushed: true } })) >= 1);
+    // Canales del proyecto: resumen cada X minutos
+    const fd = await cAOwner.req("PATCH", `/api/projects/${A.project.id}`, { feedDigestMinutes: 30 });
+    const fdBad = await cAOwner.req("PATCH", `/api/projects/${A.project.id}`, { feedDigestMinutes: 7 });
+    check("el líder define cada cuánto va el resumen a Discord/Telegram/Slack (y 7 se rechaza)", fd.status === 200 && fdBad.status === 400, `${fd.status}/${fdBad.status}`);
+    const beforeFeed = await prisma.projectFeedItem.count({ where: { projectId: A.project.id } });
+    await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, { title: `Para el resumen ${stamp}` });
+    check("un ticket nuevo no se manda al canal al instante: queda en espera del resumen", (await prisma.projectFeedItem.count({ where: { projectId: A.project.id, sentAt: null } })) === beforeFeed + 1 || (await prisma.projectFeedItem.count({ where: { projectId: A.project.id } })) === beforeFeed + 1);
+    await prisma.projectFeedItem.updateMany({ where: { projectId: A.project.id, sentAt: null }, data: { createdAt: new Date(Date.now() - 3600_000) } });
+    const f3j = await (await flush(CRON)).json();
+    check("al cumplirse la ventana sale un solo mensaje por proyecto", f3j.feeds.projects >= 1 && (await prisma.projectFeedItem.count({ where: { projectId: A.project.id, sentAt: null } })) === 0, JSON.stringify(f3j));
+    await cAOwner.req("PATCH", `/api/projects/${A.project.id}`, { feedDigestMinutes: 0 });
+    const beforeZero = await prisma.projectFeedItem.count({ where: { projectId: A.project.id } });
+    await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, { title: `Sin espera ${stamp}` });
+    check("con 0 minutos no se guarda nada para resumir (sale al instante)", (await prisma.projectFeedItem.count({ where: { projectId: A.project.id } })) === beforeZero);
+    const tkn = await tk.req("GET", "/api/notifications");
+    check("el token IA no accede a la bandeja de avisos (403)", tkn.status === 403, `dio ${tkn.status}`);
+  }
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

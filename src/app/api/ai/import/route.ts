@@ -159,6 +159,7 @@ export async function POST(req: Request) {
         title: `Carga en ${project.name}`,
         description: `**${user.name}** agregó ${createdCount} ${createdCount === 1 ? "ticket" : "tickets"}${notesCreated ? ` y ${notesCreated} ${notesCreated === 1 ? "nota" : "notas"}` : ""}.`,
         excludeUserId: user.id,
+        kind: "CREATED",
         url: `${process.env.NEXTAUTH_URL ?? ""}/projects/${projectId}/backlog`,
       });
     }
