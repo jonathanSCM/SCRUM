@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { buildExportPrompt, type ExportPromptKind } from "@/lib/aiPrompt";
 import { useToast } from "@/components/ui/Toaster";
+import ImportFromAi from "../../import/ImportFromAi";
 
 // Exportar el proyecto en JSON para darle contexto a una IA (ChatGPT, Claude, Gemini…).
 export default function ExportPanel({ projectId }: { projectId: string }) {
@@ -60,7 +61,8 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
 
   return (
     <section className="space-y-3 rounded-lg border border-line bg-card p-5">
-      <h2 className="font-display text-lg font-extrabold text-ink">Exportar para IA</h2>
+      <h2 className="font-display text-lg font-extrabold text-ink">JSON para IA</h2>
+      <h3 className="font-display text-sm font-bold text-ink">Exportar</h3>
       <p className="text-sm text-ink-soft">
         Genera un JSON del proyecto para que una IA tenga todo el contexto: tickets con su jerarquía, estados, responsables y comentarios. Puedes descargarlo o copiarlo junto con un prompt listo.
       </p>
@@ -102,6 +104,14 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
       <p className="text-xs text-ink-faint">
         Al volver a pegar el JSON en Proyectos &gt; Importar con IA, los tickets con su «key» se actualizan (estado, prioridad, responsable, puntos, sprint…, solo lo que cambió) y los que no la traen se crean como nuevos. No incluye claves, webhooks, correos ni el contenido de los archivos. Al pegarlo en una IA externa, esa información sale de la app y la recibe ese proveedor.
       </p>
+    
+      <div className="space-y-2 border-t border-line pt-4">
+        <h3 className="font-display text-sm font-bold text-ink">Importar</h3>
+        <p className="text-sm text-ink-soft">
+          Pega aquí el JSON que te devolvió la IA (o el exportado, ya editado). Los tickets con su «key» se actualizan y los nuevos se crean, siempre dentro de este proyecto.
+        </p>
+        <ImportFromAi projectId={projectId} />
+      </div>
     </section>
   );
 }
