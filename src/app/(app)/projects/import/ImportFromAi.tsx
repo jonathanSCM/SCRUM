@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/client";
 import { IMPORT_JSON_PROMPT } from "@/lib/aiPrompt";
-import { changesSchema, countIssues, importSchema } from "@/lib/scrum/aiImport";
+import { changesSchema, countIssues, importSchema, splitExport } from "@/lib/scrum/aiImport";
 import { useToast } from "@/components/ui/Toaster";
 
 type Result = { project: { id: string; key: string; name: string; created: boolean; url: string }; created: { epics: string[]; stories: string[]; tasks: string[]; notes?: number }; skipped: string[]; warnings: string[] };
@@ -17,7 +17,7 @@ export default function ImportFromAi() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
-  const [changesResult, setChangesResult] = useState<{ applied: Array<{ key: string; fields: string[] }>; failed: Array<{ key: string; error: string }>; projectId: string } | null>(null);
+  const [changesResult, setChangesResult] = useState<{ applied: Array<{ key: string; fields: string[] }>; failed: Array<{ key: string; error: string }>; unchanged?: number; projectId: string } | null>(null);
 
   const check = useMemo(() => {
     if (!text.trim()) return null;
@@ -26,6 +26,15 @@ export default function ImportFromAi() {
       json = JSON.parse(clean(text));
     } catch (e) {
       return { ok: false as const, error: `No es un JSON válido (${e instanceof Error ? e.message : "error"}). Pídele al asistente que lo corrija.` };
+    }
+    // La exportación del proyecto (editada): los tickets con "key" se actualizan, los que no la traen se crean.
+    const split = splitExport(json);
+    if (split) {
+      const ch = split.changes.length ? changesSchema.safeParse({ project: { id: split.projectId }, changes: split.changes }) : null;
+      if (ch && !ch.success) return { ok: false as const, error: ch.error.issues.slice(0, 3).map((i) => `${i.path.join(".") || "raíz"}: ${i.message}`).join(" · ") };
+      const imp = split.newImport ? importSchema.safeParse(split.newImport) : null;
+      if (imp && !imp.success) return { ok: false as const, error: imp.error.issues.slice(0, 3).map((i) => `${i.path.join(".") || "raíz"}: ${i.message}`).join(" · ") };
+      return { ok: true as const, kind: "sync" as const, changes: ch?.success ? ch.data : null, newImport: imp?.success ? imp.data : null, existing: split.existing, fresh: split.fresh, projectId: split.projectId, total: split.existing + split.fresh };
     }
     // Lista de cambios sobre tickets existentes: { project: { id }, changes: [...] }
     if (json && typeof json === "object" && "changes" in json) {
@@ -50,6 +59,27 @@ export default function ImportFromAi() {
   async function run() {
     if (!check?.ok) return;
     setBusy(true);
+    if (check.kind === "sync") {
+      let applied: Array<{ key: string; fields: string[] }> = [];
+      let failed: Array<{ key: string; error: string }> = [];
+      let unchanged = 0;
+      if (check.changes) {
+        const res = await api<{ applied: typeof applied; failed: typeof failed; unchanged: number }>("/api/ai/changes", "POST", check.changes);
+        if (!res.ok) { setBusy(false); return toast.error(res.error); }
+        ({ applied, failed, unchanged } = res.data);
+      }
+      let imported: Result | null = null;
+      if (check.newImport) {
+        const res = await api<Result>("/api/ai/import", "POST", check.newImport);
+        if (!res.ok) toast.error(`Se actualizaron los existentes, pero los nuevos fallaron: ${res.error}`);
+        else imported = res.data;
+      }
+      setBusy(false);
+      setResult(imported);
+      setChangesResult({ applied, failed, unchanged, projectId: check.projectId });
+      setText("");
+      return;
+    }
     if (check.kind === "changes") {
       const res = await api<{ applied: Array<{ key: string; fields: string[] }>; failed: Array<{ key: string; error: string }> }>("/api/ai/changes", "POST", check.data);
       setBusy(false);
@@ -79,6 +109,11 @@ export default function ImportFromAi() {
         <h2 className="font-display text-base font-extrabold text-ink">2. Pega el JSON aquí</h2>
         <textarea className="field min-h-[14rem] font-mono text-xs" placeholder='{ "project": { "name": "…" }, "epics": [ … ] }' value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
         {check && !check.ok && <p className="text-sm font-medium text-danger">{check.error}</p>}
+        {check?.ok && check.kind === "sync" && (
+          <p className="text-sm text-ink-soft">
+            Detecté la <b>exportación de un proyecto</b>: se revisarán <b>{check.existing}</b> tickets que ya existen (solo se aplica lo que cambió: estado, prioridad, responsable, puntos, sprint…) y se crearán <b>{check.fresh}</b> {check.fresh === 1 ? "ticket nuevo" : "tickets nuevos"} (los que no traen «key»).
+          </p>
+        )}
         {check?.ok && check.kind === "changes" && (
           <p className="text-sm text-ink-soft">Listo para aplicar: <b>{check.total}</b> cambios sobre tickets existentes del proyecto. No crea ni borra tickets.</p>
         )}
@@ -87,12 +122,12 @@ export default function ImportFromAi() {
             Listo para importar: proyecto <b>{check.data.project.name ?? "existente"}</b> · {check.total} tickets · {check.data.notes?.length ?? 0} notas. Si ya existe algo con el mismo tipo y título, se omite (no se duplica).
           </p>
         )}
-        <button className="btn-primary" disabled={!check?.ok || busy} onClick={run}>{busy ? "Procesando…" : check?.ok && check.kind === "changes" ? "Aplicar cambios" : "Importar"}</button>
+        <button className="btn-primary" disabled={!check?.ok || busy} onClick={run}>{busy ? "Procesando…" : check?.ok && (check.kind === "changes" || check.kind === "sync") ? (check.kind === "sync" ? "Actualizar y agregar" : "Aplicar cambios") : "Importar"}</button>
       </section>
 
       {changesResult && (
         <section className="space-y-1 rounded-lg border border-moss bg-card-2 p-5 text-sm">
-          <p className="font-semibold text-ink">Cambios aplicados: {changesResult.applied.length} · con problemas: {changesResult.failed.length}</p>
+          <p className="font-semibold text-ink">Tickets actualizados: {changesResult.applied.length}{changesResult.unchanged ? ` · sin cambios: ${changesResult.unchanged}` : ""} · con problemas: {changesResult.failed.length}</p>
           {changesResult.applied.length > 0 && <p className="text-xs text-ink-soft">{changesResult.applied.map((a) => `${a.key} (${a.fields.join(", ")})`).join(" · ")}</p>}
           {changesResult.failed.map((f) => <p key={f.key} className="text-xs text-danger">{f.key}: {f.error}</p>)}
           <Link href={`/projects/${changesResult.projectId}/backlog`} className="mt-2 inline-block font-semibold text-rust hover:underline">Abrir el backlog</Link>

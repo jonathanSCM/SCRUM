@@ -762,3 +762,49 @@ describe("biblioteca: tarjetas de archivos", () => {
     expect(checkCardCapacity({ items: 1, bytes: MAX_CARD_BYTES - 10 }, [{ size: 20 }])).toMatch(/MB/);
   });
 });
+
+import { splitExport, isExportShape } from "./aiImport";
+
+describe("exportación editada: actualizar y agregar con el mismo JSON", () => {
+  const exportado = {
+    _meta: { format: "scrum-proshop-export", anonimizado: false },
+    project: { id: "p1", key: "SAI", name: "Demo" },
+    epics: [
+      {
+        key: "SAI-1", type: "EPIC", title: "Épica", status: "TODO",
+        stories: [
+          { key: "SAI-2", type: "STORY", title: "Historia", status: "DONE", priority: "ALTA", storyPoints: 5, assignee: "Ana", tasks: [{ key: "SAI-3", type: "TASK", title: "T1", status: "IN_PROGRESS" }, { title: "Tarea nueva", type: "BUG", priority: "URGENTE" }] },
+          { title: "Historia nueva", tasks: [{ title: "Dentro de la nueva" }] },
+        ],
+        tasks: [],
+      },
+    ],
+    stories: [],
+    tasks: [{ key: "SAI-4", type: "BUG", title: "Suelto", status: "DONE", sprint: "Sprint 1" }, { title: "Suelto nuevo" }],
+  };
+  it("detecta el formato de exportación", () => {
+    expect(isExportShape(exportado)).toBe(true);
+    expect(isExportShape({ project: { name: "x" }, epics: [{ title: "E" }] })).toBe(false);
+    expect(isExportShape({ project: { id: "p" }, tasks: [{ key: "SAI-1", title: "x" }] })).toBe(true);
+  });
+  it("separa cambios (con key) de lo nuevo (sin key)", () => {
+    const s = splitExport(exportado)!;
+    expect(s.existing).toBe(4);
+    expect(s.fresh).toBe(4);
+    expect(s.changes.map((c) => c.key)).toEqual(["SAI-1", "SAI-2", "SAI-3", "SAI-4"]);
+    expect(s.changes.find((c) => c.key === "SAI-2")).toMatchObject({ status: "DONE", priority: "ALTA", storyPoints: 5, assignee: "Ana" });
+    expect(s.changes.find((c) => c.key === "SAI-4")).toMatchObject({ status: "DONE", sprint: "Sprint 1" });
+    const imp = s.newImport as { epics: Array<{ title: string; stories: Array<{ title: string; tasks?: Array<{ title: string }> }> }>; tasks: Array<{ title: string }> };
+    expect(imp.epics[0].title).toBe("Épica");
+    expect(imp.epics[0].stories.map((x) => x.title)).toEqual(["Historia", "Historia nueva"]);
+    expect(imp.epics[0].stories[0].tasks?.map((t) => t.title)).toEqual(["Tarea nueva"]);
+    expect(imp.tasks.map((t) => t.title)).toEqual(["Suelto nuevo"]);
+  });
+  it("anonimizado: no toca responsables; sin novedades: no hay importación", () => {
+    const s = splitExport({ ...exportado, _meta: { format: "scrum-proshop-export", anonimizado: true } })!;
+    expect(s.changes.find((c) => c.key === "SAI-2")).not.toHaveProperty("assignee");
+    const solo = splitExport({ project: { id: "p" }, tasks: [{ key: "SAI-1", title: "x", status: "DONE" }] })!;
+    expect(solo.newImport).toBeNull();
+    expect(solo.changes).toHaveLength(1);
+  });
+});
