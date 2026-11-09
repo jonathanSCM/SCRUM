@@ -8,8 +8,15 @@ import { updateIssue, IssueError, type IssuePatch } from "@/lib/issues";
 import { parseIssueKey } from "@/lib/scrum/issueKey";
 import { changesSchema, matchMember } from "@/lib/scrum/aiImport";
 import { notifyComment } from "@/lib/commentNotify";
+import { parseLabels } from "@/lib/scrum/labels";
 
 export const maxDuration = 120;
+
+const FIELD_LABEL: Record<string, string> = { title: "título", description: "descripción", status: "estado", priority: "prioridad", storyPoints: "puntos", labels: "etiquetas", dueDate: "fecha límite", assigneeUserId: "responsable", sprintId: "sprint" };
+// ¿Este nombre de campo (en español) sigue en el parche, o sea, se aplicó de verdad?
+function realLabel(label: string, patch: Record<string, unknown>): boolean {
+  return Object.keys(patch).some((k) => FIELD_LABEL[k] === label);
+}
 
 // Aplica una lista de cambios a tickets EXISTENTES de un proyecto (estado, prioridad, responsable, puntos, sprint…),
 // identificados por su clave. Cada cambio es independiente: la respuesta dice cuáles se aplicaron y cuáles no.
@@ -31,6 +38,7 @@ export async function POST(req: Request) {
 
     const applied: Array<{ key: string; fields: string[] }> = [];
     const failed: Array<{ key: string; error: string }> = [];
+    let unchanged = 0;
 
     for (const c of parsed.data.changes) {
       const ref = parseIssueKey(c.key);
@@ -38,7 +46,7 @@ export async function POST(req: Request) {
         failed.push({ key: c.key, error: `La clave no es de este proyecto (${project.key}-N)` });
         continue;
       }
-      const task = await prisma.task.findUnique({ where: { projectId_number: { projectId: project.id, number: ref.number } }, select: { id: true } });
+      const task = await prisma.task.findUnique({ where: { projectId_number: { projectId: project.id, number: ref.number } }, select: { id: true, title: true, description: true, status: true, priority: true, storyPoints: true, labels: true, dueDate: true, assigneeUserId: true, sprintId: true } });
       if (!task) {
         failed.push({ key: c.key, error: "No existe ese ticket" });
         continue;
@@ -71,19 +79,32 @@ export async function POST(req: Request) {
           }
           fields.push("sprint");
         }
-        if (Object.keys(patch).length) await updateIssue(task.id, patch, user);
+        // Se descarta lo que ya está igual: así una exportación editada solo cambia lo que de verdad cambió.
+        const same: Array<[keyof IssuePatch, string]> = [];
+        const cur = { title: task.title, description: task.description, status: task.status, priority: task.priority, storyPoints: task.storyPoints, dueDate: task.dueDate ? task.dueDate.toISOString().slice(0, 10) : null, assigneeUserId: task.assigneeUserId, sprintId: task.sprintId } as Record<string, unknown>;
+        for (const k of Object.keys(patch) as Array<keyof IssuePatch>) {
+          const v = patch[k] as unknown;
+          const equal = k === "labels" ? JSON.stringify([...(v as string[])].sort()) === JSON.stringify([...parseLabels(task.labels)].sort()) : k === "dueDate" ? (v ? String(v).slice(0, 10) : null) === cur.dueDate : cur[k] === v;
+          if (equal) same.push([k, ""]);
+        }
+        for (const [k] of same) delete patch[k];
+        const realFields = Object.keys(patch).length;
+        if (realFields === 0 && !c.comment) {
+          unchanged++;
+          continue;
+        }
+        if (realFields) await updateIssue(task.id, patch, user);
         if (c.comment) {
           await prisma.comment.create({ data: { taskId: task.id, authorId: user.id, body: c.comment } });
           await notifyComment({ taskId: task.id, body: c.comment, author: { id: user.id, name: user.name } });
           fields.push("comentario");
         }
-        if (fields.length === 0) throw new IssueError("No trae ningún cambio");
-        applied.push({ key: c.key, fields });
+        applied.push({ key: c.key, fields: fields.filter((f) => f === "comentario" || realLabel(f, patch)) });
       } catch (e) {
         failed.push({ key: c.key, error: e instanceof IssueError ? e.message : "Error inesperado" });
       }
     }
-    return NextResponse.json({ applied, failed });
+    return NextResponse.json({ applied, failed, unchanged });
   } catch (e) {
     return errorResponse(e);
   }

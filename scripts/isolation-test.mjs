@@ -546,12 +546,12 @@ async function main() {
   const dr2x = await cPlain.req("GET", `/api/projects/${A.project.id}/resources?task=${A.task.id}`);
   check("se listan los enlaces de un ticket", dr2x.status === 200 && dr2x.json.length >= 1 && dr2x.json.every((r) => r.task?.id === A.task.id));
   const ch0x = await cPlain.req("POST", "/api/ai/changes", { project: { id: A.project.id }, changes: [{ key: "SAI-1", status: "IN_PROGRESS", priority: "URGENTE", storyPoints: 8, assignee: "Aldo", sprint: "Sprint A", comment: "Ajuste por la IA" }] });
-  check("cambios por JSON: se aplican estado, prioridad, puntos, responsable, sprint y comentario", ch0x.status === 200 && ch0x.json.applied.length === 1 && ch0x.json.failed.length === 0 && ch0x.json.applied[0].fields.length === 6, `dio ${ch0x.status} ${ch0x.text.slice(0, 220)}`);
+  check("cambios por JSON: se aplican estado, prioridad, puntos, responsable y comentario (el sprint ya era el mismo y no se toca)", ch0x.status === 200 && ch0x.json.applied.length === 1 && ch0x.json.failed.length === 0 && ch0x.json.applied[0].fields.length === 5 && !ch0x.json.applied[0].fields.includes("sprint"), `dio ${ch0x.status} ${ch0x.text.slice(0, 220)}`);
   const t1x = await prisma.task.findUnique({ where: { id: A.task.id } });
   check("quedaron guardados", t1x.status === "IN_PROGRESS" && t1x.priority === "URGENTE" && t1x.storyPoints === 8 && t1x.assigneeUserId === aMember.id && t1x.sprintId === A.sprint.id);
   check("y el comentario quedó a nombre de quien lo aplicó", (await prisma.comment.count({ where: { taskId: A.task.id, authorId: plain.id, body: "Ajuste por la IA" } })) === 1);
   const ch1x = await cPlain.req("POST", "/api/ai/changes", { project: { id: A.project.id }, changes: [{ key: "SAI-999", status: "DONE" }, { key: "XYZ-1", status: "DONE" }, { key: "SAI-1", assignee: "Nadie Existe" }, { key: "SAI-1", sprint: "No hay" }, { key: "SAI-1" }] });
-  check("claves inexistentes, de otro proyecto, personas o sprints desconocidos y cambios vacíos fallan uno por uno", ch1x.status === 200 && ch1x.json.failed.length === 5 && ch1x.json.applied.length === 0, `${ch1x.status} ${ch1x.text.slice(0, 300)}`);
+  check("claves inexistentes, de otro proyecto y personas o sprints desconocidos fallan uno por uno; un cambio vacío cuenta como sin cambios", ch1x.status === 200 && ch1x.json.failed.length === 4 && ch1x.json.applied.length === 0 && ch1x.json.unchanged === 1, `${ch1x.status} ${ch1x.text.slice(0, 300)}`);
   const ch2x = await cBOnly.req("POST", "/api/ai/changes", { project: { id: A.project.id }, changes: [{ key: "SAI-1", status: "DONE" }] });
   check("alguien de otro equipo no cambia tickets de A (404)", ch2x.status === 404, `dio ${ch2x.status}`);
   const ch3x = await cPlain.req("POST", "/api/ai/changes", { project: { id: B.project.id }, changes: [{ key: "SAI-1", status: "DONE" }] });
@@ -602,6 +602,29 @@ async function main() {
   check("y borra la tarjeta con todo su contenido", ldel.status === 200 && (await prisma.fileCardItem.count({ where: { cardId: lc.json.id } })) === 0, `dio ${ldel.status}`);
   const ltk = await tk.req("GET", "/api/library/cards");
   check("el token IA no accede a la biblioteca (403)", ltk.status === 403, `dio ${ltk.status}`);
+
+  console.log("17) Exportar, editar y volver a importar (actualiza y agrega)");
+  const aiImportMod = await import("../src/lib/scrum/aiImport.ts");
+  const splitExport = aiImportMod.splitExport ?? aiImportMod.default?.splitExport;
+  const exA = await cAOwner.req("GET", `/api/projects/${A.project.id}/export-json?scope=tasks&comments=0`);
+  const edited = JSON.parse(exA.text);
+  const flat = [];
+  const collect = (items) => items.forEach((i) => { flat.push(i); collect(i.stories ?? []); collect(i.tasks ?? []); });
+  collect(edited.epics); collect(edited.stories ?? []); collect(edited.tasks ?? []);
+  const target = flat.find((i) => i.type !== "EPIC" && i.status !== "DONE");
+  target.status = "DONE";
+  edited.tasks = [...(edited.tasks ?? []), { title: `Tarea nueva desde el JSON ${stamp}`, type: "BUG", priority: "ALTA" }];
+  const sp = splitExport(edited);
+  check("se separan los tickets existentes de los nuevos", sp.existing >= 1 && sp.fresh === 1 && sp.newImport?.tasks?.length === 1);
+  const sy1 = await cAOwner.req("POST", "/api/ai/changes", { project: { id: sp.projectId }, changes: sp.changes });
+  check("al aplicar, solo se actualiza el ticket que cambió; el resto queda sin cambios", sy1.status === 200 && sy1.json.applied.length === 1 && sy1.json.applied[0].key === target.key && sy1.json.applied[0].fields.includes("estado") && sy1.json.unchanged === sp.existing - 1 && sy1.json.failed.length === 0, `${sy1.status} ${sy1.text.slice(0, 260)}`);
+  const dbT = await prisma.task.findFirst({ where: { projectId: A.project.id, title: target.title } });
+  check("el estado quedó en Hecho en la base", dbT.status === "DONE");
+  const sy2 = await cAOwner.req("POST", "/api/ai/import", sp.newImport);
+  check("el ticket nuevo se crea", sy2.status === 200 && sy2.json.created.tasks.length === 1, `${sy2.status} ${sy2.text.slice(0, 160)}`);
+  const sy3 = await cAOwner.req("POST", "/api/ai/changes", { project: { id: sp.projectId }, changes: sp.changes });
+  const sy4 = await cAOwner.req("POST", "/api/ai/import", sp.newImport);
+  check("repetirlo todo no cambia ni duplica nada", sy3.json.applied.length === 0 && sy3.json.unchanged === sp.existing && sy4.json.created.tasks.length === 0 && sy4.json.skipped.length >= 1, `${sy3.text.slice(0, 120)} / ${sy4.text.slice(0, 160)}`);
 
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();

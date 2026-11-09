@@ -98,3 +98,76 @@ export const changesSchema = z.object({
 });
 
 export type ChangesInput = z.infer<typeof changesSchema>;
+
+// ---- Exportación editada: el mismo JSON que se exporta sirve para actualizar y para agregar ----
+// Los tickets que traen "key" (ya existen) se convierten en cambios (solo se aplica lo que difiere);
+// los que NO traen key se importan como nuevos (bajo su historia o épica por título).
+type Loose = Record<string, unknown>;
+const isObj = (v: unknown): v is Loose => !!v && typeof v === "object" && !Array.isArray(v);
+const arr = (v: unknown): Loose[] => (Array.isArray(v) ? v.filter(isObj) : []);
+const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
+const PRIORITIES = ["URGENTE", "ALTA", "MEDIA", "BAJA"];
+
+export type SplitExport = {
+  projectId: string;
+  changes: Array<Loose & { key: string }>;
+  newImport: Loose | null;
+  existing: number;
+  fresh: number;
+  anonymized: boolean;
+};
+
+export function isExportShape(json: unknown): boolean {
+  if (!isObj(json) || !isObj(json.project) || typeof json.project.id !== "string") return false;
+  if (isObj(json._meta) && json._meta.format === "scrum-proshop-export") return true;
+  const hasKey = (items: Loose[]): boolean => items.some((i) => typeof i.key === "string" || hasKey(arr(i.stories)) || hasKey(arr(i.tasks)));
+  return hasKey(arr(json.epics)) || hasKey(arr(json.stories)) || hasKey(arr(json.tasks));
+}
+
+export function splitExport(json: unknown): SplitExport | null {
+  if (!isExportShape(json)) return null;
+  const root = json as Loose;
+  const project = root.project as Loose;
+  const anonymized = isObj(root._meta) && root._meta.anonimizado === true;
+  const changes: SplitExport["changes"] = [];
+  let fresh = 0;
+
+  const changeOf = (it: Loose): SplitExport["changes"][number] => {
+    const c: Loose & { key: string } = { key: String(it.key) };
+    if (typeof it.title === "string") c.title = it.title;
+    if (typeof it.description === "string") c.description = it.description;
+    if (typeof it.status === "string" && STATUSES.includes(it.status)) c.status = it.status;
+    if (typeof it.priority === "string" && PRIORITIES.includes(it.priority)) c.priority = it.priority;
+    if (typeof it.storyPoints === "number" || it.storyPoints === null) c.storyPoints = it.storyPoints;
+    if (typeof it.assignee === "string" && !anonymized) c.assignee = it.assignee;
+    if (typeof it.sprint === "string") c.sprint = it.sprint;
+    if (Array.isArray(it.labels)) c.labels = it.labels.filter((l): l is string => typeof l === "string");
+    if (typeof it.dueDate === "string") c.dueDate = it.dueDate;
+    return c;
+  };
+  const newFields = (it: Loose): Loose => {
+    const o: Loose = { title: it.title };
+    for (const k of ["description", "priority", "storyPoints", "labels", "dueDate", "checklist", "type"]) if (it[k] !== undefined) o[k] = it[k];
+    if (typeof it.assignee === "string" && !anonymized) o.assignee = it.assignee;
+    if (o.type !== "TASK" && o.type !== "BUG") delete o.type;
+    return o;
+  };
+
+  // Devuelve la versión "solo lo nuevo" de un ticket (o null si no hay nada nuevo en él ni debajo).
+  const walk = (it: Loose, level: "epic" | "story" | "task"): Loose | null => {
+    const has = typeof it.key === "string";
+    if (has) changes.push(changeOf(it));
+    const stories = level === "epic" ? arr(it.stories).map((s) => walk(s, "story")).filter((x): x is Loose => !!x) : [];
+    const tasks = level !== "task" ? arr(it.tasks).map((t) => walk(t, "task")).filter((x): x is Loose => !!x) : [];
+    if (!has) fresh++;
+    if (!has) return { ...newFields(it), ...(stories.length ? { stories } : {}), ...(tasks.length ? { tasks } : {}) };
+    if (stories.length || tasks.length) return { title: it.title, ...(stories.length ? { stories } : {}), ...(tasks.length ? { tasks } : {}) };
+    return null;
+  };
+
+  const epics = arr(root.epics).map((e) => walk(e, "epic")).filter((x): x is Loose => !!x);
+  const stories = arr(root.stories).map((s) => walk(s, "story")).filter((x): x is Loose => !!x);
+  const tasks = arr(root.tasks).map((t) => walk(t, "task")).filter((x): x is Loose => !!x);
+  const newImport = epics.length || stories.length || tasks.length ? { project: { id: project.id }, ...(epics.length ? { epics } : {}), ...(stories.length ? { stories } : {}), ...(tasks.length ? { tasks } : {}) } : null;
+  return { projectId: project.id as string, changes, newImport, existing: changes.length, fresh, anonymized };
+}

@@ -89,6 +89,7 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
         <label className="mb-1 block text-xs font-semibold text-ink-soft">Prompt que acompaña al JSON</label>
         <select className="field" value={kind} onChange={(e) => setKind(e.target.value as ExportPromptKind)}>
           <option value="analyze">Analizar el proyecto y recomendar prioridades</option>
+          <option value="update">Actualizar el estado de los tickets según lo que te cuente (devuelve este mismo JSON modificado)</option>
           <option value="newTickets">Proponer tickets nuevos (devuelve JSON para Importar con IA)</option>
           <option value="changes">Proponer cambios a tickets existentes (estado, prioridad, responsable…)</option>
         </select>
@@ -99,7 +100,7 @@ export default function ExportPanel({ projectId }: { projectId: string }) {
       </div>
       {info && <p className="text-xs text-ink-faint">{info}</p>}
       <p className="text-xs text-ink-faint">
-        No incluye claves, webhooks, correos ni el contenido de los archivos. Al pegarlo en una IA externa, esa información sale de la app y la recibe ese proveedor.
+        Al volver a pegar el JSON en Proyectos &gt; Importar con IA, los tickets con su «key» se actualizan (estado, prioridad, responsable, puntos, sprint…, solo lo que cambió) y los que no la traen se crean como nuevos. No incluye claves, webhooks, correos ni el contenido de los archivos. Al pegarlo en una IA externa, esa información sale de la app y la recibe ese proveedor.
       </p>
     </section>
   );

@@ -78,7 +78,7 @@ Reglas:
 - Los campos opcionales se pueden omitir.`;
 
 // Prompts para pasar la exportación del proyecto a una IA (junto con el JSON).
-export type ExportPromptKind = "analyze" | "newTickets" | "changes";
+export type ExportPromptKind = "analyze" | "newTickets" | "changes" | "update";
 
 export function buildExportPrompt(kind: ExportPromptKind, projectId: string): string {
   const intro = `Te paso el JSON de un proyecto de SCRUM ProShop (épicas, historias, tareas y bugs con su estado, prioridad, responsables y comentarios; el modo completo suma sprints, notas, retros y archivos). Léelo entero antes de responder y usa las claves (por ejemplo SAI-12) para referirte a los tickets. No inventes datos que no estén en el JSON.`;
@@ -92,6 +92,19 @@ Quiero que me hagas, en español y de forma concisa:
 4. Sugerencias de mejora para el siguiente sprint.
 
 Al final, espera mis preguntas.`;
+  }
+  if (kind === "update") {
+    return `${intro}
+
+Te voy a contar qué avanzó (qué se terminó, qué está en proceso, qué cambió de responsable o prioridad) y quiero que actualices el JSON. Cuando te lo pida, respóndeme SOLO con un bloque de código JSON que sea el MISMO JSON que te pasé, pero:
+- Conservando el "project.id" y la "key" de cada ticket que ya existe (así la app sabe cuál actualizar).
+- Cambiando solo los campos que cambiaron (por ejemplo "status": "DONE" | "IN_PROGRESS" | "IN_REVIEW" | "TODO", "priority", "storyPoints", "assignee", "sprint").
+- Incluyendo SOLO los tickets modificados y los nuevos (los demás se pueden omitir).
+- Los tickets nuevos van SIN "key", con "title" y, si quieres, descripción, prioridad y puntos, dentro de su épica o historia.
+JSON válido (comillas dobles, sin comas finales ni comentarios). No cambies las claves existentes ni inventes tickets que no te pedí.
+
+Mis cambios son:
+[escribe aquí qué cambió]`;
   }
   if (kind === "changes") {
     return `${intro}
