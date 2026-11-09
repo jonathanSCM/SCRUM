@@ -70,6 +70,8 @@ export default function FilesView({ projectId, initial, sprints, tickets, curren
         </div>
       </div>
 
+      <p className="text-xs text-ink-faint">Todo lo que subas aquí también aparece en la <a href="/library" className="font-semibold text-rust hover:underline">Biblioteca</a> del equipo, en la tarjeta «Archivos de este proyecto».</p>
+
       {(adding || editing) && (
         <ResourceForm
           key={editing?.id ?? adding}

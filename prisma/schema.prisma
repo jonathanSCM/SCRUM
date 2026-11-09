@@ -704,6 +704,7 @@ model FileCardItem {
   mimeType  String?
   size      Int?
   data      Bytes?
+  note      String   @default("") // mini nota del archivo (ej. "versión firmada")
   createdAt DateTime @default(now())
 
   cardId String

@@ -18,12 +18,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const auth = await apiUser({ fileCardItem: id });
   if ("error" in auth) return auth.error;
-  const parsed = parseBody(z.object({ title: z.string().trim().min(1).max(200) }), await readJson(req));
+  const parsed = parseBody(z.object({ title: z.string().trim().min(1).max(200).optional(), note: z.string().trim().max(1000).optional() }), await readJson(req));
   if ("error" in parsed) return parsed.error;
   try {
     const g = await gate(id, auth.user);
     if ("error" in g) return g.error;
-    await prisma.fileCardItem.update({ where: { id }, data: { title: parsed.data.title } });
+    await prisma.fileCardItem.update({ where: { id }, data: { ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}), ...(parsed.data.note !== undefined ? { note: parsed.data.note } : {}) } });
     return NextResponse.json(await cardById(g.item.cardId));
   } catch (e) {
     return errorResponse(e);
