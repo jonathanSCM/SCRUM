@@ -626,6 +626,48 @@ async function main() {
   const sy4 = await cAOwner.req("POST", "/api/ai/import", sp.newImport);
   check("repetirlo todo no cambia ni duplica nada", sy3.json.applied.length === 0 && sy3.json.unchanged === sp.existing && sy4.json.created.tasks.length === 0 && sy4.json.skipped.length >= 1, `${sy3.text.slice(0, 120)} / ${sy4.text.slice(0, 160)}`);
 
+  console.log("18) Tokens IA con nombre y volver a copiar");
+  const tl0k = await cMulti.req("GET", "/api/tokens");
+  const legacyk = tl0k.json.tokens.find((t) => !t.canReveal);
+  check("el token antiguo (sin copia cifrada) aparece y no se puede recuperar", tl0k.status === 200 && !!legacyk && legacyk.name === "Token");
+  const tr0k = await cMulti.req("GET", `/api/tokens/${legacyk.id}/reveal`);
+  check("pedir su valor da 409 con instrucciones para regenerar", tr0k.status === 409, `dio ${tr0k.status}`);
+  const tc1k = await cMulti.req("POST", "/api/tokens", { name: "Claude de Marta", allowDelete: false });
+  const tc2k = await cMulti.req("POST", "/api/tokens", { name: "ChatGPT" });
+  check("se crean dos tokens con nombre", tc1k.status === 201 && tc2k.status === 201 && tc1k.json.token !== tc2k.json.token, `dio ${tc1k.status}/${tc2k.status}`);
+  const tl1k = await cMulti.req("GET", "/api/tokens");
+  check("la lista trae ambos con su nombre y se pueden volver a copiar", tl1k.json.tokens.some((t) => t.name === "Claude de Marta" && t.canReveal) && tl1k.json.tokens.some((t) => t.name === "ChatGPT" && t.canReveal));
+  check("la lista nunca trae el valor del token", !tl1k.text.includes(tc1k.json.token) && !tl1k.text.includes("tokenEnc") && !tl1k.text.includes("tokenHash"));
+  const trvk = await cMulti.req("GET", `/api/tokens/${tc1k.json.id}/reveal`);
+  check("se vuelve a obtener el mismo token completo", trvk.status === 200 && trvk.json.token === tc1k.json.token);
+  const tkNewk = new Client("token nuevo de Marta");
+  tkNewk.bearer = trvk.json.token;
+  const tusek = await tkNewk.req("GET", "/api/ai/projects");
+  check("y el token recuperado funciona contra la API", tusek.status === 200, `dio ${tusek.status}`);
+  const tselfk = await tkNewk.req("GET", "/api/tokens");
+  check("un token IA no puede gestionar tokens (403)", tselfk.status === 403, `dio ${tselfk.status}`);
+  const trvXk = await cAOwner.req("GET", `/api/tokens/${tc1k.json.id}/reveal`);
+  check("otra persona no puede ver el token de Marta (404)", trvXk.status === 404, `dio ${trvXk.status}`);
+  const tpXk = await cAOwner.req("PATCH", `/api/tokens/${tc1k.json.id}`, { name: "hack" });
+  const tdXk = await cAOwner.req("DELETE", `/api/tokens/${tc1k.json.id}`);
+  check("ni renombrarlo ni borrarlo (404)", tpXk.status === 404 && tdXk.status === 404, `${tpXk.status}/${tdXk.status}`);
+  const trnk = await cMulti.req("PATCH", `/api/tokens/${tc2k.json.id}`, { name: "ChatGPT gratis", allowDelete: true });
+  const tl2k = await cMulti.req("GET", "/api/tokens");
+  check("se renombra y se activa el borrado en ese token solamente", trnk.status === 200 && tl2k.json.tokens.find((t) => t.id === tc2k.json.id).name === "ChatGPT gratis" && tl2k.json.tokens.find((t) => t.id === tc2k.json.id).allowDelete === true && tl2k.json.tokens.find((t) => t.id === tc1k.json.id).allowDelete === false);
+  const tgenk = await cMulti.req("POST", `/api/tokens/${tc1k.json.id}/regenerate`);
+  const tOldk = await tkNewk.req("GET", "/api/ai/projects");
+  check("regenerar da un valor nuevo y el anterior deja de funcionar (401)", tgenk.status === 200 && tgenk.json.token !== tc1k.json.token && tOldk.status === 401, `${tgenk.status} / ${tOldk.status}`);
+  const tgen2k = await cMulti.req("POST", `/api/tokens/${legacyk.id}/regenerate`);
+  const tr1k = await cMulti.req("GET", `/api/tokens/${legacyk.id}/reveal`);
+  check("regenerar un token antiguo lo vuelve recuperable", tgen2k.status === 200 && tr1k.status === 200 && tr1k.json.token === tgen2k.json.token);
+  const trevk = await cMulti.req("DELETE", `/api/tokens/${tc2k.json.id}`);
+  const tl3k = await cMulti.req("GET", "/api/tokens");
+  check("revocar borra solo ese token", trevk.status === 200 && !tl3k.json.tokens.some((t) => t.id === tc2k.json.id) && tl3k.json.tokens.some((t) => t.id === tc1k.json.id));
+  let createdk = tl3k.json.tokens.length;
+  let lastStatusk = 201;
+  while (createdk < 11 && lastStatusk === 201) { lastStatusk = (await cMulti.req("POST", "/api/tokens", { name: `t${createdk}` })).status; createdk++; }
+  check("hay un tope de 10 tokens por persona", lastStatusk === 400, `dio ${lastStatusk}`);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

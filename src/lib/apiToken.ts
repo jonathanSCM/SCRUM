@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 
 export const TOKEN_PREFIX = "scrum_";
+export const MAX_TOKENS_PER_USER = 10;
 
 export function generateToken(): string {
   return `${TOKEN_PREFIX}${randomBytes(24).toString("hex")}`;
