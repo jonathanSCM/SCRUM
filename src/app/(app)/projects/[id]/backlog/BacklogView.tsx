@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import {
   DndContext,
   DragOverlay,
@@ -73,9 +74,10 @@ export default function BacklogView({
   const confirm = useConfirm();
   const openIssue = useOpenIssue();
 
-  const [byId, setById] = useState<Record<string, IssueCardData>>({});
   const [lists, setLists] = useState<Record<string, string[]>>({});
+  const [byId, setById] = useState<Record<string, IssueCardData>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
+  useLiveRefresh(`/api/projects/${projectId}/live`, { paused: !!activeId });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());

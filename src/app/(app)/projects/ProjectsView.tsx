@@ -16,6 +16,7 @@ import { DragIcon, PlusIcon } from "@/components/ui/Icons";
 import { useDragScroll } from "@/lib/useDragScroll";
 import { ProgressBar, staggerChild, staggerParent } from "@/components/ui/Motion";
 import { useToast } from "@/components/ui/Toaster";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
 export type ProjectCardData = {
   id: string;
@@ -40,6 +41,8 @@ export default function ProjectsView({ projects, statuses, people }: { projects:
   const [query, setQuery] = useState("");
 
   useEffect(() => setItems(projects), [projects]);
+  // En vivo: si alguien más mueve o edita un proyecto, se ve acá sin recargar.
+  useLiveRefresh("/api/live/projects", { paused: !!dragId });
   useEffect(() => {
     try {
       const saved = localStorage.getItem("projects-view");
