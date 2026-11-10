@@ -17,6 +17,7 @@ export type ChatMessage = {
   id: string;
   body: string;
   level?: "AYUDA" | "URGENTE" | null;
+  announce?: boolean;
   channel?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +31,21 @@ type IndexItem = { id: string; label: string; sub: string };
 type ChatIndex = { projects: IndexItem[]; issues: IndexItem[]; sprints: IndexItem[]; users: IndexItem[] };
 type Suggestion = IndexItem & { kind: RefKind; short: string };
 type Pending = { id: string; filename: string; mimeType: string; size: number };
+
+// Cabecera de los avisos enviados por comando (/noti general, /reunion, /urgente, /ayuda).
+function AnnounceHeader({ m }: { m: ChatMessage }) {
+  const reunion = m.body.startsWith("Reunión · ");
+  const label = m.level === "URGENTE" ? "Urgente" : m.level === "AYUDA" ? "Pide ayuda" : reunion ? "Convocatoria" : "Aviso al equipo";
+  const icon = m.level === "URGENTE" ? "🚨" : m.level === "AYUDA" ? "🆘" : reunion ? "📅" : "📣";
+  const tone = m.level === "URGENTE" ? "text-danger" : m.level === "AYUDA" ? "text-amber-600" : "text-rust";
+  return (
+    <p className={cn("mb-1 flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider", tone)}>
+      <span aria-hidden className="text-sm leading-none">{icon}</span>
+      {label}
+      <span className="rounded bg-ink/10 px-1 py-px font-mono text-[9px] normal-case tracking-normal text-ink-soft">{reunion ? "/reunion" : m.level === "URGENTE" ? "/urgente" : m.level === "AYUDA" ? "/ayuda" : "/noti"}</span>
+    </p>
+  );
+}
 
 const POLL_MS = 2000;
 const GROUP_MS = 5 * 60 * 1000;
@@ -637,6 +653,7 @@ function MessageRow({
         <div
           className={cn(
             "min-w-0 max-w-full rounded-2xl px-3 py-1.5 text-sm text-ink shadow-hard-sm",
+            m.announce && !m.level && "rounded-bl-md border border-l-[5px] border-line border-l-rust bg-card sm:min-w-[18rem]",
             m.level === "URGENTE" ? "rounded-bl-md border-2 border-danger bg-danger-bg" : m.level === "AYUDA" ? "rounded-bl-md border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30" : mine ? "rounded-br-md bg-bubble-mine" : "rounded-bl-md border border-line bg-surface"
           )}
         >
@@ -659,7 +676,8 @@ function MessageRow({
           )}
 
           {showChannel && m.channel && <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-faint">{m.channel}</p>}
-          {m.level && <p className={cn("mb-0.5 text-[10px] font-extrabold uppercase tracking-wide", m.level === "URGENTE" ? "text-danger" : "text-amber-600")}>{m.level === "URGENTE" ? "Urgente" : "Pide ayuda"}</p>}
+          {m.announce && <AnnounceHeader m={m} />}
+          {!m.announce && m.level && <p className={cn("mb-0.5 text-[10px] font-extrabold uppercase tracking-wide", m.level === "URGENTE" ? "text-danger" : "text-amber-600")}>{m.level === "URGENTE" ? "Urgente" : "Pide ayuda"}</p>}
           {m.body && (
             <p className="whitespace-pre-wrap break-words">
               {splitMessage(m.body).map((seg, i) => {

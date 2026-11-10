@@ -19,6 +19,7 @@ export type ChatMessageDTO = {
   id: string;
   body: string;
   level: "AYUDA" | "URGENTE" | null;
+  announce: boolean;
   channel: string | null; // nombre del canal (solo se usa en la pestaña de avisos del equipo)
   createdAt: string;
   author: { id: string; name: string; color: string | null } | null;
@@ -81,6 +82,7 @@ export async function toDTOs(rows: Row[], workspaceId: string): Promise<ChatMess
       body: r.body,
       channel: r.channel?.name ?? null,
       level: r.level === "URGENTE" || r.level === "AYUDA" ? r.level : null,
+      announce: !!r.announce,
       updatedAt: r.updatedAt.toISOString(),
       replyTo: r.replyTo && !r.replyTo.deletedAt ? { id: r.replyTo.id, author: r.replyTo.author?.name ?? null, snippet: snippetOf(r.replyTo.body, r.replyTo._count.files > 0) } : null,
       reactions: [...grouped.values()],
