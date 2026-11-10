@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -61,6 +62,7 @@ export default function BoardView({
   const [byId, setById] = useState<Record<string, IssueCardData>>({});
   const [lists, setLists] = useState<Record<string, string[]>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
+  useLiveRefresh(`/api/projects/${projectId}/live`, { paused: !!activeId });
   const [mine, setMine] = useState(false);
   const [assignee, setAssignee] = useState("");
   const [epic, setEpic] = useState("");
