@@ -888,6 +888,37 @@ async function main() {
   const nlist = await cAOwner.req("GET", "/api/library/cards");
   check("la lista trae las notas, quién lo subió y cuándo", nlist.json.find((c) => c.id === nc.json.id).items.every((i) => typeof i.note === "string" && i.uploadedBy === "Pablo Plano" && !!i.createdAt));
 
+  console.log("22) SCP-65: avisos de movimientos de tickets y de sus historias/épicas");
+  const mvU = await mkUser("Dueña Historia", `historia-${stamp}@a.test`);
+  await member(mvU.id, A.ws.id, "MEMBER");
+  const cMv = await new Client("Dueña de la historia").login(mvU.email);
+  const epicM = await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, { title: `Épica mov ${stamp}`, issueType: "EPIC" });
+  const storyM = await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, { title: `Historia mov ${stamp}`, issueType: "STORY", epicId: epicM.json.id, assigneeUserId: mvU.id });
+  const taskM = await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, { title: `Tarea mov ${stamp}`, issueType: "TASK", parentId: storyM.json.id, epicId: epicM.json.id, assigneeUserId: aMember.id });
+  check("se arma la épica, la historia y la tarea", epicM.status === 201 && storyM.status === 201 && taskM.status === 201, `${epicM.status}/${storyM.status}/${taskM.status}`);
+  const rowsOf = (userId, kind) => prisma.notification.findMany({ where: { userId, kind, groupKey: { contains: `status-` }, body: { contains: "Tarea mov" } } });
+  const mv1M = await cAOwner.req("PATCH", `/api/issues/${taskM.json.id}`, { status: "IN_PROGRESS" });
+  const stAldoM = await rowsOf(aMember.id, "STATUS");
+  const stMvM = await rowsOf(mvU.id, "STATUS");
+  check("mover a En progreso avisa al responsable y a quien es responsable de su historia (en el resumen, sin sonar)", mv1M.status === 200 && stAldoM.length === 1 && stMvM.length === 1 && stAldoM[0].deliveredAt === null && stMvM[0].deliveredAt === null, JSON.stringify([stAldoM.length, stMvM.length]));
+  check("quien hace el movimiento no se avisa a sí mismo", (await prisma.notification.count({ where: { userId: aOwner.id, kind: "STATUS", body: { contains: "Tarea mov" } } })) === 0);
+  await cAOwner.req("PATCH", `/api/issues/${taskM.json.id}`, { status: "IN_REVIEW" });
+  const stAldo2M = await rowsOf(aMember.id, "STATUS");
+  check("otro movimiento del mismo ticket se junta en la misma línea (contador 2)", stAldo2M.length === 1 && stAldo2M[0].count === 2, JSON.stringify(stAldo2M.map((r) => r.count)));
+  await cAMember.req("PATCH", `/api/issues/${taskM.json.id}`, { status: "DONE" });
+  const cmpM = await prisma.notification.findMany({ where: { kind: "COMPLETED", body: { contains: "Tarea mov" } } });
+  const cmpUsers = cmpM.map((r) => r.userId);
+  check("al completarlo avisa a quien lo reportó y a la dueña de la historia, y no a quien lo completó", cmpUsers.includes(aOwner.id) && cmpUsers.includes(mvU.id) && !cmpUsers.includes(aMember.id), JSON.stringify(cmpUsers));
+  const unreadMvM = await cMv.req("GET", "/api/notifications?limit=1");
+  check("el número de avisos sin leer (el de la insignia del icono) cuenta lo pendiente", unreadMvM.status === 200 && unreadMvM.json.unread >= 2, `${unreadMvM.json?.unread}`);
+  await cMv.req("POST", "/api/notifications/read", { all: true });
+  check("y vuelve a 0 al marcar todo como leído", (await cMv.req("GET", "/api/notifications?limit=1")).json.unread === 0);
+  await cMv.req("PUT", "/api/notifications/prefs", { muted: ["tickets"] });
+  const t2mv = await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, { title: `Tarea mov2 ${stamp}`, issueType: "TASK", parentId: storyM.json.id, epicId: epicM.json.id });
+  await cAOwner.req("PATCH", `/api/issues/${t2mv.json.id}`, { status: "IN_PROGRESS" });
+  const mutedM = await prisma.notification.findFirst({ where: { userId: mvU.id, kind: "STATUS", body: { contains: "Tarea mov2" } } });
+  check("quien silenció los avisos de tickets los ve solo en la bandeja (sin sonar ni esperar resumen)", !!mutedM && mutedM.deliveredAt !== null && mutedM.pushed === false);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

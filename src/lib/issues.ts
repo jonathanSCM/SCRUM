@@ -7,6 +7,7 @@ import { getBaseUrl } from "@/lib/baseUrl";
 import { formatIssueKey, parseIssueKey } from "@/lib/scrum/issueKey";
 import { parseStringList } from "@/lib/scrum/ready";
 import { canHaveParent, parseChecklist, type ChecklistItem } from "@/lib/scrum/checklist";
+import { movementRecipients } from "@/lib/scrum/movement";
 import { parseLabels } from "@/lib/scrum/labels";
 import { validateLeaveActiveSprint } from "@/lib/scrum/sprintLifecycle";
 import { needsRebalance, rankBetween, rebalance, RANK_STEP } from "@/lib/scrum/rank";
@@ -349,6 +350,9 @@ export async function updateIssue(
   }
 
   if (!options.silent) {
+    // A quién le importa este movimiento: responsable, reportó, involucrados y los responsables de su historia y épica.
+    const statusMoved = updated.issueType !== "EPIC" && updated.status !== current.status;
+    const audience = becameDone || statusMoved ? await movementAudience(updated, project.leadUserId, actor.id) : [];
     if (becameDone) {
       await notifyProject(project.id, {
         title: `${key} completado en ${project.name}`,
@@ -357,7 +361,19 @@ export async function updateIssue(
         excludeUserId: actor.id,
         kind: "COMPLETED",
         groupKey: `completed-${key}`,
-        mentionUserIds: [updated.assigneeUserId, project.leadUserId],
+        mentionUserIds: audience,
+        url: issueUrl(project.id, key),
+      });
+    } else if (statusMoved) {
+      // Movimientos intermedios (Por hacer, En progreso, En revisión): van en el resumen, una línea por ticket.
+      await notifyProject(project.id, {
+        title: `${key} pasó a ${STATUS_META[updated.status as IssueStatus]?.label ?? updated.status} en ${project.name}`,
+        description: `**${actor.name}** movió «${updated.title}» de ${STATUS_META[current.status as IssueStatus]?.label ?? current.status} a ${STATUS_META[updated.status as IssueStatus]?.label ?? updated.status}`,
+        color: DISCORD_COLOR.status,
+        excludeUserId: actor.id,
+        kind: "STATUS",
+        groupKey: `status-${key}`,
+        mentionUserIds: audience,
         url: issueUrl(project.id, key),
       });
     }
@@ -460,4 +476,15 @@ export async function findIssueByKey(key: string, workspaceId: string) {
   const project = await prisma.project.findUnique({ where: { workspaceId_key: { workspaceId, key: parsed.projectKey } }, select: { id: true } });
   if (!project) return null;
   return prisma.task.findUnique({ where: { projectId_number: { projectId: project.id, number: parsed.number } }, include: issueInclude });
+}
+
+
+// Personas a las que les importa un movimiento del ticket (ver movementRecipients).
+async function movementAudience(t: { id: string; assigneeUserId: string | null; reporterId: string | null; parentId: string | null; epicId: string | null }, leadId: string | null, actorId: string): Promise<string[]> {
+  const parents = [t.parentId, t.epicId].filter((x): x is string => !!x);
+  const [owners, involved] = await Promise.all([
+    parents.length ? prisma.task.findMany({ where: { id: { in: parents } }, select: { assigneeUserId: true, reporterId: true } }) : Promise.resolve([]),
+    prisma.taskInvolved.findMany({ where: { taskId: t.id }, select: { userId: true } }),
+  ]);
+  return movementRecipients({ assignee: t.assigneeUserId, reporter: t.reporterId, involved: involved.map((i) => i.userId), owners: owners.flatMap((o) => [o.assigneeUserId, o.reporterId]), lead: leadId, actor: actorId });
 }
