@@ -11,9 +11,9 @@ export default async function ProjectChatPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const project = await getProjectOrNotFound(id);
   const workspaceId = project.access.workspaceId;
-  const channel = (await ensureChannels(workspaceId)).find((c) => c.projectId === id);
+  const channel = (await ensureChannels(workspaceId, project.access.session.user.id)).find((c) => c.projectId === id);
   if (!channel) return <p className="text-sm text-ink-faint">No se pudo abrir el chat de este proyecto.</p>;
-  const initial = await loadMessages({ workspaceId, channel: await channelFilter(workspaceId, channel.id) });
+  const initial = await loadMessages({ workspaceId, viewerId: project.access.session.user.id, channel: await channelFilter(workspaceId, channel.id, project.access.session.user.id) });
   return (
     <div className="space-y-3">
       <p className="text-sm text-ink-soft">

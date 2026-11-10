@@ -59,6 +59,7 @@ model User {
   notifications       Notification[]    @relation("NotificationUser")
   notifPrefs          NotifPrefs?       @relation("NotifPrefsUser")
   chatReads           ChatRead[]        @relation("ChatReadUser")
+  chatChannelMembers  ChatChannelMember[] @relation("ChatChannelMemberUser")
   fileCardItemsUploaded FileCardItem[]  @relation("FileCardItemUploader")
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
@@ -448,12 +449,26 @@ model ChatChannel {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   messages    ChatMessage[]
   reads       ChatRead[]
+  // Canales privados (PRIVATE) y mensajes directos (DIRECT): solo ven y escriben sus miembros.
+  members     ChatChannelMember[]
 
   // Canal de un proyecto (kind PROJECT): uno por proyecto, se crea solo y desaparece con el proyecto.
   projectId String?  @unique
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, slug])
+}
+
+model ChatChannelMember {
+  id        String      @id @default(cuid())
+  createdAt DateTime    @default(now())
+  channelId String
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation("ChatChannelMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
 }
 
 // Hasta cuándo leyó cada persona cada canal (para los mensajes sin leer de la lista de canales).

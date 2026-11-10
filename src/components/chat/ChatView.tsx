@@ -7,6 +7,7 @@ import { cn, formatBytes, formatDateTime } from "@/lib/ui";
 import { CHAT_EMOJIS, QUICK_REACTIONS, applyInsertedRefs, makeToken, reactorsText, snippetOf, splitMessage, type RefKind } from "@/lib/scrum/chat";
 import Avatar from "@/components/ui/Avatar";
 import { PaperclipIcon } from "@/components/ui/Icons";
+import { AlertIcon, CalendarIcon, LifebuoyIcon, MegaphoneIcon } from "@/components/chat/ChatIcons";
 import { useToast } from "@/components/ui/Toaster";
 import { isCommand, COMMAND_HELP, COMMAND_LIST, personaQuery } from "@/lib/scrum/chatCommands";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -17,6 +18,7 @@ export type ChatMessage = {
   id: string;
   body: string;
   level?: "AYUDA" | "URGENTE" | null;
+  announce?: boolean;
   channel?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +32,28 @@ type IndexItem = { id: string; label: string; sub: string };
 type ChatIndex = { projects: IndexItem[]; issues: IndexItem[]; sprints: IndexItem[]; users: IndexItem[] };
 type Suggestion = IndexItem & { kind: RefKind; short: string };
 type Pending = { id: string; filename: string; mimeType: string; size: number };
+
+// Cabecera (título) de los avisos enviados por comando: franja de color con ícono y quién lo envió.
+const ANNOUNCE_TONE = {
+  general: { label: "Aviso al equipo", band: "bg-rust/10 text-rust", border: "border-line" },
+  reunion: { label: "Convocatoria", band: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", border: "border-emerald-500/40" },
+  urgente: { label: "Urgente", band: "bg-[color-mix(in_srgb,var(--danger)_14%,transparent)] text-danger", border: "border-[color-mix(in_srgb,var(--danger)_60%,transparent)]" },
+  ayuda: { label: "Pide ayuda", band: "bg-amber-500/15 text-amber-700 dark:text-amber-400", border: "border-amber-500/60" },
+} as const;
+function announceTone(m: ChatMessage) {
+  return ANNOUNCE_TONE[m.level === "URGENTE" ? "urgente" : m.level === "AYUDA" ? "ayuda" : m.body.startsWith("Reunión · ") ? "reunion" : "general"];
+}
+function AnnounceHeader({ m }: { m: ChatMessage }) {
+  const tone = announceTone(m);
+  const Icon = m.level === "URGENTE" ? AlertIcon : m.level === "AYUDA" ? LifebuoyIcon : m.body.startsWith("Reunión · ") ? CalendarIcon : MegaphoneIcon;
+  return (
+    <div className={cn("-mx-3 -mt-1.5 mb-1.5 flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider", tone.band)}>
+      <Icon size={14} />
+      <span>{tone.label}</span>
+      {m.author && <span className="ml-auto truncate pl-3 text-[11px] font-semibold normal-case tracking-normal opacity-80">{m.author.name.split(" ")[0]}</span>}
+    </div>
+  );
+}
 
 const POLL_MS = 2000;
 const GROUP_MS = 5 * 60 * 1000;
@@ -637,10 +661,11 @@ function MessageRow({
         <div
           className={cn(
             "min-w-0 max-w-full rounded-2xl px-3 py-1.5 text-sm text-ink shadow-hard-sm",
-            m.level === "URGENTE" ? "rounded-bl-md border-2 border-danger bg-danger-bg" : m.level === "AYUDA" ? "rounded-bl-md border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30" : mine ? "rounded-br-md bg-bubble-mine" : "rounded-bl-md border border-line bg-surface"
+            m.announce ? cn("overflow-hidden rounded-bl-md border bg-card sm:min-w-[18rem]", announceTone(m).border) : m.level === "URGENTE" ? "rounded-bl-md border-2 border-danger bg-danger-bg" : m.level === "AYUDA" ? "rounded-bl-md border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30" : mine ? "rounded-br-md bg-bubble-mine" : "rounded-bl-md border border-line bg-surface"
           )}
         >
-          {!mine && !grouped && (
+          {m.announce && <AnnounceHeader m={m} />}
+          {!mine && !grouped && !m.announce && (
             <p className="mb-0.5 text-xs font-bold" style={{ color: accent }}>
               {m.author ? <Link href={`/people/${m.author.id}`} className="hover:underline">{m.author.name}</Link> : "Usuario eliminado"}
             </p>
@@ -659,7 +684,7 @@ function MessageRow({
           )}
 
           {showChannel && m.channel && <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-faint">{m.channel}</p>}
-          {m.level && <p className={cn("mb-0.5 text-[10px] font-extrabold uppercase tracking-wide", m.level === "URGENTE" ? "text-danger" : "text-amber-600")}>{m.level === "URGENTE" ? "Urgente" : "Pide ayuda"}</p>}
+          {!m.announce && m.level && <p className={cn("mb-0.5 text-[10px] font-extrabold uppercase tracking-wide", m.level === "URGENTE" ? "text-danger" : "text-amber-600")}>{m.level === "URGENTE" ? "Urgente" : "Pide ayuda"}</p>}
           {m.body && (
             <p className="whitespace-pre-wrap break-words">
               {splitMessage(m.body).map((seg, i) => {

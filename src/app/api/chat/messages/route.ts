@@ -5,6 +5,7 @@ import { errorResponse } from "@/lib/api";
 import { chatMessageSchema, parseBody, readJson } from "@/lib/validation";
 import { loadMessages, messageInclude, resolveRefs, toDTOs } from "@/lib/chatData";
 import { findKeyMentions, makeToken, parseRefs, plainText } from "@/lib/scrum/chat";
+import { isRestricted, messageVisibleTo } from "@/lib/chatChannels";
 import { notifyUsers } from "@/lib/notifications";
 import { channelFilter, ensureChannels } from "@/lib/chatChannels";
 
@@ -24,9 +25,9 @@ export async function GET(req: Request) {
     if (projectParam && !(await prisma.project.findFirst({ where: { id: projectParam, workspaceId }, select: { id: true } }))) return NextResponse.json({ messages: [], deleted: [] });
     // ?channel=<id> un canal · ?announce=1 solo avisos por comando (pestaña "Del equipo" de un proyecto)
     const channelParam = url.searchParams.get("channel");
-    const channel = channelParam ? await channelFilter(workspaceId, channelParam) : null;
+    const channel = channelParam ? await channelFilter(workspaceId, channelParam, auth.user.id) : null;
     if (channelParam && !channel) return NextResponse.json({ messages: [], deleted: [] });
-    const messages = await loadMessages({ workspaceId, after: valid, projectId: projectParam, channel, announce: url.searchParams.get("announce") === "1" });
+    const messages = await loadMessages({ workspaceId, viewerId: auth.user.id, after: valid, projectId: projectParam, channel, announce: url.searchParams.get("announce") === "1" });
     // Mensajes borrados desde ese momento (con margen por si los relojes no coinciden al milisegundo).
     const deleted = valid
       ? (await prisma.chatDeletion.findMany({ where: { workspaceId, deletedAt: { gt: new Date(valid.getTime() - 10_000) } }, select: { messageId: true } })).map((d) => d.messageId)
@@ -79,12 +80,12 @@ export async function POST(req: Request) {
       kind === "project" ? id : kind === "issue" ? issues.find((i) => i.id === id)?.projectId ?? null : kind === "sprint" ? sprints.find((s) => s.id === id)?.projectId ?? null : null;
 
     // Canal de destino: el pedido (del equipo) o "General".
-    const channels = await ensureChannels(workspaceId);
+    const channels = await ensureChannels(workspaceId, auth.user.id);
     const channelId = parsed.data.channelId ? channels.find((c) => c.id === parsed.data.channelId)?.id : channels.find((c) => c.kind === "GENERAL")?.id;
     if (!channelId) return NextResponse.json({ error: "Ese canal no existe" }, { status: 400 });
 
     if (replyToId) {
-      const original = await prisma.chatMessage.findFirst({ where: { id: replyToId, workspaceId }, select: { id: true } });
+      const original = await prisma.chatMessage.findFirst({ where: { id: replyToId, workspaceId, ...messageVisibleTo(auth.user.id) }, select: { id: true } });
       if (!original) return NextResponse.json({ error: "El mensaje al que respondés ya no existe" }, { status: 400 });
     }
 
@@ -109,7 +110,19 @@ export async function POST(req: Request) {
     const [dto] = await toDTOs([message], workspaceId);
 
     // Aviso del navegador a las personas mencionadas.
-    const mentioned = found.filter((r) => r.kind === "user" && r.id !== auth.user.id).map((r) => r.id);
+    const ch = await prisma.chatChannel.findUnique({ where: { id: channelId }, select: { kind: true, members: { select: { userId: true } } } });
+    const restricted = ch ? isRestricted(ch.kind) : false;
+    const memberIds = new Set((ch?.members ?? []).map((x) => x.userId));
+    // En un canal privado solo se avisa a sus miembros (mencionar a alguien de fuera no le muestra nada).
+    const mentioned = found.filter((r) => r.kind === "user" && r.id !== auth.user.id && (!restricted || memberIds.has(r.id))).map((r) => r.id);
+    // Mensaje directo: se avisa a la otra persona aunque no la mencionen.
+    if (ch?.kind === "DIRECT") {
+      const peer = [...memberIds].find((u) => u !== auth.user.id);
+      if (peer && !mentioned.includes(peer)) {
+        const text = plainText(body, (r) => resolved.get(`${r.kind.toUpperCase()}:${r.id}`)?.label ?? "");
+        void notifyUsers([peer], { kind: "DIRECT", title: `${auth.user.name} te escribió`, body: text.slice(0, 160) || "Archivo adjunto", url: `/chat?canal=${channelId}`, workspaceId, groupKey: `dm-${channelId}` });
+      }
+    }
     if (mentioned.length) {
       const text = plainText(body, (r) => resolved.get(`${r.kind.toUpperCase()}:${r.id}`)?.label ?? "");
       void notifyUsers(mentioned, { kind: "MENTION", title: `${auth.user.name} te mencionó en el chat`, body: text.slice(0, 160) || "Archivo adjunto", url: `/chat?canal=${channelId}`, workspaceId, groupKey: `chat-${auth.user.id}` });

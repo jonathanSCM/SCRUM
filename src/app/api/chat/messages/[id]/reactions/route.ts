@@ -4,6 +4,7 @@ import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { chatReactionSchema, parseBody, readJson } from "@/lib/validation";
 import { CHAT_EMOJIS, QUICK_REACTIONS } from "@/lib/scrum/chat";
+import { messageVisibleTo } from "@/lib/chatChannels";
 import { messageInclude, toDTOs } from "@/lib/chatData";
 
 const ALLOWED = new Set([...QUICK_REACTIONS, ...CHAT_EMOJIS]);
@@ -19,7 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!ALLOWED.has(emoji)) return NextResponse.json({ error: "Emoji no disponible" }, { status: 400 });
 
   try {
-    const message = await prisma.chatMessage.findUnique({ where: { id }, select: { id: true, deletedAt: true } });
+    const message = await prisma.chatMessage.findFirst({ where: { id, ...messageVisibleTo(auth.user.id) }, select: { id: true, deletedAt: true } });
     if (!message || message.deletedAt) return notFound("Mensaje no encontrado");
 
     const existing = await prisma.chatReaction.findUnique({ where: { messageId_userId_emoji: { messageId: id, userId: auth.user.id, emoji } } });
