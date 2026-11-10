@@ -31,7 +31,7 @@ export default async function ProjectChatPage({ params, searchParams }: { params
           <>Mensajes que mencionan a <b>{project.name}</b>. Lo que escribas acá también aparece en el <a href="/chat" className="font-semibold text-rust hover:underline">chat general</a>, con el proyecto mencionado.</>
         )}
       </p>
-      <ChatView key={team ? "equipo" : "proyecto"} initial={initial} currentUserId={session.user.id} isLead={project.access.isLead} {...(team ? { announceOnly: true } : { projectId: id })} />
+      <ChatView key={team ? "equipo" : "proyecto"} initial={initial} currentUserId={session.user.id} currentUserName={session.user.name ?? ""} isLead={project.access.isLead} {...(team ? { announceOnly: true } : { projectId: id })} />
     </div>
   );
 }
