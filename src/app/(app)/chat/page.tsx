@@ -19,7 +19,7 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
         Escribí <b>#</b> para mencionar un proyecto (y luego su sprint o ticket) y <b>@</b> para avisarle a alguien. Las convocatorias con <b>/reunion</b> quedan en el canal Reuniones.
       </p>
       <ChannelTabs channels={channels} activeId={active.id} canManage={ws.isLead} />
-      <ChatView key={active.id} initial={initial} currentUserId={ws.session.user.id} isLead={ws.isLead} channelId={active.id} fill />
+      <ChatView key={active.id} initial={initial} currentUserId={ws.session.user.id} currentUserName={ws.session.user.name ?? ""} isLead={ws.isLead} channelId={active.id} fill />
     </main>
   );
 }

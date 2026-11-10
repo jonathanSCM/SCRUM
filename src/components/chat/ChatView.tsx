@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { cn, formatBytes, formatDateTime } from "@/lib/ui";
-import { CHAT_EMOJIS, QUICK_REACTIONS, applyInsertedRefs, makeToken, snippetOf, splitMessage, type RefKind } from "@/lib/scrum/chat";
+import { CHAT_EMOJIS, QUICK_REACTIONS, applyInsertedRefs, makeToken, reactorsText, snippetOf, splitMessage, type RefKind } from "@/lib/scrum/chat";
 import Avatar from "@/components/ui/Avatar";
 import { PaperclipIcon } from "@/components/ui/Icons";
 import { useToast } from "@/components/ui/Toaster";
@@ -59,7 +59,7 @@ function dayLabel(iso: string): string {
 
 // Chat general del equipo. Con projectId muestra solo los mensajes que mencionan
 // ese proyecto, y lo que se escribe queda mencionándolo.
-export default function ChatView({ initial, currentUserId, isLead, projectId, fill, channelId, announceOnly }: { initial: ChatMessage[]; currentUserId: string; isLead: boolean; projectId?: string; fill?: boolean; channelId?: string; announceOnly?: boolean }) {
+export default function ChatView({ initial, currentUserId, currentUserName = "", isLead, projectId, fill, channelId, announceOnly }: { initial: ChatMessage[]; currentUserId: string; currentUserName?: string; isLead: boolean; projectId?: string; fill?: boolean; channelId?: string; announceOnly?: boolean }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -353,6 +353,7 @@ export default function ChatView({ initial, currentUserId, isLead, projectId, fi
                 canDelete={m.author?.id === currentUserId || isLead}
                 mine={m.author?.id === currentUserId}
                 currentUserId={currentUserId}
+                currentUserName={currentUserName}
                 highlighted={highlight === m.id}
                 showChannel={!!announceOnly}
                 onDelete={() => void remove(m)}
@@ -585,6 +586,7 @@ function MessageRow({
   canDelete,
   mine,
   currentUserId,
+  currentUserName,
   highlighted,
   showChannel,
   onDelete,
@@ -597,6 +599,7 @@ function MessageRow({
   canDelete: boolean;
   mine: boolean;
   currentUserId: string;
+  currentUserName: string;
   highlighted: boolean;
   showChannel: boolean;
   onDelete: () => void;
@@ -605,6 +608,8 @@ function MessageRow({
   onJump: (id: string) => void;
 }) {
   const [picker, setPicker] = useState(false);
+  const [who, setWho] = useState<string | null>(null); // emoji abierto en la lista de "quién reaccionó"
+  const longPress = useRef<number>(0);
   const refByKey = new Map(m.refs.map((r) => [`${r.kind}:${r.id}`, r]));
   const color = m.author?.color ?? null;
   const accent = color ?? "var(--rust)";
@@ -683,19 +688,42 @@ function MessageRow({
             {m.reactions.map((r) => {
               const iReacted = r.userIds.includes(currentUserId);
               return (
-                <button
-                  key={r.emoji}
-                  type="button"
-                  onClick={() => onReact(r.emoji)}
-                  title={r.users.join(", ")}
-                  className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-px text-xs shadow-hard-sm", iReacted ? "border-rust bg-chip-tint text-rust" : "border-line-strong bg-surface text-ink-soft hover:border-rust")}
-                >
-                  <span>{r.emoji}</span>
-                  <span className="font-semibold">{r.count}</span>
-                </button>
+                <span key={r.emoji} className="group/react relative inline-flex">
+                  <button
+                    type="button"
+                    onClick={() => onReact(r.emoji)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setWho(r.emoji);
+                    }}
+                    onTouchStart={() => {
+                      // Mantener pulsado (celular) abre la lista de quién reaccionó.
+                      longPress.current = window.setTimeout(() => setWho(r.emoji), 450);
+                    }}
+                    onTouchEnd={() => window.clearTimeout(longPress.current)}
+                    onTouchMove={() => window.clearTimeout(longPress.current)}
+                    aria-label={`${r.emoji} ${reactorsText(r.users, iReacted ? currentUserName : null)}. Pulsa para ${iReacted ? "quitar tu reacción" : "reaccionar"}`}
+                    className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-px text-xs shadow-hard-sm", iReacted ? "border-rust bg-chip-tint text-rust" : "border-line-strong bg-surface text-ink-soft hover:border-rust")}
+                  >
+                    <span>{r.emoji}</span>
+                    <span className="font-semibold">{r.count}</span>
+                  </button>
+                  {/* Al pasar el cursor: quién reaccionó (como en Discord) */}
+                  <span role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 hidden w-max max-w-[16rem] -translate-x-1/2 rounded-lg bg-ink px-2.5 py-1.5 text-center text-[11px] font-medium leading-snug text-paper shadow-hard-lg group-hover/react:block group-focus-within/react:block">
+                    <span className="mr-1 text-sm">{r.emoji}</span>
+                    {reactorsText(r.users, iReacted ? currentUserName : null)}
+                  </span>
+                </span>
               );
             })}
+            <button type="button" onClick={() => setWho(m.reactions[0].emoji)} className="text-[11px] font-medium text-ink-faint hover:text-rust" aria-label="Ver quién reaccionó">
+              ¿Quién?
+            </button>
           </div>
+        )}
+
+        {who !== null && m.reactions.length > 0 && (
+          <ReactionsModal reactions={m.reactions} start={who} currentUserId={currentUserId} onReact={onReact} onClose={() => setWho(null)} />
         )}
 
         <div className={cn("relative mt-0.5 flex items-center gap-3 px-1 text-[11px] opacity-100 sm:opacity-0 sm:transition-opacity sm:group-focus-within:opacity-100 sm:group-hover:opacity-100", mine && "flex-row-reverse")}>
@@ -746,5 +774,56 @@ function RefChip({ kind, r }: { kind: RefKind; r: ResolvedRef | undefined }) {
     <Link href={r.href} className={cn(cls, "hover:brightness-95")} title={title}>
       <span className="truncate">{label}</span>
     </Link>
+  );
+}
+
+
+// Lista de quién reaccionó, como en Discord: pestañas por emoji (con el conteo) y las personas de cada una.
+function ReactionsModal({ reactions, start, currentUserId, onReact, onClose }: { reactions: ChatMessage["reactions"]; start: string; currentUserId: string; onReact: (emoji: string) => void; onClose: () => void }) {
+  const [tab, setTab] = useState<string>(reactions.some((r) => r.emoji === start) ? start : "all");
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  // Si una reacción desaparece (alguien la quitó), se vuelve a "Todas".
+  const current = tab === "all" || reactions.some((r) => r.emoji === tab) ? tab : "all";
+  const total = reactions.reduce((n, r) => n + r.count, 0);
+  const rows = (current === "all" ? reactions : reactions.filter((r) => r.emoji === current)).flatMap((r) => r.userIds.map((id, i) => ({ id, name: r.users[i] ?? "Alguien", emoji: r.emoji })));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Quién reaccionó" onClick={onClose}>
+      <div className="flex max-h-[70vh] w-full max-w-sm flex-col overflow-hidden rounded-t-xl border border-line-strong bg-surface shadow-hard-lg sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+          <p className="flex-1 font-display text-sm font-extrabold text-ink">Reacciones</p>
+          <button className="text-ink-faint hover:text-ink" onClick={onClose} aria-label="Cerrar">✕</button>
+        </div>
+        <div className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2" role="tablist">
+          <button role="tab" aria-selected={current === "all"} onClick={() => setTab("all")} className={cn("shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold", current === "all" ? "border-rust bg-chip-tint text-rust" : "border-line-strong text-ink-soft")}>
+            Todas {total}
+          </button>
+          {reactions.map((r) => (
+            <button key={r.emoji} role="tab" aria-selected={current === r.emoji} onClick={() => setTab(r.emoji)} className={cn("shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold", current === r.emoji ? "border-rust bg-chip-tint text-rust" : "border-line-strong text-ink-soft")}>
+              {r.emoji} {r.count}
+            </button>
+          ))}
+        </div>
+        <ul className="min-h-0 flex-1 divide-y divide-line overflow-y-auto">
+          {rows.map((u, i) => (
+            <li key={`${u.id}-${u.emoji}-${i}`} className="flex items-center gap-3 px-4 py-2">
+              <Avatar name={u.name} userId={u.id} size={28} />
+              <span className="min-w-0 flex-1 truncate text-sm text-ink">
+                {u.name}
+                {u.id === currentUserId && <span className="ml-1.5 text-xs text-ink-faint">(tú)</span>}
+              </span>
+              <span className="text-base" aria-hidden="true">{u.emoji}</span>
+              {u.id === currentUserId && (
+                <button className="text-xs text-ink-faint hover:text-danger" onClick={() => onReact(u.emoji)}>Quitar</button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }

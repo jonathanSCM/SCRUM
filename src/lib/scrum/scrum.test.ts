@@ -884,3 +884,17 @@ describe("política de avisos: instante, resumen y silencio", () => {
     expect(Object.keys(KIND_META).sort()).toEqual([...KINDS].sort());
   });
 });
+
+import { reactorsText } from "./chat";
+
+describe("quién reaccionó (estilo Discord)", () => {
+  it("nombres, 'Tú' primero y 'y N más'", () => {
+    expect(reactorsText(["Ana"], null)).toBe("Ana reaccionó");
+    expect(reactorsText(["Ana", "Luis"], null)).toBe("Ana y Luis reaccionaron");
+    expect(reactorsText(["Ana", "Luis", "Marta"], null)).toBe("Ana, Luis y Marta reaccionaron");
+    expect(reactorsText(["Ana", "Luis", "Marta", "Pedro", "Rosa"], null)).toBe("Ana, Luis, Marta y 2 más reaccionaron");
+    expect(reactorsText(["Ana", "Yo", "Luis"], "Yo")).toBe("Tú, Ana y Luis reaccionaron");
+    expect(reactorsText(["Yo"], "Yo")).toBe("Tú reaccionaste");
+    expect(reactorsText([], null)).toBe("");
+  });
+});

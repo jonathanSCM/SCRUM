@@ -66,7 +66,7 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
               <span className="hidden font-display text-lg font-extrabold tracking-tight text-ink sm:inline">SCRUM ProShop</span>
             </Link>
             <TeamSwitcher teams={teams} activeId={activeId} canCreate={canCreate} maxOwned={maxOwned} />
-            <div className="hidden items-center gap-6 sm:flex">
+            <div className="hidden items-center gap-4 lg:flex xl:gap-6">
               {links.map((link) => (
                 <Link key={link.href} href={link.href} className={linkClass(link.href)}>
                   {link.label}
@@ -121,7 +121,7 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
           </div>
         </div>
 
-        <div className="mt-3 flex items-center gap-5 overflow-x-auto sm:hidden">
+        <div className="mt-3 flex items-center gap-5 overflow-x-auto lg:hidden">
           {links.map((link) => (
             <Link key={link.href} href={link.href} className={linkClass(link.href)}>
               {link.label}

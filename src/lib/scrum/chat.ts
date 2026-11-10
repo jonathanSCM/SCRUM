@@ -116,3 +116,17 @@ export function findKeyMentions(body: string): KeyMention[] {
   }
   return out;
 }
+
+// Texto de "quién reaccionó" al estilo Discord: "Tú, Ana y 2 más reaccionaron".
+// Si `myName` es el nombre de quien mira y está entre los que reaccionaron, aparece primero como "Tú".
+export function reactorsText(users: string[], myName: string | null, max = 3): string {
+  const mine = myName ? users.indexOf(myName) : -1;
+  const others = users.filter((_, i) => i !== mine);
+  const names = [...(mine >= 0 ? ["Tú"] : []), ...others];
+  if (names.length === 0) return "";
+  const shown = names.slice(0, max);
+  const rest = names.length - shown.length;
+  const list = rest > 0 ? `${shown.join(", ")} y ${rest} más` : shown.length > 1 ? `${shown.slice(0, -1).join(", ")} y ${shown[shown.length - 1]}` : shown[0];
+  const verb = names.length > 1 ? "reaccionaron" : shown[0] === "Tú" ? "reaccionaste" : "reaccionó";
+  return `${list} ${verb}`;
+}
