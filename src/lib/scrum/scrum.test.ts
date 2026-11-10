@@ -898,3 +898,23 @@ describe("quién reaccionó (estilo Discord)", () => {
     expect(reactorsText([], null)).toBe("");
   });
 });
+
+import { movementRecipients, badgeCount, titleWithBadge } from "./movement";
+
+describe("movimientos de tickets e insignia del icono", () => {
+  it("a quién se avisa: sin repetidos y sin quien mueve", () => {
+    expect(movementRecipients({ assignee: "a", reporter: "b", involved: ["c", "a"], owners: ["d", null], lead: "e", actor: "b" }).sort()).toEqual(["a", "c", "d", "e"]);
+    expect(movementRecipients({ assignee: "x", actor: "x" })).toEqual([]);
+    expect(movementRecipients({ actor: "x" })).toEqual([]);
+  });
+  it("insignia del icono y título de la pestaña", () => {
+    expect(badgeCount(0)).toBe(0);
+    expect(badgeCount(-3)).toBe(0);
+    expect(badgeCount(7)).toBe(7);
+    expect(badgeCount(250)).toBe(99);
+    expect(titleWithBadge("Backlog | Scrum", 3)).toBe("(3) Backlog | Scrum");
+    expect(titleWithBadge("(3) Backlog | Scrum", 5)).toBe("(5) Backlog | Scrum");
+    expect(titleWithBadge("(3) Backlog | Scrum", 0)).toBe("Backlog | Scrum");
+    expect(titleWithBadge("Chat | Scrum", 120)).toBe("(99+) Chat | Scrum");
+  });
+});

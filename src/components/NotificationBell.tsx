@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { applyUnreadBadge } from "@/lib/appBadge";
 
 // Campana con el número de avisos sin leer (se actualiza cada minuto y al cambiar de página).
 export default function NotificationBell() {
@@ -15,7 +16,11 @@ export default function NotificationBell() {
       if (document.visibilityState !== "visible") return;
       try {
         const res = await fetch("/api/notifications?limit=1", { cache: "no-store" });
-        if (res.ok && alive) setUnread((await res.json()).unread ?? 0);
+        if (res.ok && alive) {
+          const n = (await res.json()).unread ?? 0;
+          setUnread(n);
+          applyUnreadBadge(n);
+        }
       } catch {}
     }
     void load();
@@ -27,6 +32,16 @@ export default function NotificationBell() {
       window.removeEventListener("notifs-changed", load);
     };
   }, [pathname]);
+
+  // Next cambia el título al navegar: se vuelve a poner el "(3)" delante.
+  useEffect(() => {
+    const el = document.querySelector("title");
+    if (!el) return;
+    const obs = new MutationObserver(() => applyUnreadBadge(unread));
+    obs.observe(el, { childList: true, characterData: true, subtree: true });
+    applyUnreadBadge(unread);
+    return () => obs.disconnect();
+  }, [unread, pathname]);
 
   return (
     <Link href="/notifications" aria-label={unread ? `Avisos: ${unread} sin leer` : "Avisos"} className="relative flex h-9 w-9 items-center justify-center rounded-md border border-line text-ink-soft hover:text-ink">

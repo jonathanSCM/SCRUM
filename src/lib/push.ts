@@ -1,13 +1,14 @@
 import webpush from "web-push";
 import { prisma } from "@/lib/prisma";
 import { notifyNtfy } from "@/lib/ntfy";
+import { badgeCount } from "@/lib/scrum/movement";
 import type { NtfyPriority } from "@/lib/scrum/ntfyFormat";
 
 // Notificaciones push del navegador (Web Push + VAPID). Se activan solo si
 // están VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY; si no, todo esto es un no-op.
 // NUNCA lanza: un push caído no puede romper la acción que lo disparó.
 
-export type PushPayload = { title: string; body: string; url?: string; tag?: string; priority?: NtfyPriority };
+export type PushPayload = { title: string; body: string; url?: string; tag?: string; priority?: NtfyPriority; badge?: number };
 
 export function pushConfigured(): boolean {
   return !!process.env.VAPID_PUBLIC_KEY && !!process.env.VAPID_PRIVATE_KEY;
@@ -45,10 +46,13 @@ export async function sendPush(userIds: string[] | null, payload: PushPayload): 
     if (userIds && userIds.length === 0) return 0;
     const subs = await prisma.pushSubscription.findMany({ where: userIds ? { userId: { in: userIds } } : {} });
     let sent = 0;
-    const body = JSON.stringify(payload);
+    // Número de avisos sin leer de cada persona, para la insignia del icono de la app (se calcula una vez por persona).
+    const badges = new Map<string, number>();
+    for (const uid of new Set(subs.map((s) => s.userId))) badges.set(uid, badgeCount(await prisma.notification.count({ where: { userId: uid, readAt: null } }).catch(() => 0)));
     await Promise.allSettled(
       subs.map(async (s) => {
         try {
+          const body = JSON.stringify({ ...payload, badge: badges.get(s.userId) ?? undefined });
           await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body, { TTL: 60 * 60 * 24 });
           sent++;
         } catch (err) {

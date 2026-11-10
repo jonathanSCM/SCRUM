@@ -27,13 +27,22 @@ self.addEventListener("push", (event) => {
     data = { title: "SCRUM ProShop", body: event.data ? event.data.text() : "" };
   }
   const title = data.title || "SCRUM ProShop";
+  // Insignia con el número de avisos sin leer sobre el icono de la app instalada (Badging API).
+  const badgeJob =
+    typeof data.badge === "number" && self.navigator && "setAppBadge" in self.navigator
+      ? (data.badge > 0 ? self.navigator.setAppBadge(data.badge) : self.navigator.clearAppBadge()).catch(() => {})
+      : Promise.resolve();
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body: data.body || "",
-      icon: "/icons/icon-192.png",
-      tag: data.tag || undefined,
-      data: { url: data.url || "/home" },
-    })
+    Promise.all([
+      self.registration.showNotification(title, {
+        body: data.body || "",
+        icon: "/icons/icon-192.png",
+        badge: "/icons/badge-96.png",
+        tag: data.tag || undefined,
+        data: { url: data.url || "/home" },
+      }),
+      badgeJob,
+    ])
   );
 });
 
