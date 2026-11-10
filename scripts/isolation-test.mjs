@@ -919,6 +919,53 @@ async function main() {
   const mutedM = await prisma.notification.findFirst({ where: { userId: mvU.id, kind: "STATUS", body: { contains: "Tarea mov2" } } });
   check("quien silenció los avisos de tickets los ve solo en la bandeja (sin sonar ni esperar resumen)", !!mutedM && mutedM.deliveredAt !== null && mutedM.pushed === false);
 
+  console.log("23) Chat a pantalla completa: un canal por proyecto, sin leer y último mensaje");
+  const cl0 = await cPlain.req("GET", "/api/chat/channels");
+  const projCh = cl0.json.find((c) => c.projectId === A.project.id);
+  check("cada proyecto tiene su canal (con el nombre y la clave del proyecto)", cl0.status === 200 && !!projCh && projCh.kind === "PROJECT" && projCh.name === "Proyecto A" && projCh.projectKey === "SAI", JSON.stringify(projCh));
+  check("la lista trae el último mensaje y los sin leer de cada canal", cl0.json.every((c) => typeof c.unread === "number" && "last" in c));
+  const clB = await cBOnly.req("GET", "/api/chat/channels");
+  check("cada equipo ve solo los canales de sus proyectos", !clB.json.some((c) => c.projectId === A.project.id) && clB.json.some((c) => c.projectId === B.project.id));
+  const pm = await cAOwner.req("POST", "/api/chat/messages", { body: "hola solo proyecto A", channelId: projCh.id });
+  check("se escribe en el canal del proyecto", pm.status === 201, `dio ${pm.status}`);
+  const inProj = await cPlain.req("GET", `/api/chat/messages?channel=${projCh.id}`);
+  const generalCh = cl0.json.find((c) => c.kind === "GENERAL");
+  const inGen = await cPlain.req("GET", `/api/chat/messages?channel=${generalCh.id}`);
+  check("el mensaje está en el canal del proyecto y NO se mezcla en General", inProj.json.messages.some((m) => m.body === "hola solo proyecto A") && !inGen.json.messages.some((m) => m.body === "hola solo proyecto A"));
+  const cl1 = await cPlain.req("GET", "/api/chat/channels");
+  const projCh1 = cl1.json.find((c) => c.id === projCh.id);
+  check("a otra persona le sale 1 sin leer y el último mensaje", projCh1.unread === 1 && projCh1.last?.text === "hola solo proyecto A" && projCh1.last?.author === "Ana Dueña A", JSON.stringify(projCh1));
+  check("a quien lo escribió no le cuenta como sin leer", (await cAOwner.req("GET", "/api/chat/channels")).json.find((c) => c.id === projCh.id).unread === 0);
+  const rd = await cPlain.req("POST", "/api/chat/read", { channelId: projCh.id });
+  check("marcar el canal como leído deja 0 sin leer", rd.status === 200 && (await cPlain.req("GET", "/api/chat/channels")).json.find((c) => c.id === projCh.id).unread === 0);
+  const rdX = await cBOnly.req("POST", "/api/chat/read", { channelId: projCh.id });
+  check("no se puede marcar leído un canal de otro equipo (404)", rdX.status === 404, `dio ${rdX.status}`);
+  const delP = await cAOwner.req("DELETE", `/api/chat/channels/${projCh.id}`);
+  check("el canal de un proyecto no se borra a mano (400)", delP.status === 400, `dio ${delP.status}`);
+  await cPlain.req("POST", "/api/chat/messages", { body: `ojo [[user:${aOwner.id}]] en el proyecto`, channelId: projCh.id });
+  await new Promise((r) => setTimeout(r, 800)); // el aviso se manda sin esperar la respuesta
+  const projMention = await prisma.notification.findFirst({ where: { userId: aOwner.id, kind: "MENTION", url: { contains: `canal=${projCh.id}` } } });
+  check("una mención en el canal del proyecto lleva al canal", !!projMention);
+  await cAOwner.req("PATCH", `/api/projects/${A.project.id}`, { name: "Proyecto A renombrado" });
+  const clRen = await cPlain.req("GET", "/api/chat/channels");
+  check("si se renombra el proyecto, su canal cambia de nombre solo", clRen.json.find((c) => c.projectId === A.project.id).name === "Proyecto A renombrado");
+  await cAOwner.req("PATCH", `/api/projects/${A.project.id}`, { name: "Proyecto A" });
+  const tmp = await cAOwner.req("POST", "/api/projects", { name: `Temporal ${stamp}`, description: "x" });
+  const tmpCh = (await cAOwner.req("GET", "/api/chat/channels")).json.find((c) => c.projectId === tmp.json.id);
+  check("un proyecto nuevo recibe su canal solo", tmp.status === 201 && !!tmpCh);
+  await cAOwner.req("POST", "/api/chat/messages", { body: "mensaje del temporal", channelId: tmpCh.id });
+  const tmpDel = await cAOwner.req("DELETE", `/api/projects/${tmp.json.id}`);
+  check("al borrar el proyecto desaparecen su canal y sus mensajes (no pasan a General)", tmpDel.status === 200 && (await prisma.chatChannel.count({ where: { id: tmpCh.id } })) === 0 && (await prisma.chatMessage.count({ where: { body: "mensaje del temporal" } })) === 0);
+
+  console.log("24) Subtareas con responsable y fecha");
+  const subOk = await cPlain.req("PATCH", `/api/issues/${A.task.id}`, { checklist: [{ id: "s1", text: "Mejorar el diseño", done: false, assignee: aMember.id, due: "2026-12-01" }, { id: "s2", text: "Hacer las animaciones", done: true }] });
+  const subRow = await prisma.task.findUnique({ where: { id: A.task.id } });
+  check("una subtarea guarda su responsable y su fecha", subOk.status === 200 && subRow.checklist.includes(`"assignee":"${aMember.id}"`) && subRow.checklist.includes('"due":"2026-12-01"') && subRow.checklist.includes('"done":true'), subRow.checklist);
+  const subBad = await cPlain.req("PATCH", `/api/issues/${A.task.id}`, { checklist: [{ id: "s1", text: "x", done: false, assignee: bOnly.id }] });
+  check("no se puede asignar una subtarea a alguien de otro equipo (400)", subBad.status === 400, `dio ${subBad.status} ${subBad.text.slice(0, 100)}`);
+  const subBk = await cPlain.req("GET", "/api/issues/by-key/SAI-1");
+  check("el detalle del ticket devuelve las subtareas con su responsable", subBk.json.issue.checklist.some((c) => c.text === "Mejorar el diseño" && c.assignee === aMember.id));
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

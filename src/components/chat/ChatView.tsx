@@ -59,7 +59,9 @@ function dayLabel(iso: string): string {
 
 // Chat general del equipo. Con projectId muestra solo los mensajes que mencionan
 // ese proyecto, y lo que se escribe queda mencionándolo.
-export default function ChatView({ initial, currentUserId, currentUserName = "", isLead, projectId, fill, channelId, announceOnly }: { initial: ChatMessage[]; currentUserId: string; currentUserName?: string; isLead: boolean; projectId?: string; fill?: boolean; channelId?: string; announceOnly?: boolean }) {
+export default function ChatView({ initial, currentUserId, currentUserName = "", isLead, projectId, fill, channelId, announceOnly, pane, mentionProjectId }: { initial: ChatMessage[]; currentUserId: string; currentUserName?: string; isLead: boolean; projectId?: string; fill?: boolean; channelId?: string; announceOnly?: boolean; pane?: boolean; mentionProjectId?: string }) {
+  // pane: ocupa todo el espacio de su contenedor (vista tipo WhatsApp/Discord). mentionProjectId: canal de un proyecto (el # busca dentro de ese proyecto).
+  const scopeProject = projectId ?? mentionProjectId;
   const toast = useToast();
   const confirm = useConfirm();
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -139,6 +141,16 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
 
+  // Marca el canal como leído al abrirlo y cada vez que llegan mensajes mientras se está viendo.
+  useEffect(() => {
+    if (!channelId || announceOnly) return;
+    const t = setTimeout(() => {
+      if (document.visibilityState !== "visible") return;
+      void api("/api/chat/read", "POST", { channelId }).then(() => window.dispatchEvent(new Event("chat-read")));
+    }, 600);
+    return () => clearTimeout(t);
+  }, [channelId, announceOnly, messages.length]);
+
   // El índice para # y @ se pide la primera vez que se necesita.
   const loadIndex = useCallback(async () => {
     if (index) return;
@@ -156,7 +168,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
   );
 
   // Proyecto dentro del que se busca: el del chat del proyecto, o el que se acaba de elegir con #.
-  const scopeId = projectId ?? (scope && trigger && trigger.start === scope.start ? scope.id : null);
+  const scopeId = scopeProject ?? (scope && trigger && trigger.start === scope.start ? scope.id : null);
   const scopeLoading = !!trigger && trigger.char === "#" && !!scopeId && !scoped[scopeId];
 
   const suggestions = useMemo<Suggestion[]>(() => {
@@ -205,7 +217,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
       setTrigger({ char: m[2] as "#" | "@", query: m[3], start: caret - m[3].length - 1 });
       setActive(0);
       void loadIndex();
-      if (projectId && m[2] === "#") void loadScope(projectId);
+      if (scopeProject && m[2] === "#") void loadScope(scopeProject);
     } else {
       setTrigger(null);
       setScope(null);
@@ -219,7 +231,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
     const after = draft.slice(caret);
     inserted.current.push({ text: s.short, token: makeToken(s.kind, s.id) });
     // Elegir un proyecto abre el segundo nivel: se deja un "#" nuevo para elegir su sprint o ticket.
-    if (s.kind === "project" && !projectId && trigger.char === "#") {
+    if (s.kind === "project" && !scopeProject && trigger.char === "#") {
       setDraft(`${before}${s.short} #${after}`);
       const at = before.length + s.short.length + 1;
       setScope({ id: s.id, label: s.label, start: at });
@@ -327,8 +339,10 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
     <div
       className={cn(
         "flex flex-col overflow-hidden bg-card",
-        // En el celular, con "fill", el chat ocupa toda la pantalla bajo la barra (sin tarjeta ni márgenes).
-        fill ? "h-[calc(100dvh-7.5rem)] sm:h-[min(74vh,700px)] sm:rounded-xl sm:border sm:border-line-strong sm:shadow-hard" : "h-[70dvh] max-h-[700px] rounded-xl border border-line-strong shadow-hard"
+        pane
+          ? "h-full min-h-0"
+          : // En el celular, con "fill", el chat ocupa toda la pantalla bajo la barra (sin tarjeta ni márgenes).
+            fill ? "h-[calc(100dvh-7.5rem)] sm:h-[min(74vh,700px)] sm:rounded-xl sm:border sm:border-line-strong sm:shadow-hard" : "h-[70dvh] max-h-[700px] rounded-xl border border-line-strong shadow-hard"
       )}
     >
       {/* Mensajes: fondo suave para que las burbujas blancas se distingan */}
@@ -409,7 +423,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
         )}
         {trigger && suggestions.length > 0 && (
           <ul className="absolute bottom-full left-3 right-3 z-20 mb-1 max-h-64 overflow-y-auto rounded-lg border border-line-strong bg-surface shadow-hard-lg" role="listbox">
-            {scopeId && !projectId && scope && (
+            {scopeId && !scopeProject && scope && (
               <li className="border-b border-line px-3 py-1 text-[11px] text-ink-faint">Dentro de <b className="text-ink-soft">{scope.label}</b> · sprints y tickets · Esc deja solo el proyecto</li>
             )}
             {suggestions.map((s, i) => (
@@ -488,7 +502,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
               ref={inputRef}
               rows={1}
               className="field max-h-36 min-h-[2.5rem] resize-none rounded-xl bg-paper-deep py-2"
-              placeholder={projectId ? "Mensaje sobre el proyecto…" : "Escribí un mensaje… (o /noti, /reunion)"}
+              placeholder={projectId ? "Mensaje sobre el proyecto…" : mentionProjectId ? "Escribe un mensaje al canal del proyecto…" : "Escribe un mensaje… (o /noti, /reunion)"}
               title={COMMAND_HELP}
               value={draft}
               maxLength={4000}

@@ -285,7 +285,7 @@ function DrawerBody({
             <ReadyChecklist items={data.options.readyItems} done={issue.readyDone} onChange={(readyDone) => patch({ readyDone })} settingsHref={`/projects/${issue.projectId}/settings`} />
           )}
 
-          {!isEpic && <Checklist items={issue.checklist} onChange={(checklist) => patch({ checklist })} />}
+          {!isEpic && <Checklist items={issue.checklist} people={data.options.members} onChange={(checklist) => patch({ checklist })} />}
 
           <Attachments issueId={issue.id} items={data.attachments} onChange={load} />
 
@@ -640,10 +640,14 @@ function ReadyChecklist({ items, done, onChange, settingsHref }: { items: string
   );
 }
 
-// Checklist propio de la tarjeta (pasos chicos que no merecen un ticket).
-function Checklist({ items, onChange }: { items: ChecklistItem[]; onChange: (items: ChecklistItem[]) => void }) {
+// Subtareas: minitareas dentro de una tarea grande (por ejemplo, en "Rehacer la landing": mejorar el diseño, hacer las animaciones…).
+// Cada una tiene su casilla, y opcionalmente responsable y fecha límite; el avance se ve en la barra y en la tarjeta.
+function Checklist({ items, people, onChange }: { items: ChecklistItem[]; people: UserRef[]; onChange: (items: ChecklistItem[]) => void }) {
   const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
   const done = items.filter((i) => i.done).length;
+  const personName = (id?: string | null) => people.find((p) => p.id === id)?.name ?? null;
 
   function add() {
     const text = draft.trim();
@@ -651,37 +655,71 @@ function Checklist({ items, onChange }: { items: ChecklistItem[]; onChange: (ite
     setDraft("");
     onChange([...items, { id: Math.random().toString(36).slice(2, 10), text, done: false }]);
   }
+  const update = (id: string, patch: Partial<ChecklistItem>) => onChange(items.map((x) => (x.id === id ? { ...x, ...patch } : x)));
 
   return (
     <section>
       <h3 className="mb-2 font-display text-sm font-bold text-ink">
-        Checklist {items.length > 0 && <span className="font-mono text-ink-faint">({done}/{items.length})</span>}
+        Subtareas {items.length > 0 && <span className="font-mono text-ink-faint">({done}/{items.length})</span>}
       </h3>
       {items.length > 0 && (
         <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-paper-deep" aria-hidden="true">
           <div className="h-full rounded-full bg-moss" style={{ width: `${(done / items.length) * 100}%` }} />
         </div>
       )}
-      <ul className="space-y-1">
+      {items.length === 0 && <p className="mb-2 text-xs text-ink-faint">Divide esta tarea en pasos pequeños (por ejemplo: «mejorar el diseño», «hacer las animaciones»). Cada una se marca al terminar y puede tener responsable y fecha.</p>}
+      <ul className="space-y-1.5">
         {items.map((it) => (
-          <li key={it.id} className="group flex items-center gap-2 text-sm">
-            <input type="checkbox" className="h-4 w-4 accent-moss" checked={it.done} onChange={() => onChange(items.map((x) => (x.id === it.id ? { ...x, done: !x.done } : x)))} />
-            <span className={cn("min-w-0 flex-1 break-words", it.done ? "text-ink-faint line-through" : "text-ink")}>{it.text}</span>
-            <input
-              type="date"
-              className={cn("w-[7.5rem] rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-ink-faint hover:border-line-strong focus:border-line-strong", isOverdue(it) && "font-semibold text-danger")}
-              value={it.due ?? ""}
-              title={isOverdue(it) ? "Vencido" : "Fecha límite de este paso"}
-              aria-label={`Fecha límite de ${it.text}`}
-              onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, due: e.target.value || null } : x)))}
-            />
-            <button className="hidden text-xs text-ink-faint hover:text-danger group-hover:inline" onClick={() => onChange(items.filter((x) => x.id !== it.id))} aria-label={`Quitar ${it.text}`}>quitar</button>
+          <li key={it.id} className="group rounded-md border border-line px-2.5 py-2 text-sm">
+            <div className="flex items-start gap-2">
+              <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-moss" checked={it.done} onChange={() => update(it.id, { done: !it.done })} aria-label={`Marcar «${it.text}»`} />
+              {editing === it.id ? (
+                <input
+                  autoFocus
+                  className="field field-sm min-w-0 flex-1"
+                  value={editText}
+                  maxLength={200}
+                  onChange={(e) => setEditText(e.target.value)}
+                  onBlur={() => {
+                    const t = editText.trim();
+                    if (t && t !== it.text) update(it.id, { text: t });
+                    setEditing(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    if (e.key === "Escape") setEditing(null);
+                  }}
+                />
+              ) : (
+                <button type="button" className={cn("min-w-0 flex-1 break-words text-left", it.done ? "text-ink-faint line-through" : "text-ink")} onClick={() => { setEditing(it.id); setEditText(it.text); }} title="Clic para editar">
+                  {it.text}
+                </button>
+              )}
+              <button className="shrink-0 text-xs text-ink-faint hover:text-danger sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100" onClick={() => onChange(items.filter((x) => x.id !== it.id))} aria-label={`Quitar ${it.text}`}>quitar</button>
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 pl-6">
+              <label className="flex items-center gap-1 text-xs text-ink-faint">
+                {it.assignee ? <Avatar name={personName(it.assignee)} userId={it.assignee} size={16} /> : null}
+                <select className="max-w-[9rem] rounded border border-transparent bg-transparent py-0.5 text-xs text-ink-soft hover:border-line-strong focus:border-line-strong" value={it.assignee ?? ""} onChange={(e) => update(it.id, { assignee: e.target.value || null })} aria-label={`Responsable de ${it.text}`}>
+                  <option value="">Sin responsable</option>
+                  {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </label>
+              <input
+                type="date"
+                className={cn("w-[7.5rem] rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-ink-faint hover:border-line-strong focus:border-line-strong", isOverdue(it) && "font-semibold text-danger")}
+                value={it.due ?? ""}
+                title={isOverdue(it) ? "Vencida" : "Fecha límite de esta subtarea"}
+                aria-label={`Fecha límite de ${it.text}`}
+                onChange={(e) => update(it.id, { due: e.target.value || null })}
+              />
+            </div>
           </li>
         ))}
       </ul>
       <input
         className="field field-sm mt-2"
-        placeholder="Agregar un paso y Enter"
+        placeholder="Agregar una subtarea y Enter"
         maxLength={200}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}

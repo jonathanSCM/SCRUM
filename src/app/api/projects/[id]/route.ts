@@ -86,6 +86,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   try {
     const project = await prisma.project.findUnique({ where: { id }, select: { id: true } });
     if (!project) return notFound("Proyecto no encontrado");
+    // El canal del proyecto se borra con él (en cascada); sus mensajes también, para que no pasen a "General".
+    await prisma.chatMessage.deleteMany({ where: { channel: { projectId: id } } });
     await prisma.project.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (e) {

@@ -271,6 +271,13 @@ export async function updateIssue(
     );
   }
   if (patch.checklist !== undefined) {
+    // Las subtareas solo se pueden asignar a personas del equipo del proyecto.
+    const ids = [...new Set(patch.checklist.map((c) => c.assignee).filter((x): x is string => !!x))];
+    if (ids.length) {
+      const workspaceId = (await prisma.project.findUnique({ where: { id: project.id }, select: { workspaceId: true } }))?.workspaceId;
+      const ok = workspaceId ? await prisma.membership.count({ where: { workspaceId, userId: { in: ids } } }) : 0;
+      if (ok !== ids.length) throw new IssueError("Una subtarea está asignada a alguien que no es del equipo");
+    }
     const before = parseChecklist(current.checklist);
     const same = JSON.stringify(before) === JSON.stringify(patch.checklist);
     if (!same) {

@@ -1,37 +1,26 @@
 import Link from "next/link";
-import { requireSession } from "@/lib/session";
 import { getProjectOrNotFound } from "@/lib/projectData";
 import { loadMessages } from "@/lib/chatData";
+import { channelFilter, ensureChannels } from "@/lib/chatChannels";
 import ChatView from "@/components/chat/ChatView";
-import { cn } from "@/lib/ui";
 
 export const metadata = { title: "Chat del proyecto" };
 
-// Dos pestañas: "Del proyecto" (mensajes que mencionan este proyecto) y "Del equipo" (avisos generales y
-// convocatorias hechas con comandos, solo para leer).
-export default async function ProjectChatPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
+// El chat del proyecto es el canal de ese proyecto (el mismo que aparece en la lista de Chat, en "Proyectos").
+export default async function ProjectChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { tab } = await searchParams;
-  const team = tab === "equipo";
-  const session = await requireSession();
   const project = await getProjectOrNotFound(id);
   const workspaceId = project.access.workspaceId;
-  const initial = await loadMessages({ workspaceId, ...(team ? { announce: true } : { projectId: id }) });
-  const tabClass = (on: boolean) => cn("rounded-full border px-3 py-1 text-sm font-semibold", on ? "border-rust bg-chip-tint text-rust" : "border-line-strong bg-surface text-ink-soft hover:text-ink");
+  const channel = (await ensureChannels(workspaceId)).find((c) => c.projectId === id);
+  if (!channel) return <p className="text-sm text-ink-faint">No se pudo abrir el chat de este proyecto.</p>;
+  const initial = await loadMessages({ workspaceId, channel: await channelFilter(workspaceId, channel.id) });
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-1.5" role="tablist">
-        <Link href={`/projects/${id}/chat`} role="tab" aria-selected={!team} className={tabClass(!team)}>Del proyecto</Link>
-        <Link href={`/projects/${id}/chat?tab=equipo`} role="tab" aria-selected={team} className={tabClass(team)}>Del equipo</Link>
-      </div>
       <p className="text-sm text-ink-soft">
-        {team ? (
-          <>Avisos y reuniones de todo el equipo (solo lectura). Se escriben desde el <a href="/chat" className="font-semibold text-rust hover:underline">chat del equipo</a> con /noti, /reunion, /urgente o /ayuda.</>
-        ) : (
-          <>Mensajes que mencionan a <b>{project.name}</b>. Lo que escribas acá también aparece en el <a href="/chat" className="font-semibold text-rust hover:underline">chat general</a>, con el proyecto mencionado.</>
-        )}
+        Canal de <b>{project.name}</b>: lo que se escriba aquí es solo de este proyecto. También lo ves, junto a los demás canales, en{" "}
+        <Link href={`/chat?canal=${channel.id}`} className="font-semibold text-rust hover:underline">Chat a pantalla completa</Link>. Escribe <b>#</b> para mencionar un sprint o ticket de este proyecto.
       </p>
-      <ChatView key={team ? "equipo" : "proyecto"} initial={initial} currentUserId={session.user.id} currentUserName={session.user.name ?? ""} isLead={project.access.isLead} {...(team ? { announceOnly: true } : { projectId: id })} />
+      <ChatView key={channel.id} initial={initial} currentUserId={project.access.session.user.id} currentUserName={project.access.session.user.name ?? ""} isLead={project.access.isLead} channelId={channel.id} mentionProjectId={id} />
     </div>
   );
 }

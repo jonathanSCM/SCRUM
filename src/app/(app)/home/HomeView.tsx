@@ -50,7 +50,7 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
       </motion.div>
 
       <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <section>
             <h2 className="mb-2 font-display text-lg font-extrabold text-ink">Sprints activos</h2>
             {sprints.length === 0 ? (
@@ -62,10 +62,10 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
                   return (
                     <motion.li key={s.id} variants={staggerChild}>
                       <Link href={`/projects/${s.projectId}/board`} className="lift block border border-line bg-card p-4 rounded-lg">
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <span className="font-mono text-xs font-bold text-moss-ink">{s.projectKey}</span>
-                          <span className="font-display font-extrabold text-ink">{s.projectName}</span>
-                          <span className="text-sm text-ink-soft">· {s.name}</span>
+                          <span className="min-w-0 break-words font-display font-extrabold text-ink">{s.projectName}</span>
+                          <span className="min-w-0 break-words text-sm text-ink-soft">· {s.name}</span>
                           {left !== null && (
                             <span className={cn("lozenge ml-auto", left < 0 ? "text-danger" : left <= 2 ? "text-warn" : "text-moss-ink")}>
                               {left < 0 ? "vencido" : left === 0 ? "termina hoy" : `${left} d`}
@@ -96,9 +96,9 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
                 {overdue.map((t) => (
                   <li key={t.id}>
                     <button onClick={() => openIssue(t.key)} className="flex w-full items-center gap-3 border-b border-line-strong px-3 py-2 text-left last:border-b-0 hover:bg-card-2">
-                      <span className="w-16 shrink-0 font-mono text-xs text-ink-faint">{t.key}</span>
+                      <span className="shrink-0 font-mono text-xs text-ink-faint sm:w-16">{t.key}</span>
                       <span className="min-w-0 flex-1 truncate text-sm text-ink">{t.title}</span>
-                      <span className="text-xs font-semibold text-danger">{formatDate(t.dueDate)}</span>
+                      <span className="shrink-0 text-xs font-semibold text-danger">{formatDate(t.dueDate)}</span>
                       <Avatar name={t.assignee} size={20} />
                     </button>
                   </li>
@@ -108,21 +108,24 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
           </section>
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <section>
             <h2 className="mb-2 font-display text-lg font-extrabold text-ink">Carga por persona</h2>
             {workload.length === 0 ? (
               <p className="border border-dashed border-line-strong p-5 text-sm text-ink-faint rounded-md">Sin tickets asignados.</p>
             ) : (
-              <ul className="space-y-2 border border-line bg-card p-4 rounded-lg">
+              <ul className="space-y-3 border border-line bg-card p-4 rounded-lg">
                 {workload.map((w) => (
-                  <li key={w.name} className="flex items-center gap-3 text-sm">
-                    <Avatar name={w.name} size={22} />
-                    <span className="w-28 truncate text-ink">{w.name}</span>
-                    <div className="h-3 flex-1 border border-line bg-paper-deep rounded-lg">
+                  // Dos líneas: nombre y cifras arriba (el nombre se corta con "…"), barra completa debajo. Se lee bien en el celular.
+                  <li key={w.name} className="min-w-0 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Avatar name={w.name} size={22} />
+                      <span className="min-w-0 flex-1 truncate text-ink" title={w.name}>{w.name}</span>
+                      <span className="shrink-0 font-mono text-xs text-ink-faint">{w.count} {w.count === 1 ? "ticket" : "tickets"}{w.points ? ` · ${w.points} pts` : ""}</span>
+                    </div>
+                    <div className="mt-1.5 h-2.5 overflow-hidden border border-line bg-paper-deep rounded-lg">
                       <motion.div className="h-full bg-accent" initial={{ width: 0 }} animate={{ width: `${(w.count / maxLoad) * 100}%` }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} />
                     </div>
-                    <span className="w-16 text-right font-mono text-xs text-ink-faint">{w.count}{w.points ? ` · ${w.points}p` : ""}</span>
                   </li>
                 ))}
               </ul>
