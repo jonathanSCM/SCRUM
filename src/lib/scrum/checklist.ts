@@ -1,6 +1,7 @@
 // Checklist dentro de la tarjeta y jerarquía historia > tarea (código puro).
 
-export type ChecklistItem = { id: string; text: string; done: boolean; due?: string | null }; // due: "AAAA-MM-DD"
+// Subtareas de un ticket: pasos pequeños con casilla, responsable y fecha límite opcionales. due: "AAAA-MM-DD".
+export type ChecklistItem = { id: string; text: string; done: boolean; due?: string | null; assignee?: string | null };
 
 export const isDueDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
@@ -15,7 +16,10 @@ export function parseChecklist(raw: string | null | undefined): ChecklistItem[] 
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((i): i is ChecklistItem => !!i && typeof i.id === "string" && typeof i.text === "string" && typeof i.done === "boolean")
-      .map((i) => (isDueDate((i as ChecklistItem).due) ? { id: i.id, text: i.text, done: i.done, due: (i as ChecklistItem).due } : { id: i.id, text: i.text, done: i.done }));
+      .map((i) => {
+        const it = i as ChecklistItem;
+        return { id: i.id, text: i.text, done: i.done, ...(isDueDate(it.due) ? { due: it.due } : {}), ...(typeof it.assignee === "string" && it.assignee ? { assignee: it.assignee } : {}) };
+      });
   } catch {
     return [];
   }

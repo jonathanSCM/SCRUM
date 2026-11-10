@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
-import { channelSlug, ensureChannels } from "@/lib/chatChannels";
+import { channelSlug, channelSummaries, ensureChannels } from "@/lib/chatChannels";
 import { parseBody, readJson } from "@/lib/validation";
 
 const MAX_CHANNELS = 20;
@@ -12,7 +12,8 @@ export async function GET() {
   const auth = await apiUser({ workspace: true });
   if ("error" in auth) return auth.error;
   try {
-    return NextResponse.json(await ensureChannels(auth.user.workspaceId!));
+    // Canales con su último mensaje y los mensajes sin leer de la persona (panel izquierdo del chat).
+    return NextResponse.json(await channelSummaries(auth.user.workspaceId!, auth.user.id), { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return errorResponse(e);
   }
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Ya existe un canal con ese nombre" }, { status: 400 });
     }
     const ch = await prisma.chatChannel.create({ data: { workspaceId, name: parsed.data.name, slug, kind: "CUSTOM" } });
-    return NextResponse.json({ id: ch.id, name: ch.name, kind: "CUSTOM" }, { status: 201 });
+    return NextResponse.json({ id: ch.id, name: ch.name, kind: "CUSTOM", projectId: null, projectKey: null }, { status: 201 });
   } catch (e) {
     return errorResponse(e);
   }

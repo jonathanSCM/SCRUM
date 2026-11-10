@@ -112,7 +112,7 @@ export async function POST(req: Request) {
     const mentioned = found.filter((r) => r.kind === "user" && r.id !== auth.user.id).map((r) => r.id);
     if (mentioned.length) {
       const text = plainText(body, (r) => resolved.get(`${r.kind.toUpperCase()}:${r.id}`)?.label ?? "");
-      void notifyUsers(mentioned, { kind: "MENTION", title: `${auth.user.name} te mencionó en el chat`, body: text.slice(0, 160) || "Archivo adjunto", url: "/chat", workspaceId, groupKey: `chat-${auth.user.id}` });
+      void notifyUsers(mentioned, { kind: "MENTION", title: `${auth.user.name} te mencionó en el chat`, body: text.slice(0, 160) || "Archivo adjunto", url: `/chat?canal=${channelId}`, workspaceId, groupKey: `chat-${auth.user.id}` });
     }
 
     return NextResponse.json(dto, { status: 201 });
