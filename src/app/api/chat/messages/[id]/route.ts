@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
-import { errorResponse, notFound } from "@/lib/api";
+import { errorResponse } from "@/lib/api";
+import { messageVisibleTo } from "@/lib/chatChannels";
 
 // Borra el mensaje de verdad (con sus archivos, reacciones y referencias).
 // Las respuestas que lo citaban quedan como mensajes normales, sin la cita.
@@ -11,8 +12,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   try {
-    const message = await prisma.chatMessage.findUnique({ where: { id }, select: { authorId: true } });
-    if (!message) return NextResponse.json({ ok: true }); // ya no existe: nada que hacer
+    const message = await prisma.chatMessage.findFirst({ where: { id, ...messageVisibleTo(auth.user.id) }, select: { authorId: true } });
+    if (!message) return NextResponse.json({ ok: true }); // ya no existe (o no es tuyo para verlo): nada que hacer
     if (message.authorId !== auth.user.id && auth.user.role !== "LEAD") {
       return NextResponse.json({ error: "Solo su autor o un líder puede borrar el mensaje" }, { status: 403 });
     }

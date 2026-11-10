@@ -3,7 +3,37 @@ import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/scrum/roles";
 import { snippetOf } from "@/lib/scrum/chat";
 
-export type ChannelDTO = { id: string; name: string; kind: "GENERAL" | "REUNIONES" | "CUSTOM" | "PROJECT"; projectId: string | null; projectKey: string | null };
+export type ChannelKind = "GENERAL" | "REUNIONES" | "CUSTOM" | "PROJECT" | "PRIVATE" | "DIRECT";
+export type ChannelMember = { id: string; name: string };
+// members: solo en canales privados y mensajes directos. peerId: en un mensaje directo, la otra persona.
+export type ChannelDTO = { id: string; name: string; kind: ChannelKind; projectId: string | null; projectKey: string | null; members: ChannelMember[]; peerId: string | null };
+
+export const isRestricted = (kind: string) => kind === "PRIVATE" || kind === "DIRECT";
+
+// Condición de Prisma sobre ChatMessage: solo mensajes que `userId` puede ver
+// (los de canales abiertos y los de canales privados / directos de los que es miembro).
+export const messageVisibleTo = (userId: string) => ({
+  OR: [{ channelId: null }, { channel: { is: { OR: [{ kind: { notIn: ["PRIVATE", "DIRECT"] } }, { members: { some: { userId } } }] } } }],
+});
+
+// ¿Puede esta persona entrar al canal? (el canal debe ser de su equipo; los privados, solo miembros)
+export async function canAccessChannel(workspaceId: string, userId: string, channelId: string): Promise<boolean> {
+  const ch = await prisma.chatChannel.findFirst({ where: { id: channelId, workspaceId }, select: { kind: true, members: { where: { userId }, select: { id: true } } } });
+  if (!ch) return false;
+  return !isRestricted(ch.kind) || ch.members.length > 0;
+}
+
+// Mensaje directo entre dos personas del equipo: se crea la primera vez y después se reutiliza.
+export async function openDirect(workspaceId: string, meId: string, peerId: string): Promise<string> {
+  const slug = `dm-${[meId, peerId].sort().join("-")}`;
+  const ch = await prisma.chatChannel.upsert({
+    where: { workspaceId_slug: { workspaceId, slug } },
+    create: { workspaceId, slug, name: "Mensaje directo", kind: "DIRECT", members: { create: [{ userId: meId }, { userId: peerId }] } },
+    update: {},
+    select: { id: true },
+  });
+  return ch.id;
+}
 
 const DEFAULTS = [
   { slug: "general", name: "General", kind: "GENERAL" },
@@ -12,9 +42,9 @@ const DEFAULTS = [
 
 // Devuelve los canales del equipo. Crea "General" y "Reuniones" la primera vez, y un canal por cada proyecto
 // (el chat del proyecto es su canal). El nombre de un canal de proyecto es el del proyecto, siempre al día.
-export async function ensureChannels(workspaceId: string): Promise<ChannelDTO[]> {
+export async function ensureChannels(workspaceId: string, viewerId?: string): Promise<ChannelDTO[]> {
   const [rows, projects] = await Promise.all([
-    prisma.chatChannel.findMany({ where: { workspaceId }, orderBy: { createdAt: "asc" }, include: { project: { select: { name: true, key: true } } } }),
+    prisma.chatChannel.findMany({ where: { workspaceId, ...visibleChannels(viewerId) }, orderBy: { createdAt: "asc" }, include: { project: { select: { name: true, key: true } }, members: { select: { user: { select: { id: true, name: true } } } } } }),
     prisma.project.findMany({ where: { workspaceId }, select: { id: true, name: true, key: true } }),
   ]);
   let list = rows;
@@ -23,20 +53,28 @@ export async function ensureChannels(workspaceId: string): Promise<ChannelDTO[]>
   if (missingDefaults.length || missingProjects.length) {
     for (const d of missingDefaults) await prisma.chatChannel.upsert({ where: { workspaceId_slug: { workspaceId, slug: d.slug } }, create: { workspaceId, ...d }, update: {} });
     for (const p of missingProjects) await prisma.chatChannel.upsert({ where: { workspaceId_slug: { workspaceId, slug: `proyecto-${p.id}` } }, create: { workspaceId, slug: `proyecto-${p.id}`, name: p.name, kind: "PROJECT", projectId: p.id }, update: {} });
-    list = await prisma.chatChannel.findMany({ where: { workspaceId }, orderBy: { createdAt: "asc" }, include: { project: { select: { name: true, key: true } } } });
+    list = await prisma.chatChannel.findMany({ where: { workspaceId, ...visibleChannels(viewerId) }, orderBy: { createdAt: "asc" }, include: { project: { select: { name: true, key: true } }, members: { select: { user: { select: { id: true, name: true } } } } } });
   }
-  const order = (k: string) => (k === "GENERAL" ? 0 : k === "REUNIONES" ? 1 : k === "CUSTOM" ? 2 : 3);
+  const order = (k: string) => (k === "GENERAL" ? 0 : k === "REUNIONES" ? 1 : k === "CUSTOM" ? 2 : k === "PRIVATE" ? 3 : k === "DIRECT" ? 4 : 5);
   return list
-    .map((r) => ({ id: r.id, name: r.kind === "PROJECT" && r.project ? r.project.name : r.name, kind: r.kind as ChannelDTO["kind"], projectId: r.projectId, projectKey: r.project?.key ?? null, at: r.createdAt.getTime() }))
-    .sort((a, b) => order(a.kind) - order(b.kind) || (a.kind === "PROJECT" ? a.name.localeCompare(b.name) : a.at - b.at))
+    .map((r) => {
+      const members = isRestricted(r.kind) ? r.members.map((m) => m.user) : [];
+      const peer = r.kind === "DIRECT" ? members.find((m) => m.id !== viewerId) ?? members[0] ?? null : null;
+      const name = r.kind === "PROJECT" && r.project ? r.project.name : peer ? peer.name : r.name;
+      return { id: r.id, name, kind: r.kind as ChannelKind, projectId: r.projectId, projectKey: r.project?.key ?? null, members, peerId: peer?.id ?? null, at: r.createdAt.getTime() };
+    })
+    .sort((a, b) => order(a.kind) - order(b.kind) || (a.kind === "PROJECT" || a.kind === "DIRECT" ? a.name.localeCompare(b.name) : a.at - b.at))
     .map(({ at: _at, ...c }) => c);
 }
+
+// Qué canales ve cada persona: sin viewerId solo los abiertos (nunca se filtran los privados por descuido).
+const visibleChannels = (viewerId?: string) => ({ OR: [{ kind: { notIn: ["PRIVATE", "DIRECT"] } }, ...(viewerId ? [{ members: { some: { userId: viewerId } } }] : [])] });
 
 export const channelSlug = (name: string) => slugify(name) || "canal";
 
 // Filtro de mensajes de un canal. En "General" entran también los mensajes anteriores a los canales (sin canal).
-export async function channelFilter(workspaceId: string, channelId: string) {
-  const ch = await prisma.chatChannel.findFirst({ where: { id: channelId, workspaceId }, select: { id: true, kind: true } });
+export async function channelFilter(workspaceId: string, channelId: string, viewerId: string) {
+  const ch = await prisma.chatChannel.findFirst({ where: { id: channelId, workspaceId, ...visibleChannels(viewerId) }, select: { id: true, kind: true } });
   if (!ch) return null;
   return ch.kind === "GENERAL" ? { OR: [{ channelId: ch.id }, { channelId: null }] } : { channelId: ch.id };
 }
@@ -46,7 +84,7 @@ export type ChannelSummary = ChannelDTO & { unread: number; last: { text: string
 // Lista de canales para el panel izquierdo del chat: último mensaje y mensajes sin leer de cada uno.
 // La primera vez que alguien ve un canal se marca como leído hasta ahora (no se llena de "sin leer" lo anterior).
 export async function channelSummaries(workspaceId: string, userId: string): Promise<ChannelSummary[]> {
-  const channels = await ensureChannels(workspaceId);
+  const channels = await ensureChannels(workspaceId, userId);
   const now = new Date();
   const reads = await prisma.chatRead.findMany({ where: { userId, channelId: { in: channels.map((c) => c.id) } } });
   const lastRead = new Map(reads.map((r) => [r.channelId, r.lastReadAt]));
@@ -60,9 +98,9 @@ export async function channelSummaries(workspaceId: string, userId: string): Pro
   const norm = (id: string | null) => id ?? generalId;
   const since = new Date(Math.min(...[...lastRead.values()].map((d) => d.getTime())));
   const [fresh, lasts] = await Promise.all([
-    prisma.chatMessage.findMany({ where: { workspaceId, deletedAt: null, createdAt: { gt: since }, authorId: { not: userId } }, select: { channelId: true, createdAt: true }, take: 3000 }),
+    prisma.chatMessage.findMany({ where: { workspaceId, deletedAt: null, createdAt: { gt: since }, authorId: { not: userId }, ...messageVisibleTo(userId) }, select: { channelId: true, createdAt: true }, take: 3000 }),
     prisma.chatMessage.findMany({
-      where: { workspaceId, deletedAt: null },
+      where: { workspaceId, deletedAt: null, ...messageVisibleTo(userId) },
       orderBy: { createdAt: "desc" },
       distinct: ["channelId"],
       select: { channelId: true, body: true, createdAt: true, author: { select: { name: true } }, _count: { select: { files: true } } },
@@ -88,8 +126,7 @@ export async function channelSummaries(workspaceId: string, userId: string): Pro
 }
 
 export async function markChannelRead(workspaceId: string, userId: string, channelId: string): Promise<boolean> {
-  const ch = await prisma.chatChannel.findFirst({ where: { id: channelId, workspaceId }, select: { id: true } });
-  if (!ch) return false;
+  if (!(await canAccessChannel(workspaceId, userId, channelId))) return false;
   await prisma.chatRead.upsert({ where: { userId_channelId: { userId, channelId } }, create: { userId, channelId }, update: { lastReadAt: new Date() } });
   return true;
 }

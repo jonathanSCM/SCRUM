@@ -1,4 +1,5 @@
 import "server-only";
+import { messageVisibleTo } from "@/lib/chatChannels";
 import { prisma } from "@/lib/prisma";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { parseRefs, snippetOf, type RefKind } from "@/lib/scrum/chat";
@@ -96,13 +97,14 @@ export async function toDTOs(rows: Row[], workspaceId: string): Promise<ChatMess
 
 // Últimos mensajes (cronológico). after: solo los más nuevos. projectId: solo los que mencionan ese proyecto.
 // channel: filtro de un canal (ver channelFilter). announce: solo los avisos por comando de todos los canales.
-export async function loadMessages(opts: { workspaceId: string; after?: Date | null; projectId?: string | null; limit?: number; channel?: object | null; announce?: boolean }): Promise<ChatMessageDTO[]> {
+export async function loadMessages(opts: { workspaceId: string; viewerId: string; after?: Date | null; projectId?: string | null; limit?: number; channel?: object | null; announce?: boolean }): Promise<ChatMessageDTO[]> {
   const projectFilter = {
     workspaceId: opts.workspaceId,
     deletedAt: null,
     ...(opts.projectId ? { refs: { some: { projectId: opts.projectId } } } : {}),
-    ...(opts.channel ? opts.channel : {}),
     ...(opts.announce ? { announce: true } : {}),
+    // AND para no pisar el OR de "General"; siempre se filtran los canales privados ajenos.
+    AND: [messageVisibleTo(opts.viewerId), ...(opts.channel ? [opts.channel] : [])],
   };
   // Con "after" se devuelve lo que cambió desde entonces (mensajes nuevos, reacciones, borrados).
   if (opts.after) {

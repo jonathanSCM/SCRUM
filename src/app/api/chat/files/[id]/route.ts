@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
+import { prisma } from "@/lib/prisma";
+import { messageVisibleTo } from "@/lib/chatChannels";
 import { getChatFile } from "@/lib/fileStore";
 
 // Solo imágenes y PDF se muestran dentro del navegador; el resto se descarga.
@@ -12,6 +14,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
 
   try {
+    // Un archivo de un canal privado solo lo abren sus miembros; uno sin enviar, solo quien lo subió.
+    const meta = await prisma.chatFile.findUnique({ where: { id }, select: { messageId: true, uploadedById: true } });
+    if (!meta) return notFound("Archivo no encontrado");
+    if (meta.messageId) {
+      if (!(await prisma.chatMessage.findFirst({ where: { id: meta.messageId, ...messageVisibleTo(auth.user.id) }, select: { id: true } }))) return notFound("Archivo no encontrado");
+    } else if (meta.uploadedById !== auth.user.id) return notFound("Archivo no encontrado");
     const file = await getChatFile(id);
     if (!file) return notFound("Archivo no encontrado");
     const inline = INLINE_TYPES.test(file.mimeType);
