@@ -117,6 +117,8 @@ export function PwaCard() {
         )}
       </div>
 
+      <BadgeCheck installed={p.installed} permission={p.permission} isIos={isIos} />
+
       <div className="space-y-1.5 border-t border-line-strong pt-4">
         <p className="text-sm font-semibold text-ink">Notificaciones en este dispositivo</p>
         {!p.serverEnabled ? (
@@ -169,6 +171,46 @@ export function NotificationPrompt() {
       <p className="min-w-0 flex-1 text-sm text-ink">¿Querés recibir avisos en este dispositivo cuando te asignen un ticket o te comenten?</p>
       <button className="btn-primary btn-sm" disabled={p.busy} onClick={p.enable}>Activar notificaciones</button>
       <button className="btn-ghost btn-sm" onClick={dismiss}>Ahora no</button>
+    </div>
+  );
+}
+
+// Diagnóstico de la "bolita" (número de avisos sin leer sobre el icono de la app). En iPhone solo funciona con la app
+// instalada en la pantalla de inicio y con las notificaciones permitidas desde esa app; esta tarjeta dice qué falta.
+function BadgeCheck({ installed, permission, isIos }: { installed: boolean; permission: NotificationPermission; isIos: boolean }) {
+  const toast = useToast();
+  const [api_, setApi] = useState(false);
+  useEffect(() => setApi(typeof navigator !== "undefined" && "setAppBadge" in navigator), []);
+  const rows: Array<[boolean, string]> = [
+    [installed, isIos ? "App instalada en la pantalla de inicio (Compartir → Añadir a pantalla de inicio)" : "App instalada como aplicación"],
+    [permission === "granted", "Notificaciones permitidas (se piden desde la app instalada)"],
+    [api_, isIos ? "Este iPhone admite la bolita (iOS 16.4 o más reciente)" : "Este navegador admite la bolita"],
+  ];
+  async function test() {
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    try {
+      await nav.setAppBadge?.(7);
+      toast.success("Puse un 7 en el icono por unos segundos: mira la pantalla de inicio.");
+      window.setTimeout(() => void nav.clearAppBadge?.().catch(() => {}), 8000);
+    } catch {
+      toast.error("El sistema no dejó poner la bolita. Revisa los puntos de arriba.");
+    }
+  }
+  return (
+    <div className="space-y-1.5 border-t border-line-strong pt-4">
+      <p className="text-sm font-semibold text-ink">Bolita con el número de avisos</p>
+      <ul className="space-y-1 text-xs">
+        {rows.map(([ok, label]) => (
+          <li key={label} className={ok ? "text-moss-ink" : "text-ink-soft"}>
+            <span aria-hidden="true">{ok ? "✓" : "✗"}</span> {label}
+          </li>
+        ))}
+      </ul>
+      {rows.every(([ok]) => ok) ? (
+        <button className="btn-ghost btn-sm" onClick={test}>Probar la bolita</button>
+      ) : (
+        <p className="text-xs text-ink-faint">Cuando los tres puntos estén en ✓, el número aparece solo en el icono cada vez que llegue un aviso.</p>
+      )}
     </div>
   );
 }
