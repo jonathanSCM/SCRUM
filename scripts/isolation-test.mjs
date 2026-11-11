@@ -1052,6 +1052,16 @@ async function main() {
   check("otro equipo no puede tocar la definición del ticket", dorX.status === 404 || dorX.status === 403, `dio ${dorX.status}`);
   await cAOwner.req("PATCH", `/api/projects/${A.project.id}`, { readyItems: [] });
 
+  console.log("27) Referencias a tarjetas de la Biblioteca desde el chat");
+  const libCardA = await prisma.fileCard.create({ data: { title: "Contrato Acme firmado", category: "CONTRATO", workspaceId: A.ws.id } });
+  const libCardB = await prisma.fileCard.create({ data: { title: "Contrato secreto de B", category: "CONTRATO", workspaceId: B.ws.id } });
+  const ixCards = await cPlain.req("GET", "/api/chat/index");
+  check("el índice del chat ofrece las tarjetas del equipo (y solo las suyas)", ixCards.json.cards?.some((c) => c.id === libCardA.id) && !ixCards.json.cards.some((c) => c.id === libCardB.id));
+  const refMsg = await cPlain.req("POST", "/api/chat/messages", { body: `mira [[card:${libCardA.id}]] y [[card:${libCardB.id}]]` });
+  const refDto = refMsg.json?.refs ?? [];
+  check("una tarjeta de la Biblioteca se puede mencionar en el chat y lleva a la biblioteca", refMsg.status === 201 && refDto.some((r) => r.kind === "card" && r.label === "Contrato Acme firmado" && r.href === `/library?tarjeta=${libCardA.id}`), JSON.stringify(refDto));
+  check("una tarjeta de otro equipo no se resuelve ni se guarda como referencia", refDto.filter((r) => r.id === libCardB.id).every((r) => r.missing && r.label === "(eliminado)" && !r.href) && (await prisma.chatRef.count({ where: { messageId: refMsg.json.id, targetId: libCardB.id } })) === 0);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

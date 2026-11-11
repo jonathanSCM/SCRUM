@@ -4,6 +4,7 @@ import { membersOf } from "@/lib/workspace";
 import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
+import { categoryLabel } from "@/lib/scrum/library";
 
 // Índice liviano para el autocompletado de # y @ (se pide una vez y se filtra en el navegador).
 export async function GET(req: Request) {
@@ -13,10 +14,11 @@ export async function GET(req: Request) {
     const workspaceId = auth.user.workspaceId!;
 
     // ?project=<id>: solo los sprints y tickets de ese proyecto (segundo nivel del autocompletado).
+    const cardsOf = async () => (await prisma.fileCard.findMany({ where: { workspaceId }, select: { id: true, title: true, category: true }, orderBy: { updatedAt: "desc" }, take: 300 })).map((c) => ({ id: c.id, label: c.title, sub: categoryLabel(c.category) }));
     const only = new URL(req.url).searchParams.get("project");
     if (only) {
       const project = await prisma.project.findFirst({ where: { id: only, workspaceId }, select: { id: true, name: true, key: true } });
-      if (!project) return NextResponse.json({ sprints: [], issues: [] });
+      if (!project) return NextResponse.json({ sprints: [], issues: [], cards: [] });
       const [issues, sprints] = await Promise.all([
         prisma.task.findMany({ where: { projectId: project.id, issueType: { not: "EPIC" } }, select: { id: true, number: true, title: true }, orderBy: { number: "desc" }, take: 1000 }),
         prisma.sprint.findMany({ where: { projectId: project.id }, select: { id: true, name: true, state: true }, orderBy: { createdAt: "desc" }, take: 100 }),
@@ -26,6 +28,7 @@ export async function GET(req: Request) {
       return NextResponse.json({
         sprints: [...sprints].sort((a, b) => rank(a.state) - rank(b.state)).map((x) => ({ id: x.id, label: x.name, sub: x.state === "ACTIVE" ? "activo" : x.state === "PLANNED" ? "planificado" : "cerrado" })),
         issues: issues.map((i) => ({ id: i.id, label: `${formatIssueKey(project.key, i.number)} ${i.title}`, sub: "" })),
+        cards: await cardsOf(),
       });
     }
 
@@ -36,6 +39,7 @@ export async function GET(req: Request) {
       membersOf(workspaceId).then((m) => m.map(({ id, name }) => ({ id, name }))),
     ]);
     return NextResponse.json({
+      cards: await cardsOf(),
       projects: projects.map((p) => ({ id: p.id, label: p.name, sub: p.key ?? "" })),
       issues: issues.map((i) => ({ id: i.id, label: `${formatIssueKey(i.project.key, i.number)} ${i.title}`, sub: i.project.name })),
       sprints: sprints.map((s) => ({ id: s.id, label: s.name, sub: s.project?.name ?? "" })),

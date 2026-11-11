@@ -7,7 +7,7 @@ import { cn, formatBytes, formatDateTime } from "@/lib/ui";
 import { CHAT_EMOJIS, QUICK_REACTIONS, applyInsertedRefs, makeToken, reactorsText, snippetOf, splitMessage, type RefKind } from "@/lib/scrum/chat";
 import Avatar from "@/components/ui/Avatar";
 import { PaperclipIcon } from "@/components/ui/Icons";
-import { AlertIcon, CalendarIcon, LifebuoyIcon, MegaphoneIcon } from "@/components/chat/ChatIcons";
+import { AlertIcon, BookIcon, CalendarIcon, LifebuoyIcon, MegaphoneIcon } from "@/components/chat/ChatIcons";
 import { useToast } from "@/components/ui/Toaster";
 import { isCommand, COMMAND_HELP, COMMAND_LIST, personaQuery } from "@/lib/scrum/chatCommands";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -29,7 +29,7 @@ export type ChatMessage = {
   reactions: Array<{ emoji: string; count: number; users: string[]; userIds: string[] }>;
 };
 type IndexItem = { id: string; label: string; sub: string };
-type ChatIndex = { projects: IndexItem[]; issues: IndexItem[]; sprints: IndexItem[]; users: IndexItem[] };
+type ChatIndex = { projects: IndexItem[]; issues: IndexItem[]; sprints: IndexItem[]; users: IndexItem[]; cards: IndexItem[] };
 type Suggestion = IndexItem & { kind: RefKind; short: string };
 type Pending = { id: string; filename: string; mimeType: string; size: number };
 
@@ -64,8 +64,9 @@ const CHIP_STYLE: Record<RefKind, string> = {
   issue: "border-moss bg-surface text-moss-ink",
   sprint: "border-blue bg-surface text-blue",
   user: "border-line-strong bg-surface text-ink-soft",
+  card: "border-amber-500/60 bg-surface text-amber-700 dark:text-amber-400",
 };
-const KIND_LABEL: Record<RefKind, string> = { project: "Proyecto", issue: "Ticket", sprint: "Sprint", user: "Persona" };
+const KIND_LABEL: Record<RefKind, string> = { project: "Proyecto", issue: "Ticket", sprint: "Sprint", user: "Persona", card: "Biblioteca" };
 
 // En pantallas táctiles Enter hace salto de línea (se envía con el botón).
 const isTouch = () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -97,8 +98,9 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
   const [busy, setBusy] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [attachMenu, setAttachMenu] = useState(false);
   const [index, setIndex] = useState<ChatIndex | null>(null);
-  const [trigger, setTrigger] = useState<{ char: "#" | "@"; query: string; start: number } | null>(null);
+  const [trigger, setTrigger] = useState<{ char: "#" | "@" | "!"; query: string; start: number } | null>(null);
   const [active, setActive] = useState(0);
   // Segundo nivel de #: tras elegir un proyecto se listan solo sus sprints y tickets.
   const [scope, setScope] = useState<{ id: string; label: string; start: number } | null>(null);
@@ -202,6 +204,8 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
     if (trigger.char === "@") return index.users.filter(match).slice(0, 8).map((u) => ({ ...u, kind: "user" as const, short: `@${u.label}` }));
     const issueS = (i: IndexItem) => ({ ...i, kind: "issue" as const, short: `#${i.label.split(" ")[0]}` });
     const sprintS = (s: IndexItem) => ({ ...s, kind: "sprint" as const, short: `#${s.label}` });
+    // "!" es solo para tarjetas de la Biblioteca (así nunca se confunden con proyectos, que usan "#").
+    if (trigger.char === "!") return (index.cards ?? []).filter(match).slice(0, 10).map((c) => ({ ...c, kind: "card" as const, short: `!${c.label}` }));
     // Nivel 2: dentro de un proyecto.
     if (scopeId) {
       const data = scoped[scopeId];
@@ -214,7 +218,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
     // Se busca por nombre o por código (SAI); el código exacto va primero.
     const byCode = (i: IndexItem) => i.sub.toLowerCase() === q;
     const projectMatch = (i: IndexItem) => match(i) || (!!q && i.sub.toLowerCase().startsWith(q));
-    return [...index.projects.filter(projectMatch)].sort((a, b) => Number(byCode(b)) - Number(byCode(a))).slice(0, 12).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` }));
+    return [...[...index.projects.filter(projectMatch)].sort((a, b) => Number(byCode(b)) - Number(byCode(a))).slice(0, 12).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` }))];
   }, [trigger, index, scopeId, scoped]);
 
   // Autocompletado de comandos: "/" lista los comandos; en "/noti persona …" se sugieren nombres.
@@ -233,12 +237,31 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
   }, [draft, index, isLead]);
   const cmdOpen = !trigger && cmdItems.length > 0;
 
+  // Botón "Biblioteca": inserta un "!" y abre la lista de tarjetas.
+  function openLibraryPicker() {
+    const el = inputRef.current;
+    const caret = el?.selectionStart ?? draft.length;
+    const before = draft.slice(0, caret);
+    const lead = before && !/\s$/.test(before) ? " " : "";
+    const next = `${before}${lead}!${draft.slice(caret)}`;
+    const at = before.length + lead.length;
+    setDraft(next);
+    setTrigger({ char: "!", query: "", start: at });
+    setActive(0);
+    void loadIndex();
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(at + 1, at + 1);
+    });
+  }
+
   function onChange(value: string, caret: number) {
     setDraft(value);
     if (/^\/noti/i.test(value)) void loadIndex();
-    const m = value.slice(0, caret).match(/(^|\s)([#@])([^\s#@]*)$/);
-    if (m) {
-      setTrigger({ char: m[2] as "#" | "@", query: m[3], start: caret - m[3].length - 1 });
+    // "!" abre la Biblioteca, pero no dentro de un comando (/noti !urgente …).
+    const m = value.slice(0, caret).match(/(^|\s)([#@!])([^\s#@!]*)$/);
+    if (m && !(m[2] === "!" && value.startsWith("/"))) {
+      setTrigger({ char: m[2] as "#" | "@" | "!", query: m[3], start: caret - m[3].length - 1 });
       setActive(0);
       void loadIndex();
       if (scopeProject && m[2] === "#") void loadScope(scopeProject);
@@ -470,7 +493,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
           </ul>
         )}
         {trigger && index && suggestions.length === 0 && (
-          <p className="absolute bottom-full left-3 mb-1 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-faint shadow-hard">{scopeLoading ? "Cargando…" : `Sin resultados para “${trigger.query}”.`}</p>
+          <p className="absolute bottom-full left-3 mb-1 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-faint shadow-hard">{scopeLoading ? "Cargando…" : trigger.char === "!" && !trigger.query ? "Todavía no hay tarjetas en la Biblioteca." : `Sin resultados para “${trigger.query}”.`}</p>
         )}
 
         {replyTo && (
@@ -510,10 +533,33 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
               e.target.value = "";
             }}
           />
-          <button type="button" className="btn-ghost shrink-0 !px-2.5 sm:!px-3" onClick={() => fileRef.current?.click()} aria-label="Adjuntar archivos" title="Adjuntar archivos (máx. 5 MB). También podés arrastrarlos o pegar una imagen.">
-            <PaperclipIcon size={16} />
-            <span className="hidden sm:inline">Adjuntar</span>
-          </button>
+          <div className="relative shrink-0">
+            <button type="button" className="btn-ghost !px-2.5 sm:!px-3" onClick={() => setAttachMenu((v) => !v)} aria-haspopup="menu" aria-expanded={attachMenu} aria-label="Adjuntar" title="Adjuntar un archivo o una tarjeta de la Biblioteca">
+              <PaperclipIcon size={16} />
+              <span className="hidden sm:inline">Adjuntar</span>
+            </button>
+            {attachMenu && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setAttachMenu(false)} aria-hidden="true" />
+                <div role="menu" className="absolute bottom-full left-0 z-40 mb-2 w-60 overflow-hidden rounded-xl border border-line-strong bg-surface shadow-hard">
+                  <button role="menuitem" type="button" className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-card-2" onClick={() => { setAttachMenu(false); fileRef.current?.click(); }}>
+                    <PaperclipIcon size={16} className="mt-0.5 shrink-0 text-ink-soft" />
+                    <span>
+                      <span className="block text-sm font-semibold text-ink">Subir archivo</span>
+                      <span className="block text-xs text-ink-faint">Desde tu equipo (máx. 5 MB). También puedes arrastrarlo o pegar una imagen.</span>
+                    </span>
+                  </button>
+                  <button role="menuitem" type="button" className="flex w-full items-start gap-2.5 border-t border-line px-3 py-2.5 text-left hover:bg-card-2" onClick={() => { setAttachMenu(false); openLibraryPicker(); }}>
+                    <BookIcon size={16} className="mt-0.5 shrink-0 text-ink-soft" />
+                    <span>
+                      <span className="block text-sm font-semibold text-ink">Biblioteca</span>
+                      <span className="block text-xs text-ink-faint">Mencionar una tarjeta con sus archivos.</span>
+                    </span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button type="button" className="btn-ghost shrink-0 !px-2.5 sm:!px-3" onClick={() => setEmojiOpen((v) => !v)} aria-expanded={emojiOpen} aria-label="Emojis" title="Emojis">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
