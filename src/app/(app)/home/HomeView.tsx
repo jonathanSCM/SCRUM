@@ -1,6 +1,5 @@
 "use client";
 
-import { NotificationPrompt } from "@/components/PwaControls";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { daysRemaining } from "@/lib/scrum/sprintLifecycle";
@@ -36,7 +35,6 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
       <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Hola{first ? `, ${first}` : ""}</h1>
       <p className="mb-6 text-sm text-ink-soft">Así está el portafolio hoy.</p>
 
-      <NotificationPrompt />
 
       <motion.div variants={staggerParent} initial="hidden" animate="show" className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-5">
         {tiles.map((t) => (

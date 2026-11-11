@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { currentSubscription, isStandalone, pushSupported, registerServiceWorker, subscribeToPush, unsubscribeFromPush } from "@/lib/pwaClient";
 import { useToast } from "@/components/ui/Toaster";
@@ -144,33 +144,73 @@ export function PwaCard() {
   );
 }
 
-// Aviso en Inicio que pide el permiso (el navegador exige un clic del usuario).
-export function NotificationPrompt() {
+const SNOOZE_KEY = "push-snooze-until";
+const snoozeFor = (days: number) => {
+  try {
+    localStorage.setItem(SNOOZE_KEY, String(Date.now() + days * 86_400_000));
+  } catch {}
+};
+
+// Pide el permiso de notificaciones al entrar, en cualquier pantalla (no solo en Inicio).
+// Los navegadores (sobre todo iPhone) solo muestran su diálogo tras un toque de la persona, así que:
+//  - en la app instalada, el primer toque en cualquier parte ya abre el diálogo del sistema;
+//  - en el navegador, aparece un aviso abajo con un botón (un toque) y "Ahora no" lo calla unos días;
+//  - si el permiso ya estaba dado pero este dispositivo no quedó suscrito, se suscribe solo.
+export function PushAutoPrompt() {
   const p = usePwa();
-  const [dismissed, setDismissed] = useState(true);
+  const [snoozed, setSnoozed] = useState(true);
+  const isIos = typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent);
 
   useEffect(() => {
     try {
-      setDismissed(localStorage.getItem("push-prompt-dismissed") === "1");
+      setSnoozed(Date.now() < Number(localStorage.getItem(SNOOZE_KEY) || 0));
     } catch {
-      setDismissed(false);
+      setSnoozed(false);
     }
   }, []);
 
-  if (dismissed || !p.serverEnabled || !p.supported || p.permission !== "default" || p.subscribed) return null;
+  const canAsk = p.serverEnabled && p.supported && p.permission === "default" && !p.subscribed;
+  const { enable } = p;
 
-  function dismiss() {
-    try {
-      localStorage.setItem("push-prompt-dismissed", "1");
-    } catch {}
-    setDismissed(true);
-  }
+  // Permiso ya concedido pero sin suscripción en este dispositivo: se suscribe sin molestar.
+  const healed = useRef(false);
+  useEffect(() => {
+    if (p.serverEnabled && p.supported && p.permission === "granted" && !p.subscribed && !healed.current) {
+      healed.current = true;
+      void enable();
+    }
+  }, [p.serverEnabled, p.supported, p.permission, p.subscribed, enable]);
+
+  // App instalada: el primer toque en cualquier parte abre el diálogo del sistema.
+  useEffect(() => {
+    if (!canAsk || snoozed || !p.installed) return;
+    const onTap = (e: Event) => {
+      if ((e.target as HTMLElement | null)?.closest?.("[data-push-banner]")) return;
+      document.removeEventListener("pointerup", onTap, true);
+      void enable();
+    };
+    document.addEventListener("pointerup", onTap, true);
+    return () => document.removeEventListener("pointerup", onTap, true);
+  }, [canAsk, snoozed, p.installed, enable]);
+
+  // iPhone en Safari (sin instalar): las notificaciones y la bolita solo existen en la app instalada.
+  const iosNeedsInstall = isIos && !p.supported && !p.installed;
+  if (snoozed || !(canAsk || iosNeedsInstall)) return null;
 
   return (
-    <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-card-2 px-4 py-3">
-      <p className="min-w-0 flex-1 text-sm text-ink">¿Querés recibir avisos en este dispositivo cuando te asignen un ticket o te comenten?</p>
-      <button className="btn-primary btn-sm" disabled={p.busy} onClick={p.enable}>Activar notificaciones</button>
-      <button className="btn-ghost btn-sm" onClick={dismiss}>Ahora no</button>
+    <div data-push-banner className="fixed inset-x-3 bottom-3 z-50 rounded-xl border border-line-strong bg-card p-4 shadow-hard sm:inset-x-auto sm:right-4 sm:w-96">
+      <p className="text-sm font-semibold text-ink">{iosNeedsInstall ? "Instala la app para recibir avisos" : "Recibe avisos en este dispositivo"}</p>
+      <p className="mt-1 text-xs text-ink-soft">
+        {iosNeedsInstall
+          ? "En iPhone, los avisos y la bolita con el número solo funcionan con la app instalada: toca Compartir → “Añadir a pantalla de inicio” y ábrela desde el icono."
+          : "Te avisamos cuando te asignan un ticket, te escriben o te mencionan, y el icono de la app muestra cuántos avisos tienes."}
+      </p>
+      <div className="mt-3 flex justify-end gap-2">
+        <button className="btn-ghost btn-sm" onClick={() => { snoozeFor(iosNeedsInstall ? 7 : 3); setSnoozed(true); }}>{iosNeedsInstall ? "Entendido" : "Ahora no"}</button>
+        {!iosNeedsInstall && (
+          <button className="btn-primary btn-sm" disabled={p.busy} onClick={() => void enable()}>Activar avisos</button>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import Navbar from "@/components/Navbar";
+import { PushAutoPrompt } from "@/components/PwaControls";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspace } from "@/lib/session";
 import { maxOwnedTeams, normalizeRole } from "@/lib/scrum/roles";
@@ -21,6 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         maxOwned={maxOwned}
       />
       <div className="flex-1">{children}</div>
+      <PushAutoPrompt />
     </div>
   );
 }
