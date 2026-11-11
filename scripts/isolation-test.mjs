@@ -1077,6 +1077,20 @@ async function main() {
   const cmdForeign = await cAOwner.req("POST", "/api/chat/command", { body: `/noti general ajena [[card:${libCardB.id}]] fin` });
   check("una tarjeta de otro equipo no se guarda como mención", cmdForeign.status === 200 && (await prisma.chatRef.count({ where: { targetId: libCardB.id, message: { body: { contains: "ajena" } } } })) === 0);
 
+  console.log("29) Botón Avisar (aviso estructurado, sin escribir comandos)");
+  const nbTeam = await cAOwner.req("POST", "/api/chat/command", { notice: { to: "general", level: "normal", message: "Aviso desde el botón" } });
+  check("un líder avisa a todo el equipo con el botón", nbTeam.status === 200 && (await prisma.chatMessage.count({ where: { workspaceId: A.ws.id, announce: true, body: "Aviso desde el botón" } })) === 1, `dio ${nbTeam.status} ${nbTeam.text.slice(0, 100)}`);
+  const nbPers = await cPlain.req("POST", "/api/chat/command", { notice: { to: "personas", level: "urgente", message: "Te necesito ya", userIds: [aOwner.id] } });
+  check("un miembro avisa a una persona elegida (urgente)", nbPers.status === 200 && (await prisma.notification.count({ where: { userId: aOwner.id, kind: "URGENT", body: { contains: "Te necesito ya" } } })) === 1, `dio ${nbPers.status} ${nbPers.text.slice(0, 100)}`);
+  const nbForeign = await cPlain.req("POST", "/api/chat/command", { notice: { to: "personas", level: "normal", message: "intruso", userIds: [bOnly.id] } });
+  check("no se puede avisar con el botón a alguien de otro equipo (400)", nbForeign.status === 400 && (await prisma.notification.count({ where: { userId: bOnly.id, body: { contains: "intruso" } } })) === 0, `dio ${nbForeign.status}`);
+  check("un miembro no puede avisar a todo el equipo (403)", (await cPlain.req("POST", "/api/chat/command", { notice: { to: "general", level: "normal", message: "spam" } })).status === 403);
+  check("pero sí pedir ayuda al equipo", (await cPlain.req("POST", "/api/chat/command", { notice: { to: "general", level: "ayuda", message: "Necesito ayuda" } })).status === 200);
+  check("un miembro no puede convocar una reunión (403)", (await cPlain.req("POST", "/api/chat/command", { notice: { to: "reunion", level: "normal", when: "mañana", topic: "x" } })).status === 403);
+  const nbReu = await cAOwner.req("POST", "/api/chat/command", { notice: { to: "reunion", level: "normal", when: "viernes 10:00", topic: "retro desde el botón" } });
+  check("un líder convoca una reunión con el botón", nbReu.status === 200 && (await prisma.chatMessage.count({ where: { workspaceId: A.ws.id, body: "Reunión · viernes 10:00: retro desde el botón" } })) === 1);
+  check("sin personas elegidas el aviso no se envía (400)", (await cPlain.req("POST", "/api/chat/command", { notice: { to: "personas", level: "normal", message: "hola", userIds: [] } })).status === 400);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

@@ -11,6 +11,7 @@ import { AlertIcon, BookIcon, CalendarIcon, LifebuoyIcon, MegaphoneIcon } from "
 import { useToast } from "@/components/ui/Toaster";
 import { isCommand, COMMAND_HELP, COMMAND_LIST, personaQuery } from "@/lib/scrum/chatCommands";
 import { useConfirm } from "@/components/ConfirmDialog";
+import NoticeModal from "@/components/chat/NoticeModal";
 
 // Tipos que devuelve la API (ver src/lib/chatData.ts).
 type ResolvedRef = { kind: RefKind; id: string; label: string; sub: string | null; href: string | null; missing: boolean };
@@ -99,6 +100,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [attachMenu, setAttachMenu] = useState(false);
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const [index, setIndex] = useState<ChatIndex | null>(null);
   const [trigger, setTrigger] = useState<{ char: "#" | "@" | "!"; query: string; start: number } | null>(null);
   const [active, setActive] = useState(0);
@@ -565,6 +567,12 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
               </>
             )}
           </div>
+          {!readOnly && (
+            <button type="button" className="btn-ghost shrink-0 !px-2.5 sm:!px-3" onClick={() => setNoticeOpen(true)} aria-label="Enviar un aviso" title="Enviar un aviso a personas o al equipo (sin escribir comandos)">
+              <MegaphoneIcon size={16} />
+              <span className="hidden sm:inline">Avisar</span>
+            </button>
+          )}
           <button type="button" className="btn-ghost shrink-0 !px-2.5 sm:!px-3" onClick={() => setEmojiOpen((v) => !v)} aria-expanded={emojiOpen} aria-label="Emojis" title="Emojis">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
@@ -665,6 +673,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
         <p className="mt-1 hidden text-[11px] text-ink-faint sm:block">Enter envía · Shift+Enter salto de línea</p>
       </div>
       )}
+      <NoticeModal open={noticeOpen} onClose={() => setNoticeOpen(false)} isLead={isLead} currentUserId={currentUserId} />
     </div>
   );
 }

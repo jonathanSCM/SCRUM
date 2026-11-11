@@ -12,7 +12,7 @@ export type Level = "normal" | "ayuda" | "urgente";
 export type ChatCommand =
   | { kind: "slack"; message: string; level: Level }
   | { kind: "general"; message: string; level: Level }
-  | { kind: "persona"; names: string[]; message: string; level: Level }
+  | { kind: "persona"; names: string[]; message: string; level: Level; userIds?: string[] } // userIds: cuando el aviso viene del botón (sin escribir nombres)
   | { kind: "reunion"; when: string; topic: string; level: Level };
 
 export type ParsedCommand = { ok: true; command: ChatCommand } | { ok: false; error: string };

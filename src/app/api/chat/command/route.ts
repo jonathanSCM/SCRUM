@@ -5,7 +5,7 @@ import { apiUser } from "@/lib/session";
 import { membersOf } from "@/lib/workspace";
 import { errorResponse } from "@/lib/api";
 import { parseBody, readJson } from "@/lib/validation";
-import { parseCommand, matchNames, maskRefs } from "@/lib/scrum/chatCommands";
+import { parseCommand, matchNames, maskRefs, type ChatCommand } from "@/lib/scrum/chatCommands";
 import { plainText } from "@/lib/scrum/chat";
 import { refRowsFor } from "@/lib/chatData";
 import { notifyUsers } from "@/lib/notifications";
@@ -20,15 +20,36 @@ import { teamSlackWebhookFor } from "@/lib/teamIntegrations";
 export async function POST(req: Request) {
   const auth = await apiUser({ workspace: true });
   if ("error" in auth) return auth.error;
-  const parsed = parseBody(z.object({ body: z.string().trim().min(1).max(4000) }), await readJson(req));
+  // Dos formas de pedirlo: el comando escrito ("body") o el botón "Avisar" ("notice", ya estructurado).
+  const level = z.enum(["normal", "urgente", "ayuda"]).default("normal");
+  const parsed = parseBody(
+    z.union([
+      z.object({ body: z.string().trim().min(1).max(4000) }),
+      z.object({
+        notice: z.discriminatedUnion("to", [
+          z.object({ to: z.literal("general"), level, message: z.string().trim().min(1, "Escribe el mensaje").max(1000) }),
+          z.object({ to: z.literal("personas"), level, message: z.string().trim().min(1, "Escribe el mensaje").max(1000), userIds: z.array(z.string().min(1).max(40)).min(1, "Elige a quién avisar").max(20) }),
+          z.object({ to: z.literal("reunion"), level, when: z.string().trim().min(1, "Falta cuándo").max(80), topic: z.string().trim().min(1, "Falta el tema").max(500) }),
+        ]),
+      }),
+    ]),
+    await readJson(req)
+  );
   if ("error" in parsed) return parsed.error;
-  // Las menciones [[tipo:id]] se apartan para interpretar el comando y se devuelven al mensaje y al tema.
-  const { masked, unmask } = maskRefs(parsed.data.body);
-  const cmd = parseCommand(masked);
-  if (!cmd.ok) return NextResponse.json({ error: cmd.error }, { status: 400 });
-  const c = cmd.command;
-  if (c.kind === "general" || c.kind === "slack" || c.kind === "persona") c.message = unmask(c.message);
-  if (c.kind === "reunion") c.topic = unmask(c.topic);
+  let c: ChatCommand;
+  if ("notice" in parsed.data) {
+    const n = parsed.data.notice;
+    const lv = n.level ?? "normal";
+    c = n.to === "general" ? { kind: "general", message: n.message, level: lv } : n.to === "personas" ? { kind: "persona", names: [], userIds: n.userIds, message: n.message, level: lv } : { kind: "reunion", when: n.when, topic: n.topic, level: lv };
+  } else {
+    // Las menciones [[tipo:id]] se apartan para interpretar el comando y se devuelven al mensaje y al tema.
+    const { masked, unmask } = maskRefs(parsed.data.body);
+    const cmd = parseCommand(masked);
+    if (!cmd.ok) return NextResponse.json({ error: cmd.error }, { status: 400 });
+    c = cmd.command;
+    if (c.kind === "general" || c.kind === "slack" || c.kind === "persona") c.message = unmask(c.message);
+    if (c.kind === "reunion") c.topic = unmask(c.topic);
+  }
   if (c.kind !== "persona" && !(c.kind === "general" && c.level === "ayuda") && auth.user.role !== "LEAD") return NextResponse.json({ error: "Solo un líder puede avisar a todo el equipo o al canal de Slack" }, { status: 403 });
 
   try {
@@ -55,7 +76,10 @@ export async function POST(req: Request) {
     let label = "";
 
     if (c.kind === "persona") {
-      const { found, missing, ambiguous } = matchNames(c.names, members.map(({ id, name }) => ({ id, name })));
+      const all = members.map(({ id, name }) => ({ id, name }));
+      // Desde el botón llegan los ids de las personas elegidas; desde el comando, los nombres escritos.
+      const { found, missing, ambiguous } = c.userIds ? { found: all.filter((m) => c.userIds!.includes(m.id)), missing: [] as string[], ambiguous: [] as string[] } : matchNames(c.names, all);
+      if (c.userIds && found.length === 0) return NextResponse.json({ error: "Elige a quién avisar" }, { status: 400 });
       if (missing.length || ambiguous.length) {
         const parts = [missing.length ? `No encontré a: ${missing.join(", ")}` : "", ambiguous.length ? `Hay varias personas que coinciden con: ${ambiguous.join(", ")} (escribe el nombre completo)` : ""].filter(Boolean);
         return NextResponse.json({ error: parts.join(". ") }, { status: 400 });
