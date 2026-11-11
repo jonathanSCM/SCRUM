@@ -47,6 +47,12 @@ export const LifebuoyIcon = (p: P) => (
     <path d="m6.3 6.3 3.5 3.5M14.2 14.2l3.5 3.5M17.7 6.3l-3.5 3.5M9.8 14.2l-3.5 3.5" />
   </Svg>
 );
+export const BookIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z" />
+    <path d="M5 17a3 3 0 0 1 3-3h10" />
+  </Svg>
+);
 export const UsersIcon = (p: P) => (
   <Svg {...p}>
     <circle cx="9" cy="8" r="3.2" />
