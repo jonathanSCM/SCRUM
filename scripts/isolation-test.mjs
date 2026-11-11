@@ -1062,6 +1062,21 @@ async function main() {
   check("una tarjeta de la Biblioteca se puede mencionar en el chat y lleva a la biblioteca", refMsg.status === 201 && refDto.some((r) => r.kind === "card" && r.label === "Contrato Acme firmado" && r.href === `/library?tarjeta=${libCardA.id}`), JSON.stringify(refDto));
   check("una tarjeta de otro equipo no se resuelve ni se guarda como referencia", refDto.filter((r) => r.id === libCardB.id).every((r) => r.missing && r.label === "(eliminado)" && !r.href) && (await prisma.chatRef.count({ where: { messageId: refMsg.json.id, targetId: libCardB.id } })) === 0);
 
+  console.log("28) Menciones dentro de comandos (/noti general, /reunion)");
+  const cmdCard = await prisma.fileCard.create({ data: { title: "CRM demo extensión para MEET", category: "ENTREGABLE", workspaceId: A.ws.id } });
+  const cmdRes = await cAOwner.req("POST", "/api/chat/command", { body: `/noti general Aquí está el video guía [[card:${cmdCard.id}]] revísenlo` });
+  check("un aviso con una tarjeta de la Biblioteca se envía", cmdRes.status === 200, `dio ${cmdRes.status} ${cmdRes.text.slice(0, 120)}`);
+  const cmdGen = (await cPlain.req("GET", "/api/chat/channels")).json.find((c) => c.kind === "GENERAL");
+  const cmdMsgs = (await cPlain.req("GET", `/api/chat/messages?channel=${cmdGen.id}`)).json.messages;
+  const cmdMsg = cmdMsgs.find((m) => m.body.includes(`[[card:${cmdCard.id}]]`));
+  check("en el chat el aviso lleva la tarjeta como mención (con su enlace)", !!cmdMsg && cmdMsg.announce && cmdMsg.refs.some((r) => r.kind === "card" && r.label === "CRM demo extensión para MEET" && r.href === `/library?tarjeta=${cmdCard.id}`), JSON.stringify(cmdMsg?.refs));
+  const cmdNote = await prisma.notification.findFirst({ where: { userId: plain.id, kind: "ANNOUNCE", body: { contains: "video guía" } }, orderBy: { createdAt: "desc" } });
+  check("en la bandeja y el teléfono se ve el título de la tarjeta, no la marca", !!cmdNote && cmdNote.body.includes("CRM demo extensión para MEET") && !cmdNote.body.includes("[["), cmdNote?.body);
+  const cmdReu = await cAOwner.req("POST", "/api/chat/command", { body: `/reunion viernes 10:00: ver [[card:${cmdCard.id}]]` });
+  check("/reunion con una tarjeta también funciona (la hora no se confunde con la marca)", cmdReu.status === 200 && (await prisma.chatMessage.count({ where: { workspaceId: A.ws.id, body: { startsWith: "Reunión · viernes 10:00: ver [[card:" } } })) === 1, `dio ${cmdReu.status} ${cmdReu.text.slice(0, 120)}`);
+  const cmdForeign = await cAOwner.req("POST", "/api/chat/command", { body: `/noti general ajena [[card:${libCardB.id}]] fin` });
+  check("una tarjeta de otro equipo no se guarda como mención", cmdForeign.status === 200 && (await prisma.chatRef.count({ where: { targetId: libCardB.id, message: { body: { contains: "ajena" } } } })) === 0);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

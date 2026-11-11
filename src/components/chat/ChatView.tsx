@@ -258,9 +258,10 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
   function onChange(value: string, caret: number) {
     setDraft(value);
     if (/^\/noti/i.test(value)) void loadIndex();
-    // "!" abre la Biblioteca, pero no dentro de un comando (/noti !urgente …).
+    // "!" abre la Biblioteca. En un comando, justo después de la palabra del comando es la marca de nivel (/noti !urgente …).
     const m = value.slice(0, caret).match(/(^|\s)([#@!])([^\s#@!]*)$/);
-    if (m && !(m[2] === "!" && value.startsWith("/"))) {
+    const levelFlag = !!m && m[2] === "!" && /^\/\w+$/.test(value.slice(0, caret - m[3].length - 1).trim());
+    if (m && !levelFlag) {
       setTrigger({ char: m[2] as "#" | "@" | "!", query: m[3], start: caret - m[3].length - 1 });
       setActive(0);
       void loadIndex();
@@ -337,10 +338,14 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
     // Comandos (/noti …, /reunion …): no se publican como mensaje, se ejecutan.
     if (isCommand(draft)) {
       setBusy(true);
-      const cr = await api<{ summary: string }>("/api/chat/command", "POST", { body: draft.trim() });
+      // Las menciones de personas no van en los comandos (los nombres se escriben tal cual); el resto sí.
+      const cmdRefs = inserted.current.filter((r) => !r.token.startsWith("[[user:"));
+      const cr = await api<{ summary: string }>("/api/chat/command", "POST", { body: applyInsertedRefs(draft.trim(), cmdRefs) });
       setBusy(false);
       if (!cr.ok) return toast.error(cr.error);
       toast.success(cr.data.summary);
+      inserted.current = [];
+      setTrigger(null);
       setDraft("");
       if (inputRef.current) inputRef.current.style.height = "auto";
       return;
