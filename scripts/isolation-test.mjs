@@ -1030,6 +1030,28 @@ async function main() {
   const general25 = (await cPlain.req("GET", "/api/chat/channels")).json.find((c) => c.kind === "GENERAL");
   check("al borrar un canal privado se borran sus mensajes (no pasan a General)", prDel.status === 200 && (await prisma.chatMessage.count({ where: { channelId: prId } })) === 0 && !(await cAldo.req("GET", `/api/chat/messages?channel=${general25.id}`)).json.messages.some((m) => m.body === "secreto del liderazgo"));
 
+  console.log("26) Definition of Ready personalizable por ticket");
+  const dorSprint = await prisma.sprint.create({ data: { name: "Sprint DoR", projectId: A.project.id } });
+  const dorT1 = await prisma.task.create({ data: { title: "DoR uno", number: 90, projectId: A.project.id, sprintId: dorSprint.id } });
+  const dorT2 = await prisma.task.create({ data: { title: "DoR dos", number: 91, projectId: A.project.id, sprintId: dorSprint.id } });
+  await cAOwner.req("PATCH", `/api/projects/${A.project.id}`, { readyItems: ["Accesos"] });
+  const dorStart1 = await cAOwner.req("POST", `/api/sprints/${dorSprint.id}/start`, { startDate: "2026-01-01", endDate: "2026-01-14" });
+  check("con la definición del proyecto, los tickets sin cubrirla bloquean el sprint (400)", dorStart1.status === 400 && dorStart1.json?.notReady?.length === 2, `dio ${dorStart1.status} ${dorStart1.text.slice(0, 120)}`);
+  const dorP1 = await cPlain.req("PATCH", `/api/issues/${dorT1.id}`, { readyOff: ["Accesos"] });
+  check("un ticket puede marcar un ítem del proyecto como 'no aplica'", dorP1.status === 200 && (await prisma.task.findUnique({ where: { id: dorT1.id } })).readyOff === '["Accesos"]', `dio ${dorP1.status}`);
+  const dorP2 = await cPlain.req("PATCH", `/api/issues/${dorT2.id}`, { readyExtra: ["Diseño aprobado", "Diseño aprobado"], readyDone: ["Accesos"] });
+  check("un ticket agrega sus propios requisitos (sin duplicados)", dorP2.status === 200 && (await prisma.task.findUnique({ where: { id: dorT2.id } })).readyExtra === '["Diseño aprobado"]');
+  const dorStart2 = await cAOwner.req("POST", `/api/sprints/${dorSprint.id}/start`, { startDate: "2026-01-01", endDate: "2026-01-14" });
+  check("cada ticket se mide con SU definición: solo falta el requisito propio del segundo", dorStart2.status === 400 && dorStart2.json.notReady.length === 1 && dorStart2.json.notReady[0].missing.join() === "Diseño aprobado", dorStart2.text.slice(0, 200));
+  await cPlain.req("PATCH", `/api/issues/${dorT2.id}`, { readyDone: ["Accesos", "Diseño aprobado"] });
+  const dorStart3 = await cAOwner.req("POST", `/api/sprints/${dorSprint.id}/start`, { startDate: "2026-01-01", endDate: "2026-01-14" });
+  check("con todo cubierto el sprint inicia", dorStart3.status === 200, `dio ${dorStart3.status} ${dorStart3.text.slice(0, 150)}`);
+  const dorBk = await cPlain.req("GET", "/api/issues/by-key/SAI-90");
+  check("el detalle del ticket devuelve su definición propia", dorBk.json.issue.readyOff.join() === "Accesos" && Array.isArray(dorBk.json.issue.readyExtra));
+  const dorX = await cBOnly.req("PATCH", `/api/issues/${dorT1.id}`, { readyExtra: ["intruso"] });
+  check("otro equipo no puede tocar la definición del ticket", dorX.status === 404 || dorX.status === 403, `dio ${dorX.status}`);
+  await cAOwner.req("PATCH", `/api/projects/${A.project.id}`, { readyItems: [] });
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

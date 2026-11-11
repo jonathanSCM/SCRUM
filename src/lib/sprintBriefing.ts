@@ -8,7 +8,7 @@ import { geminiKeyFor, slackBotTokenFor } from "@/lib/teamIntegrations";
 import { workspaceOfResource } from "@/lib/workspace";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { PRIORITY_META, STATUS_META, ISSUE_TYPE_META, type IssueStatus, type IssueType, type Priority } from "@/lib/scrum/constants";
-import { missingReadyItems, parseStringList } from "@/lib/scrum/ready";
+import { effectiveReadyItems, missingReadyItems, parseStringList } from "@/lib/scrum/ready";
 import { summarizeTickets, type SprintReportData } from "@/lib/scrum/sprintReport";
 
 export async function loadSprintReportData(sprintId: string): Promise<SprintReportData | null> {
@@ -45,7 +45,7 @@ export async function loadSprintReportData(sprintId: string): Promise<SprintRepo
       assignee: t.assignee?.name ?? null,
       epic: t.epic ? `${formatIssueKey(sprint.project!.key, t.epic.number)} ${t.epic.title}` : null,
       dueDate: t.dueDate?.toISOString() ?? null,
-      readyMissing: missingReadyItems(readyItems, parseStringList(t.readyDone)),
+      readyMissing: missingReadyItems(effectiveReadyItems(readyItems, parseStringList(t.readyExtra), parseStringList(t.readyOff)), parseStringList(t.readyDone)),
     })),
   };
 }

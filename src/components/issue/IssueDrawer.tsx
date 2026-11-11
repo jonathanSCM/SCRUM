@@ -1,5 +1,6 @@
 "use client";
 
+import { effectiveReadyItems } from "@/lib/scrum/ready";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
@@ -45,6 +46,8 @@ type IssueDetail = {
   storyPoints: number | null;
   labels: string[];
   readyDone: string[];
+  readyExtra: string[];
+  readyOff: string[];
   checklist: ChecklistItem[];
   parentId: string | null;
   dueDate: string | null;
@@ -281,8 +284,8 @@ function DrawerBody({
             </section>
           )}
 
-          {!isEpic && data.options.readyItems.length > 0 && (
-            <ReadyChecklist items={data.options.readyItems} done={issue.readyDone} onChange={(readyDone) => patch({ readyDone })} settingsHref={`/projects/${issue.projectId}/settings`} />
+          {!isEpic && (
+            <ReadyChecklist template={data.options.readyItems} extra={issue.readyExtra} off={issue.readyOff} done={issue.readyDone} onChange={patch} settingsHref={`/projects/${issue.projectId}/settings`} />
           )}
 
           {!isEpic && <Checklist items={issue.checklist} people={data.options.members} onChange={(checklist) => patch({ checklist })} />}
@@ -609,33 +612,75 @@ function DescriptionEditor({ value, onSave }: { value: string; onSave: (v: strin
 }
 
 // Definition of Ready: qué falta para poder empezar este ticket.
-function ReadyChecklist({ items, done, onChange, settingsHref }: { items: string[]; done: string[]; onChange: (done: string[]) => void; settingsHref: string }) {
+// Definition of Ready de ESTE ticket. Parte de la lista del proyecto, pero cada ticket la ajusta:
+// puede marcar "no aplica" en un ítem del proyecto y agregar ítems propios.
+function ReadyChecklist({ template, extra, off, done, onChange, settingsHref }: { template: string[]; extra: string[]; off: string[]; done: string[]; onChange: (p: { readyDone?: string[]; readyExtra?: string[]; readyOff?: string[] }) => void; settingsHref: string }) {
+  const [draft, setDraft] = useState("");
+  const items = effectiveReadyItems(template, extra, off);
   const covered = items.filter((i) => done.includes(i)).length;
-  const ready = covered === items.length;
-  function toggle(item: string) {
-    // Se conservan los ítems que ya no están en la definición para no perder el dato.
-    onChange(done.includes(item) ? done.filter((d) => d !== item) : [...done, item]);
-  }
+  const ready = items.length > 0 && covered === items.length;
+  const offItems = template.filter((i) => off.includes(i));
+  const custom = template.length > 0 || extra.length > 0 || off.length > 0;
+
+  // Se conservan los marcados de ítems que ya no están en la lista para no perder el dato.
+  const toggle = (item: string) => onChange({ readyDone: done.includes(item) ? done.filter((d) => d !== item) : [...done, item] });
+  const addOwn = () => {
+    const text = draft.trim();
+    if (!text || items.includes(text)) return setDraft("");
+    setDraft("");
+    onChange({ readyExtra: [...extra, text], readyOff: off.filter((o) => o !== text) });
+  };
+  const removeOwn = (item: string) => onChange({ readyExtra: extra.filter((e) => e !== item), readyDone: done.filter((d) => d !== item) });
+
   return (
     <section>
-      <h3 className="mb-2 flex items-center gap-2 font-display text-sm font-bold text-ink">
-        Definition of Ready <span className="font-mono text-ink-faint">({covered}/{items.length})</span>
-        <span className={`lozenge ${ready ? "text-moss-ink" : "text-warn"}`}>{ready ? "Listo para empezar" : "Falta información"}</span>
+      <h3 className="mb-2 flex flex-wrap items-center gap-2 font-display text-sm font-bold text-ink">
+        Definition of Ready {items.length > 0 && <span className="font-mono text-ink-faint">({covered}/{items.length})</span>}
+        {items.length > 0 && <span className={`lozenge ${ready ? "text-moss-ink" : "text-warn"}`}>{ready ? "Listo para empezar" : "Falta información"}</span>}
       </h3>
       <p className="mb-2 text-xs text-ink-faint">
-        Marca lo que ya tienes para este ticket. La lista de ítems es la misma para todos los tickets del proyecto y se edita en{" "}
-        <a href={settingsHref} className="font-semibold text-rust hover:underline">Ajustes del proyecto</a>.
+        Lo que este ticket necesita para poder empezar. Parte de la lista del{" "}
+        <a href={settingsHref} className="font-semibold text-rust hover:underline">proyecto</a>
+        {custom ? ": quita lo que aquí no aplica y agrega lo propio de este ticket." : ". Agrega lo que este ticket necesite."}
       </p>
       <ul className="space-y-1.5">
-        {items.map((item) => (
-          <li key={item}>
-            <label className="flex cursor-pointer items-center gap-2 border border-line-strong px-2.5 py-1.5 text-sm text-ink hover:border-moss rounded-md">
-              <input type="checkbox" className="h-4 w-4 accent-moss" checked={done.includes(item)} onChange={() => toggle(item)} />
-              <span className="min-w-0 flex-1 break-words">{item}</span>
-            </label>
-          </li>
-        ))}
+        {items.map((item) => {
+          const own = extra.includes(item) && !template.includes(item);
+          return (
+            <li key={item} className="flex items-stretch gap-1.5">
+              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border border-line-strong px-2.5 py-1.5 text-sm text-ink hover:border-moss rounded-md">
+                <input type="checkbox" className="h-4 w-4 shrink-0 accent-moss" checked={done.includes(item)} onChange={() => toggle(item)} />
+                <span className="min-w-0 flex-1 break-words">{item}</span>
+                {own && <span className="lozenge shrink-0 text-ink-soft">propio</span>}
+              </label>
+              <button
+                type="button"
+                className="shrink-0 rounded-md border border-line px-2 text-xs text-ink-faint hover:border-danger hover:text-danger"
+                title={own ? "Quitar este ítem" : "No aplica a este ticket"}
+                onClick={() => (own ? removeOwn(item) : onChange({ readyOff: [...off, item], readyDone: done.filter((d) => d !== item) }))}
+              >
+                {own ? "Quitar" : "No aplica"}
+              </button>
+            </li>
+          );
+        })}
       </ul>
+      {items.length === 0 && <p className="mb-1 text-xs text-ink-faint">Este ticket no tiene requisitos todavía: puede empezar cuando quieras.</p>}
+      <div className="mt-2 flex gap-1.5">
+        <input className="field-sm min-w-0 flex-1" placeholder="Agregar un requisito para este ticket…" maxLength={200} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOwn(); } }} aria-label="Nuevo requisito del ticket" />
+        <button type="button" className="btn-ghost btn-sm" disabled={!draft.trim()} onClick={addOwn}>Agregar</button>
+      </div>
+      {offItems.length > 0 && (
+        <p className="mt-2 text-xs text-ink-faint">
+          No aplican a este ticket:{" "}
+          {offItems.map((o, i) => (
+            <span key={o}>
+              {i > 0 && " · "}
+              <button type="button" className="underline hover:text-ink" title="Volver a pedirlo" onClick={() => onChange({ readyOff: off.filter((x) => x !== o) })}>{o}</button>
+            </span>
+          ))}
+        </p>
+      )}
     </section>
   );
 }

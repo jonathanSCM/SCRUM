@@ -45,6 +45,8 @@ export type IssuePatch = {
   storyPoints?: number | null;
   labels?: string[];
   readyDone?: string[];
+  readyExtra?: string[];
+  readyOff?: string[];
   checklist?: ChecklistItem[];
   parentId?: string | null;
   assigneeUserId?: string | null;
@@ -134,6 +136,8 @@ export async function createIssue(projectId: string, input: CreateIssueInput, ac
         storyPoints: input.storyPoints ?? null,
         labels: JSON.stringify(input.labels ?? []),
         readyDone: JSON.stringify(input.readyDone ?? []),
+        readyExtra: JSON.stringify([...new Set(input.readyExtra ?? [])]),
+        readyOff: JSON.stringify([...new Set(input.readyOff ?? [])]),
         rank: (top._max.rank ?? 0) + RANK_STEP,
         epicColor: issueType === "EPIC" ? input.epicColor ?? EPIC_COLORS[epicCount % EPIC_COLORS.length] : null,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
@@ -328,6 +332,20 @@ export async function updateIssue(
     if (before !== patch.readyDone.join("|")) {
       data.readyDone = JSON.stringify(patch.readyDone);
       track("listo_ticket", `${parseStringList(current.readyDone).length}`, `${patch.readyDone.length}`);
+    }
+  }
+  if (patch.readyExtra !== undefined) {
+    const next = [...new Set(patch.readyExtra)];
+    if (parseStringList(current.readyExtra).join("|") !== next.join("|")) {
+      data.readyExtra = JSON.stringify(next);
+      track("listo_propio_ticket", `${parseStringList(current.readyExtra).length}`, `${next.length}`);
+    }
+  }
+  if (patch.readyOff !== undefined) {
+    const next = [...new Set(patch.readyOff)];
+    if (parseStringList(current.readyOff).join("|") !== next.join("|")) {
+      data.readyOff = JSON.stringify(next);
+      track("listo_no_aplica_ticket", `${parseStringList(current.readyOff).length}`, `${next.length}`);
     }
   }
   if (patch.dueDate !== undefined) {

@@ -4,7 +4,7 @@ import { rankBetween, needsRebalance, rebalance, compareByRank, RANK_STEP } from
 import { computeBurndown } from "./burndown";
 import { computeVelocity } from "./velocity";
 import { validateStart, snapshotOnStart, planCompletion, durationToEnd, daysRemaining, validateLeaveActiveSprint } from "./sprintLifecycle";
-import { parseStringList, missingReadyItems, ticketsNotReady } from "./ready";
+import { parseStringList, missingReadyItems, ticketsNotReady, effectiveReadyItems } from "./ready";
 import { formatTelegramText, TELEGRAM_TOKEN_PATTERN, TELEGRAM_CHAT_PATTERN } from "../telegram";
 import { formatSlackText, SLACK_WEBHOOK_PATTERN } from "../slack";
 import { extractActionItems } from "./notes";
@@ -270,6 +270,24 @@ describe("ready (Definition of Ready)", () => {
     ];
     expect(ticketsNotReady(template, tasks)).toEqual([{ key: "A-2", title: "dos", missing: template }]);
     expect(ticketsNotReady([], tasks)).toEqual([]);
+  });
+  it("cada ticket personaliza su definición: quita lo que no aplica y suma lo propio", () => {
+    expect(effectiveReadyItems(template, [], [])).toEqual(template);
+    expect(effectiveReadyItems(template, [], ["Accesos"])).toEqual(["Estructura de datos"]);
+    expect(effectiveReadyItems(template, ["Diseño aprobado", "Accesos"], [])).toEqual(["Estructura de datos", "Accesos", "Diseño aprobado"]);
+    expect(effectiveReadyItems([], ["Solo este ticket"], [])).toEqual(["Solo este ticket"]);
+  });
+  it("al iniciar el sprint cada ticket se mide con SU definición", () => {
+    const tasks = [
+      { key: "A-1", title: "sin accesos", readyDone: ["Estructura de datos"], readyOff: ["Accesos"] },
+      { key: "A-2", title: "con diseño", readyDone: ["Estructura de datos", "Accesos"], readyExtra: ["Diseño aprobado"] },
+      { key: "A-3", title: "propio y sin proyecto", readyDone: [], readyExtra: ["Brief"] },
+    ];
+    expect(ticketsNotReady(template, tasks)).toEqual([
+      { key: "A-2", title: "con diseño", missing: ["Diseño aprobado"] },
+      { key: "A-3", title: "propio y sin proyecto", missing: [...template, "Brief"] },
+    ]);
+    expect(ticketsNotReady([], [tasks[2]])).toEqual([{ key: "A-3", title: "propio y sin proyecto", missing: ["Brief"] }]);
   });
 });
 

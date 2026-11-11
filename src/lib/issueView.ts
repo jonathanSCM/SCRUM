@@ -27,6 +27,8 @@ export function toIssueCard(task: IssueWithRefs, projectKey: string | null): Iss
     storyPoints: task.storyPoints,
     labels: parseLabels(task.labels),
     readyDone: parseStringList(task.readyDone),
+    readyExtra: parseStringList(task.readyExtra),
+    readyOff: parseStringList(task.readyOff),
     checklist: checklistProgress(parseChecklist(task.checklist)),
     parent: task.parent ? { id: task.parent.id, key: formatIssueKey(projectKey, task.parent.number), title: task.parent.title } : null,
     rank: task.rank,

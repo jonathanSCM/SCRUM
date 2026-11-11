@@ -1,5 +1,6 @@
 "use client";
 
+import { effectiveReadyItems, missingReadyItems } from "@/lib/scrum/ready";
 import type { CSSProperties } from "react";
 import { cn, formatDate, isOverdue } from "@/lib/ui";
 import { STATUSES, STATUS_META, type IssueStatus } from "@/lib/scrum/constants";
@@ -73,7 +74,7 @@ export function IssueRowView({
   readyItems?: string[];
 }) {
   const done = issue.status === "DONE";
-  const readyMissing = readyItems && !done ? readyItems.filter((i) => !issue.readyDone.includes(i)).length : 0;
+  const readyMissing = readyItems && !done ? missingReadyItems(effectiveReadyItems(readyItems, issue.readyExtra, issue.readyOff), issue.readyDone).length : 0;
   return (
     <div
       style={style}

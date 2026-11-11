@@ -63,7 +63,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
 
     return NextResponse.json({
       children,
-      issue: { ...issue, labels: parseLabels(issue.labels), readyDone: parseStringList(issue.readyDone), checklist: parseChecklist(issue.checklist) },
+      issue: { ...issue, labels: parseLabels(issue.labels), readyDone: parseStringList(issue.readyDone), readyExtra: parseStringList(issue.readyExtra), readyOff: parseStringList(issue.readyOff), checklist: parseChecklist(issue.checklist) },
       project,
       involved: involvedRows.map((r) => r.user),
       comments,

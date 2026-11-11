@@ -1,5 +1,6 @@
 "use client";
 
+import { effectiveReadyItems, missingReadyItems } from "@/lib/scrum/ready";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
@@ -529,7 +530,7 @@ export default function BacklogView({
           notReady={(lists[startFor.id] ?? [])
             .map((id) => byId[id])
             .filter(Boolean)
-            .map((i) => ({ key: i.key, title: i.title, missing: options.readyItems.filter((r) => !i.readyDone.includes(r)) }))
+            .map((i) => ({ key: i.key, title: i.title, missing: missingReadyItems(effectiveReadyItems(options.readyItems, i.readyExtra, i.readyOff), i.readyDone) }))
             .filter((i) => i.missing.length > 0)}
         />
       )}
