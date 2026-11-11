@@ -98,6 +98,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
   const [busy, setBusy] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [attachMenu, setAttachMenu] = useState(false);
   const [index, setIndex] = useState<ChatIndex | null>(null);
   const [trigger, setTrigger] = useState<{ char: "#" | "@" | "!"; query: string; start: number } | null>(null);
   const [active, setActive] = useState(0);
@@ -532,14 +533,33 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
               e.target.value = "";
             }}
           />
-          <button type="button" className="btn-ghost shrink-0 !px-2.5 sm:!px-3" onClick={() => fileRef.current?.click()} aria-label="Adjuntar archivos" title="Adjuntar archivos (máx. 5 MB). También podés arrastrarlos o pegar una imagen.">
-            <PaperclipIcon size={16} />
-            <span className="hidden sm:inline">Adjuntar</span>
-          </button>
-          <button type="button" className="btn-ghost shrink-0 !px-2.5 sm:!px-3" onClick={openLibraryPicker} aria-label="Mencionar una tarjeta de la Biblioteca" title="Mencionar una tarjeta de la Biblioteca (también puedes escribir !)">
-            <BookIcon size={16} />
-            <span className="hidden sm:inline">Biblioteca</span>
-          </button>
+          <div className="relative shrink-0">
+            <button type="button" className="btn-ghost !px-2.5 sm:!px-3" onClick={() => setAttachMenu((v) => !v)} aria-haspopup="menu" aria-expanded={attachMenu} aria-label="Adjuntar" title="Adjuntar un archivo o una tarjeta de la Biblioteca">
+              <PaperclipIcon size={16} />
+              <span className="hidden sm:inline">Adjuntar</span>
+            </button>
+            {attachMenu && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setAttachMenu(false)} aria-hidden="true" />
+                <div role="menu" className="absolute bottom-full left-0 z-40 mb-2 w-60 overflow-hidden rounded-xl border border-line-strong bg-surface shadow-hard">
+                  <button role="menuitem" type="button" className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-card-2" onClick={() => { setAttachMenu(false); fileRef.current?.click(); }}>
+                    <PaperclipIcon size={16} className="mt-0.5 shrink-0 text-ink-soft" />
+                    <span>
+                      <span className="block text-sm font-semibold text-ink">Subir archivo</span>
+                      <span className="block text-xs text-ink-faint">Desde tu equipo (máx. 5 MB). También puedes arrastrarlo o pegar una imagen.</span>
+                    </span>
+                  </button>
+                  <button role="menuitem" type="button" className="flex w-full items-start gap-2.5 border-t border-line px-3 py-2.5 text-left hover:bg-card-2" onClick={() => { setAttachMenu(false); openLibraryPicker(); }}>
+                    <BookIcon size={16} className="mt-0.5 shrink-0 text-ink-soft" />
+                    <span>
+                      <span className="block text-sm font-semibold text-ink">Biblioteca</span>
+                      <span className="block text-xs text-ink-faint">Mencionar una tarjeta con sus archivos.</span>
+                    </span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button type="button" className="btn-ghost shrink-0 !px-2.5 sm:!px-3" onClick={() => setEmojiOpen((v) => !v)} aria-expanded={emojiOpen} aria-label="Emojis" title="Emojis">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
