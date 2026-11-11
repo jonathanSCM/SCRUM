@@ -608,7 +608,7 @@ describe("secretBox", () => {
   });
 });
 
-import { parseCommand, matchNames, isCommand, personaQuery } from "./chatCommands";
+import { parseCommand, matchNames, isCommand, personaQuery, maskRefs } from "./chatCommands";
 
 describe("comandos del chat", () => {
   it("detecta comandos", () => {
@@ -934,5 +934,25 @@ describe("movimientos de tickets e insignia del icono", () => {
     expect(titleWithBadge("(3) Backlog | Scrum", 5)).toBe("(5) Backlog | Scrum");
     expect(titleWithBadge("(3) Backlog | Scrum", 0)).toBe("Backlog | Scrum");
     expect(titleWithBadge("Chat | Scrum", 120)).toBe("(99+) Chat | Scrum");
+  });
+});
+
+describe("menciones dentro de comandos", () => {
+  const tok = "[[card:cmabc12345xyz]]";
+  it("las marcas se apartan para interpretar el comando y se devuelven después", () => {
+    const { masked, unmask } = maskRefs(`/noti general Mira ${tok} ahora`);
+    expect(masked).not.toContain("[[");
+    const r = parseCommand(masked);
+    expect(r.ok && r.command.kind === "general" && unmask(r.command.message)).toBe(`Mira ${tok} ahora`);
+  });
+  it("el ':' de la marca no rompe /reunion", () => {
+    const { masked, unmask } = maskRefs(`/reunion viernes 10:00: revisar ${tok}`);
+    const r = parseCommand(masked);
+    expect(r.ok && r.command.kind === "reunion" && r.command.when).toBe("viernes 10:00");
+    expect(r.ok && r.command.kind === "reunion" && unmask(r.command.topic)).toBe(`revisar ${tok}`);
+  });
+  it("las menciones de personas no se tocan", () => {
+    const body = "/noti persona ana: hola [[user:cmabc12345xyz]]";
+    expect(maskRefs(body).masked).toBe(body);
   });
 });

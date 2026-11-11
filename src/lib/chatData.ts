@@ -119,3 +119,16 @@ export async function loadMessages(opts: { workspaceId: string; viewerId: string
 }
 
 export { messageInclude };
+
+// Menciones de un texto ya validadas contra el equipo, listas para guardar como ChatRef (cada una con su proyecto).
+export async function refRowsFor(body: string, workspaceId: string) {
+  const wanted = parseRefs(body);
+  const resolved = await resolveRefs(wanted.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id })), workspaceId);
+  const found = wanted.filter((r) => resolved.has(`${r.kind.toUpperCase()}:${r.id}`));
+  const [issues, sprints] = await Promise.all([
+    prisma.task.findMany({ where: { id: { in: found.filter((r) => r.kind === "issue").map((r) => r.id) }, project: { workspaceId } }, select: { id: true, projectId: true } }),
+    prisma.sprint.findMany({ where: { id: { in: found.filter((r) => r.kind === "sprint").map((r) => r.id) }, project: { workspaceId } }, select: { id: true, projectId: true } }),
+  ]);
+  const projectOf = (kind: string, id: string): string | null => (kind === "project" ? id : kind === "issue" ? issues.find((i) => i.id === id)?.projectId ?? null : kind === "sprint" ? sprints.find((s) => s.id === id)?.projectId ?? null : null);
+  return { resolved, rows: found.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id, projectId: projectOf(r.kind, r.id) })) };
+}

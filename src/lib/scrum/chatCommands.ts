@@ -12,7 +12,7 @@ export type Level = "normal" | "ayuda" | "urgente";
 export type ChatCommand =
   | { kind: "slack"; message: string; level: Level }
   | { kind: "general"; message: string; level: Level }
-  | { kind: "persona"; names: string[]; message: string; level: Level }
+  | { kind: "persona"; names: string[]; message: string; level: Level; userIds?: string[] } // userIds: cuando el aviso viene del botón (sin escribir nombres)
   | { kind: "reunion"; when: string; topic: string; level: Level };
 
 export type ParsedCommand = { ok: true; command: ChatCommand } | { ok: false; error: string };
@@ -116,4 +116,15 @@ export function personaQuery(draft: string): { query: string; start: number } | 
   const lead = segment.length - segment.trimStart().length;
   const start = m[1].length + m[2].lastIndexOf(",") + 1 + lead;
   return { query: segment.trim().replace(/^@/, ""), start };
+}
+
+// Menciones dentro de un comando (tarjetas de la Biblioteca, proyectos, tickets, sprints): las marcas [[tipo:id]]
+// llevan ":" y podrían confundir al separador del comando, así que se guardan aparte mientras se interpreta
+// y se devuelven después. Las menciones de personas no se tocan (los nombres del comando son otra cosa).
+const MASKABLE = /\[\[(?:project|issue|sprint|card):[a-z0-9]{8,40}\]\]/g;
+
+export function maskRefs(body: string): { masked: string; unmask: (text: string) => string } {
+  const stash: string[] = [];
+  const masked = body.replace(MASKABLE, (m) => `⟦${stash.push(m) - 1}⟧`);
+  return { masked, unmask: (text) => text.replace(/⟦(\d+)⟧/g, (_m, i: string) => stash[Number(i)] ?? "") };
 }
