@@ -288,10 +288,11 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
       </section>
 
       <section className="space-y-3 border border-line bg-card p-5 rounded-lg overflow-hidden">
-        <h2 className="font-display text-lg font-extrabold text-ink">Definition of Ready (lista para todos los tickets)</h2>
+        <h2 className="font-display text-lg font-extrabold text-ink">Definition of Ready (lista base del proyecto)</h2>
         <p className="text-sm text-ink-soft">
           Aquí defines la lista de lo que hace falta tener antes de empezar un ticket (por ejemplo: estructura de datos del cliente, accesos, brief, diseño).
-          Cada ticket (historia, tarea o bug) muestra esta misma lista y se marca ticket por ticket; no se puede iniciar un sprint con tickets incompletos, salvo que un líder lo fuerce.
+          Es la lista base: cada ticket (historia, tarea o bug) parte de ella, pero puede marcar "No aplica" en lo que no necesita y agregar requisitos propios, porque no todos los tickets piden lo mismo.
+          No se puede iniciar un sprint con tickets que no cumplan su propia lista, salvo que un líder lo fuerce.
           Escribe un ítem en el campo de abajo (es texto libre, no un correo) y pulsa Añadir.
         </p>
         {readyItems.length === 0 && <p className="text-xs text-ink-faint">Todavía no hay ítems: sin ellos, el sprint se puede iniciar sin revisar nada.</p>}

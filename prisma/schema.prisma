@@ -198,6 +198,8 @@ model Task {
   labels      String  @default("[]")
   checklist   String  @default("[]") // [{ id, text, done }] dentro de la tarjeta
   readyDone   String  @default("[]") // ítems de la Definition of Ready ya cubiertos
+  readyExtra  String  @default("[]") // ítems de Ready propios de este ticket (se suman a los del proyecto)
+  readyOff    String  @default("[]") // ítems del proyecto que NO aplican a este ticket
   rank        Float   @default(0)
   epicColor   String?
 

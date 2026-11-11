@@ -32,13 +32,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const problem = validateStart({ name, startDate, endDate, state: sprint.state, hasOtherActiveSprint: otherActive > 0 });
     if (problem) return NextResponse.json({ error: problem }, { status: 400 });
 
-    const tasks = await prisma.task.findMany({ where: { sprintId: id, issueType: { not: "EPIC" } }, select: { id: true, number: true, title: true, readyDone: true, status: true, storyPoints: true } });
+    const tasks = await prisma.task.findMany({ where: { sprintId: id, issueType: { not: "EPIC" } }, select: { id: true, number: true, title: true, readyDone: true, readyExtra: true, readyOff: true, status: true, storyPoints: true } });
 
     // Definition of Ready: no se inicia con tickets a los que les falta información,
     // salvo que un líder lo fuerce.
     const notReady = ticketsNotReady(
       parseStringList(sprint.project.readyItems),
-      tasks.map((t) => ({ key: formatIssueKey(sprint.project!.key, t.number), title: t.title, readyDone: parseStringList(t.readyDone) }))
+      tasks.map((t) => ({ key: formatIssueKey(sprint.project!.key, t.number), title: t.title, readyDone: parseStringList(t.readyDone), readyExtra: parseStringList(t.readyExtra), readyOff: parseStringList(t.readyOff) }))
     );
     if (notReady.length > 0) {
       if (!parsed.data.force) {
