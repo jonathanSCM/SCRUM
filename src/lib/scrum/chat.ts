@@ -1,9 +1,9 @@
 // Utilidades puras del chat general (marcas de referencia, enlaces, colores).
 
-export const REF_KINDS = ["project", "issue", "sprint", "user"] as const;
+export const REF_KINDS = ["project", "issue", "sprint", "user", "card"] as const;
 export type RefKind = (typeof REF_KINDS)[number];
 
-const TOKEN_RE = /\[\[(project|issue|sprint|user):([a-z0-9]{8,40})\]\]/g;
+const TOKEN_RE = /\[\[(project|issue|sprint|user|card):([a-z0-9]{8,40})\]\]/g;
 
 export function makeToken(kind: RefKind, id: string): string {
   return `[[${kind}:${id}]]`;
@@ -82,7 +82,7 @@ export const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "👀", "✅",
 
 // Texto corto de un mensaje para citarlo en una respuesta.
 export function snippetOf(body: string, hasFiles: boolean, max = 110): string {
-  const t = body.replace(TOKEN_RE, (_m, kind: string) => `[${kind === "project" ? "proyecto" : kind === "issue" ? "ticket" : kind === "sprint" ? "sprint" : "persona"}]`).replace(/\s+/g, " ").trim();
+  const t = body.replace(TOKEN_RE, (_m, kind: string) => `[${kind === "project" ? "proyecto" : kind === "issue" ? "ticket" : kind === "sprint" ? "sprint" : kind === "card" ? "biblioteca" : "persona"}]`).replace(/\s+/g, " ").trim();
   if (!t) return hasFiles ? "Archivo adjunto" : "";
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }

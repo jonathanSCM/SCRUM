@@ -5,8 +5,9 @@ import LibraryView from "./LibraryView";
 
 export const metadata = { title: "Biblioteca" };
 
-export default async function LibraryPage() {
+export default async function LibraryPage({ searchParams }: { searchParams: Promise<{ tarjeta?: string }> }) {
   const ws = await requireWorkspace();
+  const { tarjeta } = await searchParams;
   const [cards, projects] = await Promise.all([
     listCards(ws.workspaceId),
     prisma.project.findMany({ where: { workspaceId: ws.workspaceId }, orderBy: { name: "asc" }, select: { id: true, name: true, key: true } }),
@@ -17,7 +18,7 @@ export default async function LibraryPage() {
       <p className="mb-6 text-sm text-ink-soft">
         Tarjetas con varios archivos y enlaces del equipo: la resolución de una reunión, un contrato, los entregables de un cliente… Cada tarjeta puede tener un tipo, etiquetas y un proyecto.
       </p>
-      <LibraryView initial={cards} projects={projects} currentUserId={ws.session.user.id} isLead={ws.isLead} />
+      <LibraryView initial={cards} projects={projects} currentUserId={ws.session.user.id} isLead={ws.isLead} openCardId={tarjeta} />
     </main>
   );
 }

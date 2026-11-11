@@ -20,7 +20,7 @@ const countText = (c: CardDTO) => {
   return [files ? `${files} ${files === 1 ? "archivo" : "archivos"}` : "", links ? `${links} ${links === 1 ? "enlace" : "enlaces"}` : ""].filter(Boolean).join(" · ");
 };
 
-export default function LibraryView({ initial, projects, currentUserId, isLead }: { initial: CardDTO[]; projects: Project[]; currentUserId: string; isLead: boolean }) {
+export default function LibraryView({ initial, projects, currentUserId, isLead, openCardId }: { initial: CardDTO[]; projects: Project[]; currentUserId: string; isLead: boolean; openCardId?: string }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [cards, setCards] = useState(initial);
@@ -29,7 +29,7 @@ export default function LibraryView({ initial, projects, currentUserId, isLead }
   const [tag, setTag] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
   const [editing, setEditing] = useState<CardDTO | "new" | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(openCardId ?? null);
 
   const allTags = useMemo(() => [...new Set(cards.flatMap((c) => c.tags))].sort((a, b) => a.localeCompare(b)), [cards]);
   const shown = useMemo(() => {

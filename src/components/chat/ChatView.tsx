@@ -29,7 +29,7 @@ export type ChatMessage = {
   reactions: Array<{ emoji: string; count: number; users: string[]; userIds: string[] }>;
 };
 type IndexItem = { id: string; label: string; sub: string };
-type ChatIndex = { projects: IndexItem[]; issues: IndexItem[]; sprints: IndexItem[]; users: IndexItem[] };
+type ChatIndex = { projects: IndexItem[]; issues: IndexItem[]; sprints: IndexItem[]; users: IndexItem[]; cards: IndexItem[] };
 type Suggestion = IndexItem & { kind: RefKind; short: string };
 type Pending = { id: string; filename: string; mimeType: string; size: number };
 
@@ -64,8 +64,9 @@ const CHIP_STYLE: Record<RefKind, string> = {
   issue: "border-moss bg-surface text-moss-ink",
   sprint: "border-blue bg-surface text-blue",
   user: "border-line-strong bg-surface text-ink-soft",
+  card: "border-amber-500/60 bg-surface text-amber-700 dark:text-amber-400",
 };
-const KIND_LABEL: Record<RefKind, string> = { project: "Proyecto", issue: "Ticket", sprint: "Sprint", user: "Persona" };
+const KIND_LABEL: Record<RefKind, string> = { project: "Proyecto", issue: "Ticket", sprint: "Sprint", user: "Persona", card: "Biblioteca" };
 
 // En pantallas táctiles Enter hace salto de línea (se envía con el botón).
 const isTouch = () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
@@ -202,11 +203,14 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
     if (trigger.char === "@") return index.users.filter(match).slice(0, 8).map((u) => ({ ...u, kind: "user" as const, short: `@${u.label}` }));
     const issueS = (i: IndexItem) => ({ ...i, kind: "issue" as const, short: `#${i.label.split(" ")[0]}` });
     const sprintS = (s: IndexItem) => ({ ...s, kind: "sprint" as const, short: `#${s.label}` });
+    // Tarjetas de la Biblioteca: se buscan por título al escribir # (aparecen después de los proyectos o tickets).
+    const cardS = (c: IndexItem) => ({ ...c, kind: "card" as const, short: `#${c.label}` });
+    const cards = !q ? [] : (index.cards ?? []).filter(match).slice(0, 5).map(cardS);
     // Nivel 2: dentro de un proyecto.
     if (scopeId) {
       const data = scoped[scopeId];
       if (!data) return [];
-      return [...data.sprints.filter(match).slice(0, 6).map(sprintS), ...data.issues.filter(match).slice(0, 8).map(issueS)];
+      return [...data.sprints.filter(match).slice(0, 6).map(sprintS), ...data.issues.filter(match).slice(0, 8).map(issueS), ...cards];
     }
     // Atajo: escribir la clave de un ticket (SAI-12) lo busca directo, sin pasar por el proyecto.
     if (/^[a-z][a-z0-9]*-\d*$/i.test(q)) return index.issues.filter(match).slice(0, 8).map(issueS);
@@ -214,7 +218,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
     // Se busca por nombre o por código (SAI); el código exacto va primero.
     const byCode = (i: IndexItem) => i.sub.toLowerCase() === q;
     const projectMatch = (i: IndexItem) => match(i) || (!!q && i.sub.toLowerCase().startsWith(q));
-    return [...index.projects.filter(projectMatch)].sort((a, b) => Number(byCode(b)) - Number(byCode(a))).slice(0, 12).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` }));
+    return [...[...index.projects.filter(projectMatch)].sort((a, b) => Number(byCode(b)) - Number(byCode(a))).slice(0, 12).map((p) => ({ ...p, kind: "project" as const, short: `#${p.label}` })), ...cards];
   }, [trigger, index, scopeId, scoped]);
 
   // Autocompletado de comandos: "/" lista los comandos; en "/noti persona …" se sugieren nombres.
