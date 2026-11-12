@@ -918,6 +918,7 @@ describe("quién reaccionó (estilo Discord)", () => {
 });
 
 import { movementRecipients, badgeCount, titleWithBadge } from "./movement";
+import { decideVersionAction } from "./appVersion";
 
 describe("movimientos de tickets e insignia del icono", () => {
   it("a quién se avisa: sin repetidos y sin quien mueve", () => {
@@ -976,4 +977,14 @@ describe("título con la bolita (no se cuelga)", () => {
       expect(settle(once, n)).toBe(once);
     }
   });
+});
+
+describe("versión de la app y limpieza de caché", () => {
+  const base = { storedCache: "1", serverCache: "1", serverBuild: "b2", clientBuild: "b2", typing: false };
+  it("sin cambios no hace nada", () => expect(decideVersionAction(base)).toBe("none"));
+  it("primera vez: solo recuerda la versión de caché", () => expect(decideVersionAction({ ...base, storedCache: null })).toBe("remember"));
+  it("si se sube CACHE_VERSION, limpia y recarga", () => expect(decideVersionAction({ ...base, serverCache: "2" })).toBe("purge-reload"));
+  it("pero si la persona está escribiendo, limpia y solo avisa (no pierde lo escrito)", () => expect(decideVersionAction({ ...base, serverCache: "2", typing: true })).toBe("purge-banner"));
+  it("versión nueva desplegada: avisa con un botón", () => expect(decideVersionAction({ ...base, serverBuild: "b3" })).toBe("banner"));
+  it("sin id de compilación (desarrollo) no molesta", () => expect(decideVersionAction({ ...base, serverBuild: "", clientBuild: "" })).toBe("none"));
 });

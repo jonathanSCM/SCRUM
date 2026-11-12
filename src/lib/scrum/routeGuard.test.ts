@@ -11,6 +11,7 @@ const ROOT = join(__dirname, "../../app/api");
 
 // Rutas "solo identidad": no leen ni escriben datos de equipos.
 const IDENTITY_ONLY = [
+  "app-version/", // versión desplegada de la app (pública, sin datos)
   "auth/", // login, registro de la primera cuenta, recuperar contraseña
   "invite/", // aceptar una invitación: se valida con el enlace secreto, sin sesión previa
   "push/", // suscripciones del navegador de la propia persona

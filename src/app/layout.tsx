@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import Providers from "./providers";
+import { buildId } from "@/lib/buildId";
 
 // Fuentes empaquetadas en el proyecto (@fontsource): el build no depende de Google Fonts.
 const display = localFont({
@@ -63,7 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen font-sans antialiased">
-        <Providers>{children}</Providers>
+        <Providers buildId={buildId()}>{children}</Providers>
       </body>
     </html>
   );
