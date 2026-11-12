@@ -56,6 +56,15 @@ function AnnounceHeader({ m }: { m: ChatMessage }) {
   );
 }
 
+// Quita de la pantalla del aparato los avisos push de este canal que ya se vieron (donde el sistema lo permite).
+async function dismissChannelNotifications(channelId: string) {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.("/");
+    const list = (await reg?.getNotifications?.()) ?? [];
+    for (const n of list) if (String((n.data as { url?: string } | null)?.url ?? "").includes(`canal=${channelId}`)) n.close();
+  } catch {}
+}
+
 const POLL_MS = 2000;
 const GROUP_MS = 5 * 60 * 1000;
 const IMAGE_RE = /^image\/(png|jpe?g|gif|webp)$/;
@@ -169,14 +178,24 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
 
-  // Marca el canal como leído al abrirlo y cada vez que llegan mensajes mientras se está viendo.
+  // Marca el canal como leído al abrirlo y cada vez que llegan mensajes mientras se está viendo. Con él se limpian
+  // los avisos de ese canal: en la bandeja y la bolita (el servidor los marca) y los que ya salieron en la pantalla del aparato.
   useEffect(() => {
     if (!channelId || announceOnly) return;
-    const t = setTimeout(() => {
+    const markRead = () => {
       if (document.visibilityState !== "visible") return;
-      void api("/api/chat/read", "POST", { channelId }).then(() => window.dispatchEvent(new Event("chat-read")));
-    }, 600);
-    return () => clearTimeout(t);
+      void api<{ cleared: number }>("/api/chat/read", "POST", { channelId }).then((res) => {
+        window.dispatchEvent(new Event("chat-read"));
+        if (res.ok && res.data.cleared > 0) window.dispatchEvent(new Event("notifs-changed"));
+        void dismissChannelNotifications(channelId);
+      });
+    };
+    const t = setTimeout(markRead, 600);
+    document.addEventListener("visibilitychange", markRead);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("visibilitychange", markRead);
+    };
   }, [channelId, announceOnly, messages.length]);
 
   // El índice para # y @ se pide la primera vez que se necesita.
@@ -342,7 +361,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
       setBusy(true);
       // Las menciones de personas no van en los comandos (los nombres se escriben tal cual); el resto sí.
       const cmdRefs = inserted.current.filter((r) => !r.token.startsWith("[[user:"));
-      const cr = await api<{ summary: string }>("/api/chat/command", "POST", { body: applyInsertedRefs(draft.trim(), cmdRefs) });
+      const cr = await api<{ summary: string }>("/api/chat/command", "POST", { body: applyInsertedRefs(draft.trim(), cmdRefs), channelId: channelId ?? undefined });
       setBusy(false);
       if (!cr.ok) return toast.error(cr.error);
       toast.success(cr.data.summary);
@@ -673,7 +692,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
         <p className="mt-1 hidden text-[11px] text-ink-faint sm:block">Enter envía · Shift+Enter salto de línea</p>
       </div>
       )}
-      <NoticeModal open={noticeOpen} onClose={() => setNoticeOpen(false)} isLead={isLead} currentUserId={currentUserId} />
+      <NoticeModal channelId={channelId} open={noticeOpen} onClose={() => setNoticeOpen(false)} isLead={isLead} currentUserId={currentUserId} />
     </div>
   );
 }

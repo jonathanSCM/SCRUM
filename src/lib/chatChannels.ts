@@ -125,8 +125,15 @@ export async function channelSummaries(workspaceId: string, userId: string): Pro
   });
 }
 
-export async function markChannelRead(workspaceId: string, userId: string, channelId: string): Promise<boolean> {
-  if (!(await canAccessChannel(workspaceId, userId, channelId))) return false;
-  await prisma.chatRead.upsert({ where: { userId_channelId: { userId, channelId } }, create: { userId, channelId }, update: { lastReadAt: new Date() } });
-  return true;
+// Marca el canal como leído y, con él, los avisos de ese canal (mensajes, menciones, avisos del equipo): si ya los viste
+// en el chat, no quedan sin leer en la bandeja ni en la bolita. Devuelve cuántos avisos se marcaron, o null si no hay acceso.
+export async function markChannelRead(workspaceId: string, userId: string, channelId: string): Promise<number | null> {
+  const ch = await prisma.chatChannel.findFirst({ where: { id: channelId, workspaceId }, select: { kind: true } });
+  if (!ch || !(await canAccessChannel(workspaceId, userId, channelId))) return null;
+  const now = new Date();
+  await prisma.chatRead.upsert({ where: { userId_channelId: { userId, channelId } }, create: { userId, channelId, lastReadAt: now }, update: { lastReadAt: now } });
+  // Los avisos antiguos de "General" apuntaban a /chat sin canal.
+  const urls = [{ url: { contains: `canal=${channelId}` } }, ...(ch.kind === "GENERAL" ? [{ url: "/chat" }] : [])];
+  const cleared = await prisma.notification.updateMany({ where: { userId, workspaceId, readAt: null, OR: urls }, data: { readAt: now } });
+  return cleared.count;
 }
