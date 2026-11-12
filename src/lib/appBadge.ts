@@ -10,6 +10,7 @@ export function applyUnreadBadge(unread: number): void {
     if (n > 0) void nav.setAppBadge?.(n)?.catch(() => {});
     else void nav.clearAppBadge?.()?.catch(() => {});
   } catch {}
-  const next = titleWithBadge(document.title, unread);
+  // document.title ya viene sin espacios sobrantes: se compara igual para no reescribirlo sin fin.
+  const next = titleWithBadge(document.title, unread).replace(/\s+/g, " ").trim();
   if (next !== document.title) document.title = next;
 }

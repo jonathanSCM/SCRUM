@@ -17,5 +17,7 @@ export function badgeCount(unread: number): number {
 export function titleWithBadge(title: string, unread: number): string {
   const clean = title.replace(/^\(\d+\+?\)\s*/, "");
   const n = badgeCount(unread);
-  return n > 0 ? `(${n}${unread > 99 ? "+" : ""}) ${clean}` : clean;
+  // Con el título vacío (Next lo vacía un instante al navegar) no se pone nada: "(3) " con el espacio final el navegador
+  // lo recorta a "(3)", no coincide con lo escrito y el aviso se volvía a poner sin fin (la página se colgaba).
+  return n > 0 && clean.trim() ? `(${n}${unread > 99 ? "+" : ""}) ${clean}` : clean;
 }
