@@ -60,6 +60,7 @@ model User {
   notifPrefs          NotifPrefs?       @relation("NotifPrefsUser")
   chatReads           ChatRead[]        @relation("ChatReadUser")
   chatChannelMembers  ChatChannelMember[] @relation("ChatChannelMemberUser")
+  draftIssues         DraftIssue[]      @relation("DraftIssueOwner")
   fileCardItemsUploaded FileCardItem[]  @relation("FileCardItemUploader")
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
@@ -133,6 +134,7 @@ model Project {
   lead       User?   @relation("ProjectLead", fields: [leadUserId], references: [id], onDelete: SetNull)
 
   tasks       Task[]
+  drafts      DraftIssue[]
   sprints     Sprint[]
   documents   Document[]
   attachments Attachment[]
@@ -820,4 +822,27 @@ model ProjectFeedItem {
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, sentAt])
+}
+
+// Borrador privado de un ticket: lo ve y lo edita SOLO quien lo creó. Vive aparte de Task a propósito, para que
+// nunca aparezca en tableros, reportes, exportaciones ni búsquedas del equipo. "Compartir" lo convierte en ticket real.
+model DraftIssue {
+  id             String   @id @default(cuid())
+  title          String
+  description    String   @default("")
+  issueType      String   @default("TASK")
+  priority       String   @default("MEDIA")
+  storyPoints    Int?
+  labels         String   @default("[]")
+  assigneeUserId String?
+  epicId         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerId   String
+  owner     User    @relation("DraftIssueOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, ownerId])
 }

@@ -10,6 +10,7 @@ import { ISSUE_TYPES, ISSUE_TYPE_META, PRIORITIES, PRIORITY_META, STORY_POINT_OP
 import type { ProjectOptions } from "@/lib/types";
 import { cn } from "@/lib/ui";
 import { useOpenIssue } from "./useOpenIssue";
+import type { DraftDTO } from "@/lib/drafts";
 
 const EPIC_COLORS = ["#8b5cf6", "#14b88a", "#3b82f6", "#f59e0b", "#ef4444", "#a78bfa"];
 
@@ -21,6 +22,8 @@ export default function CreateIssueModal({
   defaultSprintId = null,
   defaultType = "TASK",
   currentUserId,
+  draft = null,
+  projectPicker,
 }: {
   open: boolean;
   onClose: () => void;
@@ -29,6 +32,10 @@ export default function CreateIssueModal({
   defaultSprintId?: string | null;
   defaultType?: IssueType;
   currentUserId?: string;
+  // Editar un borrador privado ya guardado (se puede guardar de nuevo o compartir con el equipo).
+  draft?: DraftDTO | null;
+  // Crear desde cualquier pantalla: el proyecto se elige arriba.
+  projectPicker?: { projects: Array<{ id: string; name: string; key: string | null }>; onChange: (id: string) => void };
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -46,16 +53,77 @@ export default function CreateIssueModal({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (draft) {
+      setType(draft.issueType);
+      setTitle(draft.title);
+      setDescription(draft.description);
+      setPriority(draft.priority);
+      setPoints(draft.storyPoints != null ? String(draft.storyPoints) : "");
+      setAssignee(draft.assigneeUserId ?? "");
+      setEpicId(draft.epicId ?? "");
+      setSprintId("");
+    } else {
       setType(defaultType);
       setSprintId(defaultSprintId ?? "");
     }
-  }, [open, defaultType, defaultSprintId]);
+  }, [open, defaultType, defaultSprintId, draft]);
 
   const isEpic = type === "EPIC";
 
+  const draftBody = () => ({
+    title,
+    description: description || undefined,
+    issueType: type,
+    priority,
+    storyPoints: !isEpic && points ? Number(points) : undefined,
+    assigneeUserId: assignee || undefined,
+    epicId: !isEpic && epicId ? epicId : undefined,
+  });
+
+  // Guarda (o actualiza) el borrador privado: solo lo ve quien lo crea hasta que lo comparta con el equipo.
+  async function saveDraft(): Promise<DraftDTO | null> {
+    if (!title.trim()) return null;
+    setSaving(true);
+    const res = draft
+      ? await api<DraftDTO>(`/api/projects/${projectId}/drafts/${draft.id}`, "PATCH", { ...draftBody(), storyPoints: !isEpic && points ? Number(points) : null, assigneeUserId: assignee || null, epicId: !isEpic && epicId ? epicId : null, description })
+      : await api<DraftDTO>(`/api/projects/${projectId}/drafts`, "POST", draftBody());
+    setSaving(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return null;
+    }
+    return res.data;
+  }
+
+  async function onSaveDraft() {
+    const saved = await saveDraft();
+    if (!saved) return;
+    toast.success("Borrador guardado: solo tú lo ves");
+    setTitle("");
+    setDescription("");
+    setPoints("");
+    router.refresh();
+    onClose();
+  }
+
+  async function onShareDraft() {
+    const saved = await saveDraft();
+    if (!saved) return;
+    setSaving(true);
+    const res = await api(`/api/projects/${projectId}/drafts/${saved.id}/share`, "POST", { sprintId: sprintId || null });
+    setSaving(false);
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Compartido con el equipo");
+    setTitle("");
+    setDescription("");
+    router.refresh();
+    onClose();
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (draft) return void onShareDraft();
     if (!title.trim()) return;
     setSaving(true);
     const res = await api<{ number: number }>(`/api/projects/${projectId}/issues`, "POST", {
@@ -84,22 +152,39 @@ export default function CreateIssueModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Crear ticket"
+      title={draft ? "Borrador privado" : "Crear ticket"}
       width="max-w-xl"
       footer={
         <>
-          <label className="mr-auto flex items-center gap-2 text-xs text-ink-soft">
-            <input type="checkbox" className="accent-moss" checked={another} onChange={(e) => setAnother(e.target.checked)} />
-            Crear otro
-          </label>
+          {draft ? (
+            <span className="mr-auto text-xs text-ink-faint">Solo tú ves este borrador.</span>
+          ) : (
+            <label className="mr-auto flex items-center gap-2 text-xs text-ink-soft">
+              <input type="checkbox" className="accent-moss" checked={another} onChange={(e) => setAnother(e.target.checked)} />
+              Crear otro
+            </label>
+          )}
           <button type="button" className="btn-ghost" onClick={onClose}>Cancelar</button>
+          <button type="button" className="btn-ghost" disabled={saving || !title.trim()} onClick={onSaveDraft} title="Guárdalo en privado: nadie más lo ve hasta que lo compartas con el equipo">
+            {draft ? "Guardar cambios" : "Guardar borrador privado"}
+          </button>
           <button type="submit" form="create-issue-form" className="btn-primary" disabled={saving || !title.trim()}>
-            {saving ? "Creando…" : "Crear"}
+            {saving ? "Un momento…" : draft ? "Compartir con el equipo" : "Crear"}
           </button>
         </>
       }
     >
       <form id="create-issue-form" onSubmit={submit} className="space-y-4">
+        {projectPicker && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-ink-soft">Proyecto</label>
+            <select className="field" value={projectId} onChange={(e) => projectPicker.onChange(e.target.value)}>
+              {projectPicker.projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.key ? `${p.key} · ` : ""}{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {ISSUE_TYPES.map((t) => (
             <button

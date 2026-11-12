@@ -10,6 +10,8 @@ import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
 import TeamSwitcher, { type TeamOption } from "./TeamSwitcher";
 import Avatar from "@/components/ui/Avatar";
+import GlobalCreate, { OPEN_CREATE_EVENT } from "@/components/GlobalCreate";
+import { PlusIcon } from "@/components/ui/Icons";
 
 const LINKS = [
   { href: "/home", label: "Inicio" },
@@ -20,7 +22,7 @@ const LINKS = [
   { href: "/people", label: "Equipo" },
 ];
 
-export default function Navbar({ userName, userId, isLead, teams, activeId, canCreate, maxOwned }: { userName: string; userId: string; isLead: boolean; teams: TeamOption[]; activeId: string; canCreate: boolean; maxOwned: number }) {
+export default function Navbar({ userName, userId, isLead, teams, activeId, canCreate, maxOwned, projects }: { userName: string; userId: string; isLead: boolean; teams: TeamOption[]; activeId: string; canCreate: boolean; maxOwned: number; projects: Array<{ id: string; name: string; key: string | null }> }) {
   const pathname = usePathname();
   const links = LINKS;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -56,6 +58,7 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
     isActive(href) ? <motion.span layoutId="nav-underline" className="absolute inset-x-0 -bottom-[7px] h-[3px] bg-moss" transition={{ type: "spring", stiffness: 500, damping: 36 }} /> : null;
 
   return (
+    <>
     <nav className="sticky top-0 z-40 border-b border-line bg-paper">
       <div className="mx-auto max-w-[1600px] px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center justify-between gap-4">
@@ -77,6 +80,9 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
           </div>
 
           <div className="flex shrink-0 items-center gap-3 sm:gap-4">
+            <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_CREATE_EVENT))} className="btn-primary btn-sm hidden lg:inline-flex" title="Crear un ticket en cualquier proyecto">
+              <PlusIcon size={14} /> Crear
+            </button>
             <CommandPalette />
             <NotificationBell />
             <ThemeToggle />
@@ -122,6 +128,9 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
         </div>
 
         <div className="mt-3 flex items-center gap-5 overflow-x-auto lg:hidden">
+          <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_CREATE_EVENT))} className="btn-primary btn-sm shrink-0" aria-label="Crear un ticket">
+            <PlusIcon size={14} /> Crear
+          </button>
           {links.map((link) => (
             <Link key={link.href} href={link.href} className={linkClass(link.href)}>
               {link.label}
@@ -130,5 +139,7 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
         </div>
       </div>
     </nav>
+    <GlobalCreate projects={projects} currentUserId={userId} />
+    </>
   );
 }
