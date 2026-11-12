@@ -158,6 +158,9 @@ export const createIssueSchema = z.object({
   dueDate: optionalDate.nullable().optional(),
 });
 
+// Borrador privado de un ticket (SCP-68): solo los campos básicos; el resto se completa al compartirlo.
+export const draftSchema = createIssueSchema.pick({ title: true, description: true, issueType: true, priority: true, storyPoints: true, labels: true, assigneeUserId: true, epicId: true });
+
 export const updateIssueSchema = z.object({
   title: z.string().trim().min(1, "Título requerido").max(300).optional(),
   description: z.string().max(20000).optional(),

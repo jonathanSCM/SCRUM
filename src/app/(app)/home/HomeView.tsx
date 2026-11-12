@@ -7,6 +7,9 @@ import { cn, formatDate, timeAgo } from "@/lib/ui";
 import Avatar from "@/components/ui/Avatar";
 import { AnimatedNumber, ProgressBar, staggerChild, staggerParent } from "@/components/ui/Motion";
 import { useOpenIssue } from "@/components/issue/useOpenIssue";
+import DraftsPanel from "@/components/issue/DraftsPanel";
+import { OPEN_CREATE_EVENT } from "@/components/GlobalCreate";
+import type { DraftDTO } from "@/lib/drafts";
 
 type Props = {
   userName: string;
@@ -15,9 +18,12 @@ type Props = {
   overdue: Array<{ id: string; key: string; title: string; projectId: string; dueDate: string; assignee: string | null }>;
   workload: Array<{ name: string; count: number; points: number }>;
   activity: Array<{ id: string; who: string; projectId: string; projectName: string; at: string; label: string; detail: string }>;
+  drafts: DraftDTO[];
+  projects: Array<{ id: string; name: string; key: string | null }>;
+  currentUserId: string;
 };
 
-export default function HomeView({ userName, kpis, sprints, overdue, workload, activity }: Props) {
+export default function HomeView({ userName, kpis, sprints, overdue, workload, activity, drafts, projects, currentUserId }: Props) {
   const openIssue = useOpenIssue();
   const first = userName.split(" ")[0];
   const maxLoad = Math.max(1, ...workload.map((w) => w.count));
@@ -32,8 +38,15 @@ export default function HomeView({ userName, kpis, sprints, overdue, workload, a
 
   return (
     <main className="mx-auto w-full max-w-[1400px] px-4 pb-16 pt-8 sm:px-6">
-      <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Hola{first ? `, ${first}` : ""}</h1>
-      <p className="mb-6 text-sm text-ink-soft">Así está el portafolio hoy.</p>
+      <div className="mb-6 flex flex-wrap items-end gap-x-4 gap-y-2">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Hola{first ? `, ${first}` : ""}</h1>
+          <p className="text-sm text-ink-soft">Así está el portafolio hoy.</p>
+        </div>
+        <button className="btn-primary" onClick={() => window.dispatchEvent(new Event(OPEN_CREATE_EVENT))}>+ Crear ticket</button>
+      </div>
+
+      <DraftsPanel className="mb-8" drafts={drafts} projects={projects} currentUserId={currentUserId} />
 
 
       <motion.div variants={staggerParent} initial="hidden" animate="show" className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-5">

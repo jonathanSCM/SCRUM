@@ -4,6 +4,7 @@ import { membersOf } from "@/lib/workspace";
 import { describeHistory } from "@/lib/historyText";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { pct } from "@/lib/ui";
+import { listMyDrafts } from "@/lib/drafts";
 import HomeView from "./HomeView";
 
 export const metadata = { title: "Inicio" };
@@ -34,11 +35,14 @@ export default async function HomePage() {
   ]);
 
   const overdueTotal = await prisma.task.count({ where: { ...inWs, issueType: { not: "EPIC" }, status: { not: "DONE" }, dueDate: { lt: now } } });
-  const users = await membersOf(workspaceId);
+  const [users, drafts, projectRefs] = await Promise.all([membersOf(workspaceId), listMyDrafts(session.user.id, { workspaceId }), prisma.project.findMany({ where: { workspaceId }, orderBy: { name: "asc" }, select: { id: true, name: true, key: true } })]);
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
 
   return (
     <HomeView
+      drafts={drafts}
+      projects={projectRefs}
+      currentUserId={session.user.id}
       userName={session.user.name ?? ""}
       kpis={{ projects: projectCount, activeSprints: activeSprints.length, open, overdue: overdueTotal, doneWeek }}
       sprints={activeSprints.map((s) => {

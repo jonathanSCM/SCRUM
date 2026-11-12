@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
 import { getProjectIssues, getProjectOptions, getProjectOrNotFound, getProjectSprints } from "@/lib/projectData";
 import { sprintPdfEnabled } from "@/lib/features";
+import { listMyDrafts } from "@/lib/drafts";
+import DraftsPanel from "@/components/issue/DraftsPanel";
 import BacklogView from "./BacklogView";
 
 export const metadata = { title: "Backlog" };
@@ -21,8 +23,11 @@ export default async function BacklogPage({ params }: { params: Promise<{ id: st
   ]);
 
   const completedCount = await prisma.sprint.count({ where: { projectId: id, state: "COMPLETED" } });
+  const drafts = await listMyDrafts(session.user.id, { projectId: id });
 
   return (
+    <>
+    <DraftsPanel className="mb-4" drafts={drafts} projects={[{ id, name: project.name, key: project.key }]} options={options} currentUserId={session.user.id} />
     <BacklogView
       projectId={id}
       sprints={openSprints}
@@ -33,5 +38,6 @@ export default async function BacklogPage({ params }: { params: Promise<{ id: st
       completedSprints={completedCount}
       pdfEnabled={sprintPdfEnabled()}
     />
+    </>
   );
 }
