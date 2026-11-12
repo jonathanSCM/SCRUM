@@ -956,3 +956,24 @@ describe("menciones dentro de comandos", () => {
     expect(maskRefs(body).masked).toBe(body);
   });
 });
+
+describe("título con la bolita (no se cuelga)", () => {
+  // El navegador devuelve document.title sin espacios al inicio/fin: el resultado debe ser estable al aplicarlo otra vez.
+  const settle = (t: string, n: number) => titleWithBadge(t, n).replace(/\s+/g, " ").trim();
+  it("pone y quita el número delante", () => {
+    expect(titleWithBadge("Backlog | Scrum", 3)).toBe("(3) Backlog | Scrum");
+    expect(titleWithBadge("(3) Backlog | Scrum", 0)).toBe("Backlog | Scrum");
+    expect(titleWithBadge("(3) Backlog | Scrum", 120)).toBe("(99+) Backlog | Scrum");
+  });
+  it("con el título vacío no agrega nada (antes dejaba '(14) ' y se reescribía sin fin)", () => {
+    expect(titleWithBadge("", 14)).toBe("");
+    expect(titleWithBadge("(14)", 14)).toBe("");
+    expect(titleWithBadge("   ", 5).trim()).toBe("");
+  });
+  it("aplicarlo dos veces da lo mismo", () => {
+    for (const t of ["", "(14)", "Chat | Scrum", "(7) Chat | Scrum", "(99+) Avisos"]) for (const n of [0, 1, 14, 120]) {
+      const once = settle(t, n);
+      expect(settle(once, n)).toBe(once);
+    }
+  });
+});
