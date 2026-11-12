@@ -14,7 +14,7 @@ type Level = "normal" | "urgente" | "ayuda";
 
 // "Avisar": lo mismo que los comandos /noti, /reunion, /urgente y /ayuda, pero con botones (sin tener que escribirlos).
 // Un miembro puede avisar a personas o pedir ayuda al equipo; avisar a todo el equipo y convocar reuniones es de quien lidera.
-export default function NoticeModal({ open, onClose, isLead, currentUserId }: { open: boolean; onClose: () => void; isLead: boolean; currentUserId: string }) {
+export default function NoticeModal({ open, onClose, isLead, currentUserId, channelId }: { open: boolean; onClose: () => void; isLead: boolean; currentUserId: string; channelId?: string }) {
   const toast = useToast();
   const [to, setTo] = useState<To>(isLead ? "general" : "personas");
   const [level, setLevel] = useState<Level>("normal");
@@ -45,7 +45,7 @@ export default function NoticeModal({ open, onClose, isLead, currentUserId }: { 
     e.preventDefault();
     setBusy(true);
     const notice = to === "reunion" ? { to, level: effectiveLevel, when, topic } : to === "personas" ? { to, level: effectiveLevel, message, userIds: [...picked] } : { to, level: effectiveLevel, message };
-    const res = await api<{ summary: string }>("/api/chat/command", "POST", { notice });
+    const res = await api<{ summary: string }>("/api/chat/command", "POST", { notice, channelId });
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     toast.success(res.data.summary);

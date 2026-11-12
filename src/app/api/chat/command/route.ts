@@ -24,8 +24,9 @@ export async function POST(req: Request) {
   const level = z.enum(["normal", "urgente", "ayuda"]).default("normal");
   const parsed = parseBody(
     z.union([
-      z.object({ body: z.string().trim().min(1).max(4000) }),
+      z.object({ body: z.string().trim().min(1).max(4000), channelId: z.string().min(1).max(40).optional() }),
       z.object({
+        channelId: z.string().min(1).max(40).optional(),
         notice: z.discriminatedUnion("to", [
           z.object({ to: z.literal("general"), level, message: z.string().trim().min(1, "Escribe el mensaje").max(1000) }),
           z.object({ to: z.literal("personas"), level, message: z.string().trim().min(1, "Escribe el mensaje").max(1000), userIds: z.array(z.string().min(1).max(40)).min(1, "Elige a quién avisar").max(20) }),
@@ -115,19 +116,27 @@ export async function POST(req: Request) {
     }
 
     // Avisos al equipo: quedan también en el chat, resaltados según el nivel.
-    // /reunion va al canal "Reuniones"; el resto de avisos al canal "General".
+    // Se publican en el canal desde el que se enviaron (si es uno abierto al equipo: General, un canal del equipo o de un proyecto),
+    // para que no "desaparezcan" de donde se escribieron. /reunion va a "Reuniones" salvo que se envíe desde ahí.
+    // Como el aviso le llega a TODO el equipo, nunca se publica en un canal privado ni en un mensaje directo: va a "General".
     let chatUrl = "/chat";
+    let postedIn = "";
     if (chatText) {
-      const channels = await ensureChannels(workspaceId);
-      const channelId = channels.find((ch) => ch.kind === (c.kind === "reunion" ? "REUNIONES" : "GENERAL"))?.id;
-      if (c.kind === "reunion" && channelId) chatUrl = `/chat?canal=${channelId}`;
+      const channels = await ensureChannels(workspaceId, me.id);
+      const fallback = channels.find((ch) => ch.kind === (c.kind === "reunion" ? "REUNIONES" : "GENERAL"));
+      const asked = parsed.data.channelId ? channels.find((ch) => ch.id === parsed.data.channelId) : undefined;
+      const open = asked && ["GENERAL", "CUSTOM", "PROJECT", "REUNIONES"].includes(asked.kind) && (c.kind !== "reunion" || asked.kind === "REUNIONES") ? asked : undefined;
+      const target = open ?? fallback;
+      const channelId = target?.id;
+      postedIn = target?.name ?? "";
+      if (channelId) chatUrl = `/chat?canal=${channelId}`;
       await prisma.chatMessage.create({ data: { body: chatText, workspaceId, authorId: me.id, channelId, announce: true, level: level === "normal" ? null : level.toUpperCase(), refs: { create: refInfo.rows } } });
     }
     // Todos estos avisos son instantáneos (no esperan el resumen): persona, general, urgente, ayuda y reunión.
     const noticeKind: NoticeKind = level === "urgente" ? "URGENT" : level === "ayuda" ? "HELP" : c.kind === "persona" ? "DIRECT" : c.kind === "reunion" ? "REUNION" : "ANNOUNCE";
     const priority = level === "urgente" ? "urgent" : level === "ayuda" || c.kind === "reunion" ? "high" : "default";
     const notified = await notifyUsers(targets, { kind: noticeKind, title, body: text.slice(0, 160), url: chatUrl, priority, workspaceId });
-    return NextResponse.json({ ok: true, summary: `Aviso a ${label}${notified ? ` · ${notified} ${notified === 1 ? "persona" : "personas"} (bandeja, navegador y teléfono)` : ""}${toSlack ? " · enviado a Slack" : ""}` });
+    return NextResponse.json({ ok: true, summary: `Aviso a ${label}${notified ? ` · ${notified} ${notified === 1 ? "persona" : "personas"} (bandeja, navegador y teléfono)` : ""}${toSlack ? " · enviado a Slack" : ""}${postedIn ? ` · publicado en ${postedIn}` : ""}` });
   } catch (e) {
     return errorResponse(e);
   }
