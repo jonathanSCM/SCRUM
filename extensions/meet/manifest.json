@@ -4,7 +4,7 @@
   "short_name": "SCRUM Meet",
   "version": "1.0.0",
   "minimum_chrome_version": "116",
-  "description": "Graba los subtítulos y el audio de tus reuniones de Google Meet y los guarda en el calendario de SCRUM ProShop, con subtítulos en vivo en un panel.",
+  "description": "Guarda en el calendario de SCRUM ProShop los subtítulos y el audio de tus reuniones de Google Meet, con subtítulos en vivo.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
