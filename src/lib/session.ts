@@ -34,7 +34,7 @@ export async function requireWorkspace(): Promise<PageAccess> {
 // Si no existe o es de otro equipo, la respuesta es la misma: "no encontrado".
 export async function requireAccessTo(kind: ResourceKind, id: string): Promise<PageAccess> {
   const session = await requireSession();
-  const workspaceId = await workspaceOfResource(kind, id);
+  const workspaceId = await workspaceOfResource(kind, id, session.user.id);
   const access = workspaceId ? await membershipOf(session.user.id, workspaceId) : null;
   if (!access) notFound();
   return { ...access, session, isLead: access.legacyRole === "LEAD" };
@@ -96,7 +96,7 @@ export async function apiUser(options: ApiOptions = {}): Promise<{ user: Session
 
   let workspaceId: string | null = null;
   if (scopedKind) {
-    workspaceId = await workspaceOfResource(scopedKind, options[scopedKind] as string);
+    workspaceId = await workspaceOfResource(scopedKind, options[scopedKind] as string, identity.id);
   } else if (tokenWorkspace !== undefined) {
     workspaceId = tokenWorkspace;
   } else {

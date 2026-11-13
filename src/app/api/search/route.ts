@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
+import { visibleProjectWhere } from "@/lib/scrum/groups";
 
 // Índice liviano para el buscador (Cmd+K): se pide una sola vez al abrirlo y
 // se filtra en el navegador. El dataset es chico (decenas de proyectos,
@@ -11,9 +12,9 @@ export async function GET() {
   if ("error" in auth) return auth.error;
 
   const [projects, issues] = await Promise.all([
-    prisma.project.findMany({ where: { workspaceId: auth.user.workspaceId! }, select: { id: true, key: true, name: true } }),
+    prisma.project.findMany({ where: { ...visibleProjectWhere(auth.user.id, auth.user.workspaceId!), kind: "PROJECT" }, select: { id: true, key: true, name: true } }),
     prisma.task.findMany({
-      where: { project: { workspaceId: auth.user.workspaceId! } },
+      where: { project: visibleProjectWhere(auth.user.id, auth.user.workspaceId!) },
       select: { id: true, number: true, title: true, description: true, issueType: true, status: true, projectId: true, project: { select: { key: true, name: true } } },
       orderBy: { updatedAt: "desc" },
       take: 2000,

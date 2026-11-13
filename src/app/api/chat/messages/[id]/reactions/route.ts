@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     else await prisma.chatReaction.create({ data: { messageId: id, userId: auth.user.id, emoji } });
     // Mueve updatedAt para que los demás vean el cambio en su próximo refresco.
     const updated = await prisma.chatMessage.update({ where: { id }, data: { updatedAt: new Date() }, include: messageInclude });
-    const [dto] = await toDTOs([updated], auth.user.workspaceId!);
+    const [dto] = await toDTOs([updated], auth.user.workspaceId!, auth.user.id);
     return NextResponse.json(dto);
   } catch (e) {
     return errorResponse(e);

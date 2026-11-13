@@ -39,7 +39,7 @@ export default async function CeremoniesPage({ params, searchParams }: { params:
   return (
     <CeremoniesView
       projectId={id}
-      initialTab={tab ?? "daily"}
+      initialTab={tab ?? "planning"}
       sprints={sprints.map((s) => ({ id: s.id, name: s.name, state: s.state }))}
       selectedSprintId={selected?.id ?? null}
       currentUserId={session.user.id}

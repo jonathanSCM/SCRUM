@@ -133,8 +133,6 @@ async function main() {
     ["POST", `/api/projects/${A.project.id}/notes`, j],
     ["POST", `/api/projects/${A.project.id}/retro`, { sprintId: A.sprint.id, column: "ACTION", body: "x" }],
     ["POST", `/api/projects/${A.project.id}/contacts`, { name: "x" }],
-    ["GET", `/api/projects/${A.project.id}/standup?date=2026-01-01`],
-    ["POST", `/api/projects/${A.project.id}/standup`, { date: "2026-01-01", today: "x" }],
     ["GET", `/api/projects/${A.project.id}/export`],
     ["PATCH", `/api/projects/${A.project.id}/slack`, { slackChannelId: "C0123456789" }],
     ["PATCH", `/api/projects/${A.project.id}/telegram`, { botToken: "", chatId: "" }],
@@ -1259,6 +1257,10 @@ async function main() {
   const adhoc = await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "https://meet.google.com/zzz-yyyy-xxx", transcript: "Pablo: nota suelta", recordingId: `rec-${stamp}-suelta`, final: true, title: "Charla improvisada", organizationId: A.ws.id });
   const adhocMeeting = await prisma.meeting.findUnique({ where: { id: adhoc.json.meetingId } });
   check("sin reunión del calendario se crea una suelta, solo para quien grabó (y líderes)", adhoc.status === 200 && adhocMeeting.title === "Charla improvisada" && adhocMeeting.everyone === false && adhocMeeting.createdById === plain.id);
+  const adhocNotifs = await prisma.notification.count({ where: { url: { contains: adhoc.json.meetingId } } });
+  const cronAdhoc = await fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: { Authorization: "Bearer testcron" } });
+  const adhocAfter = await prisma.notification.count({ where: { url: { contains: adhoc.json.meetingId } } });
+  check("una reunión registrada por la extensión no avisa a nadie (ni al crearse ni como recordatorio)", adhocMeeting.reminderSentAt !== null && adhocNotifs === 0 && adhocAfter === 0 && cronAdhoc.status === 200);
   // Quién ve las transcripciones
   const seeAdhocOwner = await cAOwner.req("GET", `/api/meetings/${adhoc.json.meetingId}/recordings`);
   const seeAdhocAldo = await cNora.req("GET", `/api/meetings/${adhoc.json.meetingId}/recordings`);
@@ -1367,6 +1369,126 @@ async function main() {
   check("en una reunión con pocos invitados, quien no lo es no ve los archivos", upP.status === 201 && (await cNora.req("GET", `/api/meetings/${pastPriv.json.id}/files`)).json.files.length === 0 && (await cNora.req("GET", `/api/meetings/${pastPriv.json.id}/files`)).json.hidden === 1 && (await fetch(`${BASE}/api/meetings/${pastPriv.json.id}/files/${upP.json.id}`, { headers: { Cookie: cNora.header() } })).status === 404 && (await sendFile(cNora, "intruso.txt", "x", pastPriv.json.id)).status === 404);
   check("sus invitados sí", (await cPlain.req("GET", `/api/meetings/${pastPriv.json.id}/files`)).json.files.length === 1);
   check("al borrar la reunión se borran sus archivos", (await cAOwner.req("DELETE", `/api/meetings/${pmId}`)).status === 200 && (await prisma.meetingFile.count({ where: { meetingId: pmId } })) === 0);
+
+  // ---------- 36) Daily general, estado Bloqueadas y actividad del equipo ----------
+  console.log("36) Daily general del equipo, estado Bloqueadas y actividad (solo dueño)");
+  const dDay = "2026-03-10"; // martes: el día laboral anterior es el lunes 2026-03-09
+  const dPost = await cPlain.req("POST", "/api/daily", { date: dDay, today: "revisar el módulo de pagos", yesterday: "" });
+  const dRow = await prisma.standupEntry.findFirst({ where: { userId: plain.id, date: dDay, workspaceId: A.ws.id } });
+  check("el daily se guarda para todo el equipo (sin proyecto)", dPost.status === 200 && !!dRow && dRow.projectId === null);
+  await cPlain.req("POST", "/api/daily", { date: dDay, today: "otra cosa" });
+  check("guardar de nuevo el mismo día actualiza, no duplica", (await prisma.standupEntry.count({ where: { userId: plain.id, date: dDay, workspaceId: A.ws.id } })) === 1 && (await prisma.standupEntry.findFirst({ where: { userId: plain.id, date: dDay } })).today === "otra cosa");
+  const dSee = await cAOwner.req("GET", `/api/daily?date=${dDay}`);
+  check("todo el equipo ve las respuestas y quién falta", dSee.status === 200 && dSee.json.entries.some((e) => e.user.id === plain.id) && dSee.json.members.length >= 2);
+  const dOther = await cBOwner.req("GET", `/api/daily?date=${dDay}`);
+  check("otro equipo no ve los dailys de A", dOther.status === 200 && dOther.json.entries.length === 0 && !dOther.json.members.some((m) => m.id === plain.id));
+  check("sin sesión no se entra (401)", (await fetch(`${BASE}/api/daily?date=${dDay}`)).status === 401 && (await fetch(`${BASE}/api/daily`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status === 401);
+  check("fecha inválida se rechaza (400)", (await cPlain.req("GET", "/api/daily?date=ayer")).status === 400 && (await cPlain.req("POST", "/api/daily", { date: "2026-13-45" })).status === 400);
+  check("el daily viejo por proyecto ya no existe (404)", (await cPlain.req("GET", `/api/projects/${A.project.id}/standup?date=${dDay}`)).status === 404);
+
+  // Bloqueadas
+  const blkIssue = await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, { title: "Ticket que se bloquea", assigneeUserId: plain.id });
+  const blkPatch = await cAOwner.req("PATCH", `/api/issues/${blkIssue.json.id}`, { status: "BLOCKED" });
+  check("un ticket pasa a Bloqueadas", blkIssue.status === 201 && blkPatch.status === 200 && (await prisma.task.findUnique({ where: { id: blkIssue.json.id } })).status === "BLOCKED");
+  check("un estado que no existe se rechaza (400)", (await cAOwner.req("PATCH", `/api/issues/${blkIssue.json.id}`, { status: "STUCK" })).status === 400);
+  const blkMove = await cAOwner.req("POST", `/api/projects/${A.project.id}/move`, { issueId: blkIssue.json.id, status: "IN_PROGRESS" });
+  const blkMove2 = await cAOwner.req("POST", `/api/projects/${A.project.id}/move`, { issueId: blkIssue.json.id, status: "BLOCKED" });
+  check("también se mueve a Bloqueadas desde el tablero", blkMove.status === 200 && blkMove2.status === 200 && (await prisma.task.findUnique({ where: { id: blkIssue.json.id } })).status === "BLOCKED", `${blkMove.status}/${blkMove2.status}`);
+  // Autocompletado
+  await prisma.historyEntry.create({ data: { projectId: A.project.id, field: "estado_ticket", oldValue: "En revisión", newValue: "Hecho", taskId: blkIssue.json.id, taskTitle: "Ticket que se bloquea", changedById: plain.id, changedByName: "Pablo Plano", changedAt: new Date("2026-03-09T15:00:00Z") } });
+  const dSug = await cPlain.req("GET", `/api/daily?date=${dDay}`);
+  check("el autocompletado propone lo de ayer, lo de hoy y los bloqueos con sus tickets", dSug.json.suggestion.yesterday.includes("Terminé") && dSug.json.suggestion.yesterday.includes("Ticket que se bloquea") && dSug.json.suggestion.blockers.includes("Ticket que se bloquea"), JSON.stringify(dSug.json.suggestion));
+  check("el borrador es solo de quien lo pide", !(await cNora.req("GET", `/api/daily?date=${dDay}`)).json.suggestion.blockers.includes("Ticket que se bloquea"));
+
+  // Actividad del equipo: solo el dueño
+  const act = async (client, qs = "") => fetch(`${BASE}/activity${qs}`, { headers: { Cookie: client.header() }, redirect: "manual" });
+  const actOwner = await act(cAOwner);
+  const actHtml = await actOwner.text();
+  check("el dueño ve la actividad del equipo", actOwner.status === 200 && actHtml.includes("Actividad del equipo") && actHtml.includes("Pablo Plano"), `${actOwner.status}`);
+  // La redirección de una página con loading.tsx llega en el flujo (200) pero SIN el contenido: lo que importa es que no se envíe nada.
+  const noLeak = async (r) => { const t = await r.text(); return !t.includes("Hora pico") && !t.includes("Ana Dueña A") && !t.includes("Ticket que se bloquea") && (r.status >= 300 || t.includes("NEXT_REDIRECT") || t.includes("/home")); };
+  check("un miembro no la ve (no recibe ningún dato; lo manda al inicio)", await noLeak(await act(cPlain)));
+  check("ni un admin (Aldo)", await noLeak(await act(cAMember)));
+  const actWeek = await (await act(cAOwner, "?w=2026-03-09&u=" + plain.id)).text();
+  check("el detalle de una persona muestra su hora exacta de la semana pedida", actWeek.includes("Ticket que se bloquea") && actWeek.includes("A qué horas trabajó"));
+  const actB = await (await act(cBOwner)).text();
+  check("el dueño de otro equipo no ve a las personas de A", !actB.includes("Pablo Plano"));
+
+  // Archivos de un proyecto (pestaña Archivos) se pueden citar en el chat como cualquier tarjeta de la Biblioteca
+  await prisma.projectResource.create({ data: { kind: "LINK", title: "Brief del cliente", url: "https://example.com/brief", projectId: A.project.id } });
+  const autoId = `auto${A.project.id}`;
+  const ixAuto = await cPlain.req("GET", "/api/chat/index");
+  const autoItem = ixAuto.json.cards?.find((c) => c.id === autoId);
+  check("el índice del chat ofrece la tarjeta de los archivos de un proyecto", !!autoItem && autoItem.label === "Archivos de Proyecto A" && /Archivos del proyecto/.test(autoItem.sub), JSON.stringify(ixAuto.json.cards?.slice(0, 3)));
+  const ixAutoB = await cBOwner.req("GET", "/api/chat/index");
+  check("y no aparece en el índice de otro equipo", !ixAutoB.json.cards?.some((c) => c.id === autoId));
+  const autoMsg = await cPlain.req("POST", "/api/chat/messages", { body: `revisen [[card:${autoId}]]` });
+  const autoRef = (autoMsg.json?.refs ?? []).find((r) => r.id === autoId);
+  check("se cita en el chat y lleva a la tarjeta automática de la Biblioteca", autoMsg.status === 201 && autoRef?.kind === "card" && autoRef.label === "Archivos de Proyecto A" && autoRef.href === `/library?tarjeta=project:${A.project.id}` && !autoRef.missing, JSON.stringify(autoMsg.json?.refs));
+  const autoMsgB = await cBOwner.req("POST", "/api/chat/messages", { body: `ajena [[card:${autoId}]]` });
+  check("otro equipo no puede citarla (no se guarda la referencia)", (await prisma.chatRef.count({ where: { messageId: autoMsgB.json?.id, targetId: autoId } })) === 0);
+
+  // ---------- 37) Grupos de tareas (tareas sueltas), privados y conversión en proyecto ----------
+  console.log("37) Grupos de tareas: del equipo, privados, convertir en proyecto");
+  const keyOf = async (taskId) => { const t = await prisma.task.findUnique({ where: { id: taskId }, include: { project: { select: { key: true } } } }); return `${t.project.key}-${t.number}`; };
+  const gTeam = await cPlain.req("POST", "/api/groups", { name: "Demo cliente Acme" });
+  const gTeamRow = await prisma.project.findUnique({ where: { id: gTeam.json.id } });
+  check("cualquier miembro crea un grupo de tareas (del equipo por defecto)", gTeam.status === 201 && gTeamRow.kind === "GROUP" && gTeamRow.isPrivate === false && gTeamRow.ownerId === plain.id && !!gTeamRow.key && gTeamRow.workspaceId === A.ws.id);
+  const gT1 = await cPlain.req("POST", `/api/projects/${gTeam.json.id}/issues`, { title: "Preparar la presentación" });
+  const gT2 = await cPlain.req("POST", `/api/projects/${gTeam.json.id}/issues`, { title: "Armar los datos de ejemplo", assigneeUserId: plain.id });
+  check("se crean tareas dentro del grupo (sin proyecto ni sprint)", gT1.status === 201 && gT2.status === 201);
+  check("el grupo NO aparece como proyecto (índice del chat, buscador, IA)", !(await cPlain.req("GET", "/api/chat/index")).json.projects.some((p) => p.id === gTeam.json.id) && !(await cPlain.req("GET", "/api/search")).json.projects.some((p) => p.id === gTeam.json.id) && !(await cPlain.req("GET", "/api/ai/projects")).text.includes(gTeam.json.id));
+  const gKey1 = await keyOf(gT1.json.id);
+  check("sus tareas sí se buscan, se citan y se abren por clave", (await cNora.req("GET", "/api/search")).json.issues.some((i) => i.id === gT1.json.id) && (await cNora.req("GET", "/api/chat/index")).json.issues.some((i) => i.id === gT1.json.id) && (await cNora.req("GET", `/api/issues/by-key/${gKey1}`)).status === 200);
+  const gBoard = await fetch(`${BASE}/projects/${gTeam.json.id}/board`, { headers: { Cookie: cNora.header() } });
+  const gBoardHtml = await gBoard.text();
+  check("el tablero del grupo muestra las 5 columnas y sus tareas", gBoard.status === 200 && gBoardHtml.includes("Preparar la presentación") && gBoardHtml.includes("Bloqueadas") && gBoardHtml.includes("Crear tarea") && !gBoardHtml.includes("Completar sprint"));
+  check("el listado de grupos lo muestra a todo el equipo y no a otro equipo", (await cNora.req("GET", "/api/groups")).json.groups.some((g) => g.id === gTeam.json.id) && !(await cBOwner.req("GET", "/api/groups")).json.groups.some((g) => g.id === gTeam.json.id));
+  check("otro equipo no puede ni verlo ni cambiarlo (404)", (await cBOnly.req("PATCH", `/api/groups/${gTeam.json.id}`, { name: "x" })).status === 404 && (await cBOnly.req("GET", `/api/issues/by-key/${gKey1}`)).status === 404);
+  check("quien no lo creó ni lidera no lo cambia (403); un líder sí", (await cNora.req("PATCH", `/api/groups/${gTeam.json.id}`, { name: "robo" })).status === 403 && (await cNora.req("DELETE", `/api/groups/${gTeam.json.id}`)).status === 403 && (await cAOwner.req("PATCH", `/api/groups/${gTeam.json.id}`, { name: "Demo cliente Acme" })).status === 200);
+
+  // Privado: solo quien lo creó y las personas con acceso (ni siquiera el dueño del equipo)
+  const gPriv = await cPlain.req("POST", "/api/groups", { name: "Ideas reservadas", isPrivate: true, memberIds: [nora.id] });
+  const gPT = await cPlain.req("POST", `/api/projects/${gPriv.json.id}/issues`, { title: "Despedir al proveedor X" });
+  const gPKey = await keyOf(gPT.json.id);
+  check("un grupo privado se crea con su gente", gPriv.status === 201 && gPriv.json.isPrivate === true && (await prisma.projectMember.count({ where: { projectId: gPriv.json.id, userId: nora.id } })) === 1 && gPT.status === 201);
+  check("quien tiene acceso lo ve y trabaja en él", (await cNora.req("GET", "/api/groups")).json.groups.some((g) => g.id === gPriv.json.id) && (await cNora.req("GET", `/api/issues/by-key/${gPKey}`)).status === 200 && (await cNora.req("PATCH", `/api/issues/${gPT.json.id}`, { priority: "ALTA" })).status === 200);
+  const leaks = [
+    ["el dueño del equipo no lo lista", !(await cAOwner.req("GET", "/api/groups")).json.groups.some((g) => g.id === gPriv.json.id)],
+    ["ni abre sus tareas por clave", (await cAOwner.req("GET", `/api/issues/by-key/${gPKey}`)).status === 404],
+    ["ni por id (editar, comentar, borrar)", (await cAOwner.req("PATCH", `/api/issues/${gPT.json.id}`, { title: "x" })).status === 404 && (await cAOwner.req("POST", `/api/issues/${gPT.json.id}/comments`, { body: "x" })).status === 404 && (await cAOwner.req("DELETE", `/api/issues/${gPT.json.id}`)).status === 404],
+    ["ni el grupo (crear tareas, cambiarlo, convertirlo, borrarlo)", (await cAOwner.req("POST", `/api/projects/${gPriv.json.id}/issues`, { title: "x" })).status === 404 && (await cAOwner.req("PATCH", `/api/groups/${gPriv.json.id}`, { isPrivate: false })).status === 404 && (await cAOwner.req("POST", `/api/groups/${gPriv.json.id}/convert`, {})).status === 404 && (await cAOwner.req("DELETE", `/api/groups/${gPriv.json.id}`)).status === 404],
+    ["ni en el buscador, el índice del chat o el tablero de otros", !(await cAOwner.req("GET", "/api/search")).text.includes("Despedir al proveedor X") && !(await cAOwner.req("GET", "/api/chat/index")).text.includes("Despedir al proveedor X")],
+    ["ni en su inicio ni en Mi trabajo", !(await (await fetch(`${BASE}/home`, { headers: { Cookie: cAOwner.header() } })).text()).includes("Despedir al proveedor X")],
+    ["ni abriendo la página del tablero", !(await (await fetch(`${BASE}/projects/${gPriv.json.id}/board`, { headers: { Cookie: cAOwner.header() } })).text()).includes("Despedir al proveedor X")],
+  ];
+  for (const [name, ok] of leaks) check(`grupo privado: ${name}`, ok);
+  const pRef = await cAOwner.req("POST", "/api/chat/messages", { body: `mira [[issue:${gPT.json.id}]]` });
+  check("grupo privado: citar su tarea en el chat no guarda la referencia", pRef.status === 201 && (await prisma.chatRef.count({ where: { messageId: pRef.json.id } })) === 0);
+  const pRefOk = await cNora.req("POST", "/api/chat/messages", { body: `mira [[issue:${gPT.json.id}]]` });
+  check("pero quien tiene acceso sí puede citarla", pRefOk.status === 201 && (await prisma.chatRef.count({ where: { messageId: pRefOk.json.id } })) === 1);
+  check("no se asigna a alguien sin acceso al grupo privado (400)", (await cPlain.req("PATCH", `/api/issues/${gPT.json.id}`, { assigneeUserId: aMember.id })).status === 400 && (await cPlain.req("PATCH", `/api/issues/${gPT.json.id}`, { assigneeUserId: nora.id })).status === 200);
+  check("los grupos privados no cuentan en el daily ni en la actividad del equipo", !(await cPlain.req("GET", `/api/daily?date=${new Date().toISOString().slice(0, 10)}`)).text.includes("Despedir al proveedor X"));
+  check("se le da acceso a otra persona (solo quien lo creó o un líder)", (await cNora.req("PUT", `/api/groups/${gPriv.json.id}/access`, { userIds: [aMember.id] })).status === 403 && (await cPlain.req("PUT", `/api/groups/${gPriv.json.id}/access`, { userIds: [nora.id, aMember.id] })).status === 200 && (await cAMember.req("GET", `/api/issues/by-key/${gPKey}`)).status === 200);
+
+  // Convertir en proyecto
+  const gCom = await cPlain.req("POST", `/api/issues/${gT1.json.id}/comments`, { body: "Pendiente de confirmar con el cliente" });
+  const noConv = await cNora.req("POST", `/api/groups/${gTeam.json.id}/convert`, { name: "Acme CRM" });
+  check("solo quien creó el grupo o un líder lo convierte (403)", noConv.status === 403);
+  const conv = await cPlain.req("POST", `/api/groups/${gTeam.json.id}/convert`, { name: "Acme CRM" });
+  const newProj = await prisma.project.findUnique({ where: { id: conv.json.id } });
+  const movedTasks = await prisma.task.findMany({ where: { projectId: conv.json.id }, orderBy: { number: "asc" }, include: { comments: true } });
+  check("convertir crea un proyecto con las tareas, renumeradas, con sus comentarios", conv.status === 201 && newProj?.kind === "PROJECT" && newProj.name === "Acme CRM" && newProj.workspaceId === A.ws.id && movedTasks.length === 2 && movedTasks.map((t) => t.number).join() === "1,2" && newProj.taskSeq === 2 && movedTasks.some((t) => t.comments.some((c) => c.body.includes("Pendiente de confirmar"))) && gCom.status === 201, JSON.stringify(conv.json));
+  const gAfter = await prisma.project.findUnique({ where: { id: gTeam.json.id } });
+  check("el grupo queda archivado y apunta al proyecto (sin tareas ni clave)", !!gAfter.archivedAt && gAfter.convertedToId === conv.json.id && gAfter.key === null && (await prisma.task.count({ where: { projectId: gTeam.json.id } })) === 0);
+  const arch = (await cPlain.req("GET", "/api/groups?archived=1")).json.groups.find((g) => g.id === gTeam.json.id);
+  check("aparece entre los archivados con el proyecto en el que se convirtió", arch?.convertedTo?.id === conv.json.id && !(await cPlain.req("GET", "/api/groups")).json.groups.some((g) => g.id === gTeam.json.id));
+  check("no se convierte dos veces ni se edita lo ya convertido (400)", (await cPlain.req("POST", `/api/groups/${gTeam.json.id}/convert`, {})).status === 400 && (await cPlain.req("PATCH", `/api/groups/${gTeam.json.id}`, { name: "otro" })).status === 400);
+  check("el proyecto nuevo sí es un proyecto (en el índice del chat y las tareas se abren con su clave nueva)", (await cNora.req("GET", "/api/chat/index")).json.projects.some((p) => p.id === conv.json.id) && (await cNora.req("GET", `/api/issues/by-key/${newProj.key}-1`)).status === 200);
+  // Archivar / restaurar y borrar
+  const gArch = await cPlain.req("PATCH", `/api/groups/${gPriv.json.id}`, { archived: true });
+  check("se archiva y se restaura un grupo", gArch.status === 200 && !!gArch.json.archivedAt && (await cPlain.req("PATCH", `/api/groups/${gPriv.json.id}`, { archived: false })).json.archivedAt === null);
+  check("se borra con todas sus tareas", (await cPlain.req("DELETE", `/api/groups/${gPriv.json.id}`)).status === 200 && (await prisma.task.count({ where: { id: gPT.json.id } })) === 0);
 
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();

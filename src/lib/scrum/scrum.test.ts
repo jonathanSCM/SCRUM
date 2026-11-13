@@ -1085,3 +1085,117 @@ describe("/reunion: separar la fecha del tema y entender cómo se escribe de ver
     expect(lima("en 30 minutos")).toBe("2026-11-16T14:30:00.000Z");
   });
 });
+
+describe("daily general del equipo", () => {
+  it("el día laboral anterior salta el fin de semana", async () => {
+    const { previousWorkday } = await import("./ceremonies");
+    expect(previousWorkday("2026-11-17")).toBe("2026-11-16"); // martes → lunes
+    expect(previousWorkday("2026-11-16")).toBe("2026-11-13"); // lunes → viernes
+    expect(previousWorkday("2026-11-15")).toBe("2026-11-13"); // domingo → viernes
+    expect(previousWorkday("2026-11-14")).toBe("2026-11-13"); // sábado → viernes
+  });
+
+  it("junta los dailys viejos de varios proyectos sin perder texto", async () => {
+    const { mergeDailies } = await import("./dailyMerge");
+    const one = mergeDailies([{ projectName: "CRM", yesterday: "revisé pagos", today: "", blockers: "", help: "" }]);
+    expect(one).toEqual({ yesterday: "revisé pagos", today: "", blockers: "", help: "" });
+    const two = mergeDailies([
+      { projectName: "CRM", yesterday: "revisé pagos", today: "deploy", blockers: "", help: "" },
+      { projectName: "Web", yesterday: "arreglé el menú", today: "", blockers: "sin acceso", help: "" },
+    ]);
+    expect(two.yesterday).toBe("CRM: revisé pagos\nWeb: arreglé el menú");
+    expect(two.today).toBe("deploy");
+    expect(two.blockers).toBe("sin acceso");
+  });
+});
+
+describe("actividad del equipo", () => {
+  const t = (iso: string) => new Date(iso);
+
+  it("clasifica los campos del historial", async () => {
+    const { kindOfField } = await import("./activity");
+    expect(kindOfField("ticket_creado")).toBe("CREATE");
+    expect(kindOfField("estado_ticket")).toBe("MOVE");
+    expect(kindOfField("comentario")).toBe("COMMENT");
+    expect(kindOfField("ticket_eliminado")).toBe("DELETE");
+    expect(kindOfField("prioridad_ticket")).toBe("UPDATE");
+    expect(kindOfField("estado_proyecto")).toBe("UPDATE");
+  });
+
+  it("guardar un ticket con varios cambios cuenta como una sola acción", async () => {
+    const { collapseActions } = await import("./activity");
+    const base = { userId: "u1", projectId: "p1", taskId: "t1" };
+    const out = collapseActions([
+      { ...base, at: t("2026-11-10T14:00:05Z"), kind: "UPDATE", field: "titulo_ticket" },
+      { ...base, at: t("2026-11-10T14:00:20Z"), kind: "MOVE", field: "estado_ticket", done: true },
+      { ...base, at: t("2026-11-10T14:05:00Z"), kind: "UPDATE", field: "titulo_ticket" }, // otro minuto: otra acción
+      { ...base, userId: "u2", at: t("2026-11-10T14:00:10Z"), kind: "UPDATE", field: "titulo_ticket" }, // otra persona
+    ]);
+    expect(out).toHaveLength(3);
+    const moved = out.find((e) => e.kind === "MOVE");
+    expect(moved?.done).toBe(true);
+  });
+
+  it("la semana empieza el lunes en la zona de quien mira", async () => {
+    const { mondayOf, isMonday, weekBounds } = await import("./activity");
+    expect(mondayOf(t("2026-11-13T15:00:00Z"), "America/Lima")).toBe("2026-11-09"); // viernes
+    expect(mondayOf(t("2026-11-15T03:00:00Z"), "America/Lima")).toBe("2026-11-09"); // sábado 22:00 en Lima: sigue la misma semana
+    expect(mondayOf(t("2026-11-16T04:00:00Z"), "America/Lima")).toBe("2026-11-09"); // todavía domingo 23:00 en Lima
+    expect(mondayOf(t("2026-11-16T05:30:00Z"), "America/Lima")).toBe("2026-11-16"); // ya es lunes en Lima
+    expect(isMonday("2026-11-09")).toBe(true);
+    expect(isMonday("2026-11-10")).toBe(false);
+    const b = weekBounds("2026-11-09", "America/Lima");
+    expect(b.days).toHaveLength(7);
+    expect(b.from.toISOString()).toBe("2026-11-09T05:00:00.000Z");
+    expect(b.to.toISOString()).toBe("2026-11-16T05:00:00.000Z");
+  });
+
+  it("resume por persona: horas, días activos, primera y última acción", async () => {
+    const { summarizeActivity, hhmm } = await import("./activity");
+    const days = Array.from({ length: 7 }, (_, i) => `2026-11-${String(9 + i).padStart(2, "0")}`);
+    const ev = (iso: string, kind: "CREATE" | "MOVE" | "UPDATE" = "UPDATE", extra = {}) => ({ userId: "u1", at: t(iso), kind, projectId: "p1", taskId: "t1", field: "x", ...extra });
+    // Lima = UTC-5: 14:10Z → 09:10, 22:30Z → 17:30 (lunes), 15:00Z martes → 10:00
+    const s = summarizeActivity(
+      [ev("2026-11-09T14:10:00Z", "CREATE"), ev("2026-11-09T22:30:00Z", "MOVE", { done: true, taskId: "t2" }), ev("2026-11-10T15:00:00Z"), ev("2026-11-30T15:00:00Z") /* fuera de la semana */],
+      days,
+      "America/Lima",
+      ["u1", "u2"]
+    );
+    const a = s.get("u1")!;
+    expect(a.total).toBe(3);
+    expect(a.byDay[0]).toBe(2);
+    expect(a.byDay[1]).toBe(1);
+    expect(a.activeDays).toBe(2);
+    expect(a.completed).toBe(1);
+    expect(a.tasks).toBe(2);
+    expect(a.projects).toBe(1);
+    expect(a.heat[0][9]).toBe(1);
+    expect(a.heat[0][17]).toBe(1);
+    expect(hhmm(a.firstLast[0]!.first)).toBe("09:10");
+    expect(hhmm(a.firstLast[0]!.last)).toBe("17:30");
+    expect(a.firstLast[2]).toBeNull();
+    expect(s.get("u2")!.total).toBe(0);
+    expect(s.get("u2")!.peakHour).toBeNull();
+  });
+});
+
+describe("estado Bloqueadas", () => {
+  it("existe entre En progreso y En revisión", async () => {
+    const { STATUSES, STATUS_META, isIssueStatus } = await import("./constants");
+    expect(STATUSES).toEqual(["TODO", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "DONE"]);
+    expect(STATUS_META.BLOCKED.label).toBe("Bloqueadas");
+    expect(isIssueStatus("BLOCKED")).toBe(true);
+  });
+});
+
+describe("grupos de tareas: quién los ve", () => {
+  it("los proyectos y los grupos del equipo los ve todo el equipo; los privados, solo su gente", async () => {
+    const { canSeeProject } = await import("./groups");
+    expect(canSeeProject({ kind: "PROJECT", isPrivate: false, ownerId: null, memberIds: [] }, "u1")).toBe(true);
+    expect(canSeeProject({ kind: "GROUP", isPrivate: false, ownerId: "u2", memberIds: [] }, "u1")).toBe(true);
+    const priv = { kind: "GROUP", isPrivate: true, ownerId: "u2", memberIds: ["u3"] };
+    expect(canSeeProject(priv, "u2")).toBe(true);
+    expect(canSeeProject(priv, "u3")).toBe(true);
+    expect(canSeeProject(priv, "u1")).toBe(false);
+  });
+});

@@ -101,3 +101,17 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - **Extensión de Chrome:** el código está en `extensions/meet/`. Para publicar una versión nueva: subir `version` en `extensions/meet/manifest.json`, correr `bash scripts/pack-extension.sh` (genera `public/downloads/scrum-proshop-meet-extension.zip`, que se descarga desde `/extension-authorize`) y subir ese zip a la Chrome Web Store (ficha lista en `extensions/meet/STORE-LISTING.md`). Cada persona conecta la extensión en `/extension-authorize` (token propio, solo sirve en `/api/extension/*`).
 - **Páginas públicas:** `/` (landing), `/privacy` y `/terms`. Datos de contacto: `NEXT_PUBLIC_CONTACT_EMAIL` y `NEXT_PUBLIC_COMPANY_NAME` (opcionales; se leen al compilar).
 - **Borrar el caché de todos los dispositivos:** subir `CACHE_VERSION` y reiniciar (ver arriba).
+
+## Daily general, estado "Bloqueadas" y actividad del equipo
+
+- **Respaldo antes de desplegar:** cambia el esquema de `StandupEntry` (columnas nuevas, `projectId` ahora opcional). Todo es aditivo.
+- **Daily general:** pasó de ser por proyecto a ser uno por persona y día en el equipo (`/daily`). Al arrancar, `prisma/seed.ts` junta los dailys viejos de varios proyectos en uno solo (cada campo con el nombre del proyecto si había más de uno). No borra nada y es idempotente.
+- **Nuevo estado de ticket `BLOCKED` ("Bloqueadas")** entre En progreso y En revisión. Es un texto en `Task.status`: no hay migración.
+- **Actividad del equipo (`/activity`):** solo la ve el dueño (OWNER). Sale del historial de cambios y de los dailys; no mira el chat.
+
+## Grupos de tareas (tareas sueltas)
+
+- **Respaldo antes de desplegar:** `Project` gana columnas (`kind`, `isPrivate`, `ownerId`, `archivedAt`, `convertedToId`), todas con valor por defecto: aditivo.
+- Un grupo de tareas es una fila de `Project` con `kind = GROUP`: reutiliza tickets, tablero y permisos, y no aparece en la lista de proyectos. Se gestiona en `/groups`.
+- Por defecto lo ve todo el equipo; con `isPrivate`, solo quien lo creó y las personas con acceso (`ProjectMember`). El dueño del equipo tampoco lo ve.
+- «Convertir en proyecto» crea el proyecto, mueve las tareas (renumeradas, con comentarios y adjuntos) y deja el grupo archivado con `convertedToId`.

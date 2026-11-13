@@ -8,7 +8,7 @@ export async function GET() {
   if ("error" in auth) return auth.error;
   try {
     const projects = await prisma.project.findMany({
-      where: { workspaceId: auth.user.workspaceId! },
+      where: { workspaceId: auth.user.workspaceId!, kind: "PROJECT" },
       orderBy: { name: "asc" },
       select: { id: true, key: true, name: true, description: true, deployUrl: true, status: { select: { id: true, name: true } }, lead: { select: { name: true } }, _count: { select: { tasks: true } } },
     });

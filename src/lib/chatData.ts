@@ -3,6 +3,8 @@ import { messageVisibleTo } from "@/lib/chatChannels";
 import { prisma } from "@/lib/prisma";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { categoryLabel } from "@/lib/scrum/library";
+import { CHAT_AUTO_PREFIX } from "@/lib/libraryData";
+import { visibleProjectWhere } from "@/lib/scrum/groups";
 import { parseRefs, snippetOf, type RefKind } from "@/lib/scrum/chat";
 
 // Lectura y armado de los mensajes del chat general, con las referencias
@@ -41,18 +43,27 @@ const messageInclude = {
   replyTo: { select: { id: true, body: true, deletedAt: true, author: { select: { name: true } }, _count: { select: { files: true } } } },
 } as const;
 
-export async function resolveRefs(refs: Array<{ kind: string; targetId: string }>, workspaceId: string): Promise<Map<string, ResolvedRef>> {
+export async function resolveRefs(refs: Array<{ kind: string; targetId: string }>, workspaceId: string, viewerId?: string): Promise<Map<string, ResolvedRef>> {
+  // Con quién mira: los tickets y sprints de un grupo privado al que no tiene acceso no existen para esa persona.
+  const projectWhere = viewerId ? visibleProjectWhere(viewerId, workspaceId) : { workspaceId };
   const ids = (kind: string) => [...new Set(refs.filter((r) => r.kind === kind).map((r) => r.targetId))];
   const [projects, issues, sprints, users, cards, meetings] = await Promise.all([
-    prisma.project.findMany({ where: { id: { in: ids("PROJECT") }, workspaceId }, select: { id: true, name: true, key: true } }),
-    prisma.task.findMany({ where: { id: { in: ids("ISSUE") }, project: { workspaceId } }, select: { id: true, number: true, title: true, status: true, projectId: true, project: { select: { key: true } } } }),
-    prisma.sprint.findMany({ where: { id: { in: ids("SPRINT") }, project: { workspaceId } }, select: { id: true, name: true, state: true, projectId: true, project: { select: { name: true } } } }),
+    prisma.project.findMany({ where: { id: { in: ids("PROJECT") }, ...projectWhere }, select: { id: true, name: true, key: true } }),
+    prisma.task.findMany({ where: { id: { in: ids("ISSUE") }, project: projectWhere }, select: { id: true, number: true, title: true, status: true, projectId: true, project: { select: { key: true } } } }),
+    prisma.sprint.findMany({ where: { id: { in: ids("SPRINT") }, project: projectWhere }, select: { id: true, name: true, state: true, projectId: true, project: { select: { name: true } } } }),
     prisma.user.findMany({ where: { id: { in: ids("USER") }, memberships: { some: { workspaceId } } }, select: { id: true, name: true } }),
     prisma.fileCard.findMany({ where: { id: { in: ids("CARD") }, workspaceId }, select: { id: true, title: true, category: true, _count: { select: { items: true } } } }),
     prisma.meeting.findMany({ where: { id: { in: ids("MEETING") }, workspaceId }, select: { id: true, title: true, startsAt: true, status: true } }),
   ]);
 
+  // Tarjetas automáticas de proyecto ("auto<idDelProyecto>"): los archivos de la pestaña Archivos de un proyecto.
+  const autoProjectIds = ids("CARD").filter((id) => id.startsWith(CHAT_AUTO_PREFIX)).map((id) => id.slice(CHAT_AUTO_PREFIX.length));
+  const autoCards = autoProjectIds.length
+    ? await prisma.project.findMany({ where: { id: { in: autoProjectIds }, workspaceId, resources: { some: {} } }, select: { id: true, name: true, _count: { select: { resources: true } } } })
+    : [];
+
   const out = new Map<string, ResolvedRef>();
+  for (const a of autoCards) out.set(`CARD:${CHAT_AUTO_PREFIX}${a.id}`, { kind: "card", id: `${CHAT_AUTO_PREFIX}${a.id}`, label: `Archivos de ${a.name}`, sub: `Archivos del proyecto · ${a._count.resources} ${a._count.resources === 1 ? "archivo" : "archivos"}`, href: `/library?tarjeta=project:${a.id}`, missing: false });
   for (const p of projects) out.set(`PROJECT:${p.id}`, { kind: "project", id: p.id, label: p.name, sub: p.key, href: `/projects/${p.id}/board`, missing: false });
   for (const i of issues) {
     const key = formatIssueKey(i.project.key, i.number);
@@ -67,8 +78,8 @@ export async function resolveRefs(refs: Array<{ kind: string; targetId: string }
 
 type Row = Awaited<ReturnType<typeof prisma.chatMessage.findMany<{ include: typeof messageInclude }>>>[number];
 
-export async function toDTOs(rows: Row[], workspaceId: string): Promise<ChatMessageDTO[]> {
-  const resolved = await resolveRefs(rows.flatMap((r) => r.refs.map((x) => ({ kind: x.kind, targetId: x.targetId }))), workspaceId);
+export async function toDTOs(rows: Row[], workspaceId: string, viewerId?: string): Promise<ChatMessageDTO[]> {
+  const resolved = await resolveRefs(rows.flatMap((r) => r.refs.map((x) => ({ kind: x.kind, targetId: x.targetId }))), workspaceId, viewerId);
   return rows.map((r) => {
     // Las marcas del texto (no las filas) mandan el orden; las filas sirven para filtrar.
     const refs = parseRefs(r.body).map((p): ResolvedRef => {
@@ -114,18 +125,18 @@ export async function loadMessages(opts: { workspaceId: string; viewerId: string
   // Con "after" se devuelve lo que cambió desde entonces (mensajes nuevos, reacciones, borrados).
   if (opts.after) {
     const changed = await prisma.chatMessage.findMany({ where: { updatedAt: { gt: opts.after }, ...projectFilter }, orderBy: { updatedAt: "asc" }, take: 200, include: messageInclude });
-    return toDTOs(changed, opts.workspaceId);
+    return toDTOs(changed, opts.workspaceId, opts.viewerId);
   }
   const rows = await prisma.chatMessage.findMany({ where: projectFilter, orderBy: { createdAt: "desc" }, take: opts.limit ?? 100, include: messageInclude });
-  return toDTOs(rows.reverse(), opts.workspaceId);
+  return toDTOs(rows.reverse(), opts.workspaceId, opts.viewerId);
 }
 
 export { messageInclude };
 
 // Menciones de un texto ya validadas contra el equipo, listas para guardar como ChatRef (cada una con su proyecto).
-export async function refRowsFor(body: string, workspaceId: string) {
+export async function refRowsFor(body: string, workspaceId: string, viewerId?: string) {
   const wanted = parseRefs(body);
-  const resolved = await resolveRefs(wanted.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id })), workspaceId);
+  const resolved = await resolveRefs(wanted.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id })), workspaceId, viewerId);
   const found = wanted.filter((r) => resolved.has(`${r.kind.toUpperCase()}:${r.id}`));
   const [issues, sprints] = await Promise.all([
     prisma.task.findMany({ where: { id: { in: found.filter((r) => r.kind === "issue").map((r) => r.id) }, project: { workspaceId } }, select: { id: true, projectId: true } }),

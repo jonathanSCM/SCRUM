@@ -52,6 +52,13 @@ export function shiftDate(value: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Día laboral anterior (de lunes a viernes) a una fecha "YYYY-MM-DD": el lunes mira al viernes.
+export function previousWorkday(value: string): string {
+  const dow = new Date(`${value}T00:00:00Z`).getUTCDay(); // 0 domingo … 6 sábado
+  const back = dow === 1 ? 3 : dow === 0 ? 2 : 1;
+  return shiftDate(value, -back);
+}
+
 // Quién del equipo todavía no dejó su daily ese día.
 export function missingStandups(members: Array<{ id: string; name: string }>, doneUserIds: string[]): string[] {
   const done = new Set(doneUserIds);

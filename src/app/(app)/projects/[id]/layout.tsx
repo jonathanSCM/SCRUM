@@ -18,6 +18,38 @@ export default async function ProjectLayout({ children, params }: { children: Re
   const members = await listProjectMembers(id);
   const left = activeSprint ? daysRemaining(activeSprint.endDate) : null;
 
+  const isGroup = project.kind === "GROUP";
+  const convertedTo = project.convertedToId ? await prisma.project.findUnique({ where: { id: project.convertedToId }, select: { id: true, name: true } }) : null;
+
+  if (isGroup) {
+    return (
+      <div className="mx-auto w-full max-w-[1600px] px-4 pb-16 pt-6 sm:px-6">
+        <div className="mb-1 text-xs text-ink-faint">
+          <Link href="/groups" className="hover:text-ink">Grupos de tareas</Link> {project.key && <><span className="px-1">/</span> <span className="font-mono">{project.key}</span></>}
+        </div>
+        <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">{project.name}</h1>
+          <span className="lozenge text-ink-soft">Grupo de tareas</span>
+          {project.isPrivate && <span className="lozenge text-warn" title="Solo lo ven quien lo creó y las personas con acceso">🔒 Privado</span>}
+          {project.archivedAt && <span className="lozenge text-ink-faint">Archivado</span>}
+          {members.length > 0 && (
+            <div className="flex items-center -space-x-1.5" title={`Con acceso: ${members.map((m) => m.name).join(", ")}`}>
+              {members.slice(0, 6).map((m) => <Avatar key={m.id} name={m.name} userId={m.id} size={22} />)}
+            </div>
+          )}
+        </div>
+        {convertedTo && (
+          <p className="mb-4 rounded-lg border border-line bg-card-2 px-4 py-3 text-sm text-ink-soft">
+            Este grupo se archivó porque se convirtió en el proyecto <Link href={`/projects/${convertedTo.id}/board`} className="font-semibold text-rust hover:underline">{convertedTo.name}</Link>. Sus tareas están allí.
+          </p>
+        )}
+        {wrongTeam && project.workspaceId && <WorkspaceSync workspaceId={project.workspaceId} />}
+        <ProjectTabs projectId={id} group />
+        <div className="pt-6">{children}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-[1600px] px-4 pb-16 pt-6 sm:px-6">
       <div className="mb-1 text-xs text-ink-faint">

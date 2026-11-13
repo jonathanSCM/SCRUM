@@ -45,7 +45,7 @@ const DEFAULTS = [
 export async function ensureChannels(workspaceId: string, viewerId?: string): Promise<ChannelDTO[]> {
   const [rows, projects] = await Promise.all([
     prisma.chatChannel.findMany({ where: { workspaceId, ...visibleChannels(viewerId) }, orderBy: { createdAt: "asc" }, include: { project: { select: { name: true, key: true } }, members: { select: { user: { select: { id: true, name: true } } } } } }),
-    prisma.project.findMany({ where: { workspaceId }, select: { id: true, name: true, key: true } }),
+    prisma.project.findMany({ where: { workspaceId, kind: "PROJECT" }, select: { id: true, name: true, key: true } }),
   ]);
   let list = rows;
   const missingDefaults = DEFAULTS.filter((d) => !rows.some((r) => r.slug === d.slug));

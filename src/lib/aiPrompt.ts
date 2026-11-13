@@ -36,7 +36,7 @@ CAMBIOS PUNTUALES
 - POST  ${baseUrl}/api/projects                       { "name": "…", "description": "…" }   crear proyecto
 - PATCH ${baseUrl}/api/projects/{projectId}           { "description": "…", "deployUrl": "…", "stack": ["…"] }
 - POST  ${baseUrl}/api/projects/{projectId}/issues    { "title": "…", "issueType": "TASK|BUG|STORY|EPIC", "description": "…", "priority": "MEDIA", "storyPoints": 3, "assigneeUserId": "…", "epicId": "…", "parentId": "{id de una historia}" }
-- PATCH ${baseUrl}/api/issues/{issueId}               { "status": "TODO|IN_PROGRESS|IN_REVIEW|DONE", "priority": "…", "assigneeUserId": "…", "storyPoints": 3, "sprintId": "…|null" }
+- PATCH ${baseUrl}/api/issues/{issueId}               { "status": "TODO|IN_PROGRESS|BLOCKED|IN_REVIEW|DONE", "priority": "…", "assigneeUserId": "…", "storyPoints": 3, "sprintId": "…|null" }
 - POST  ${baseUrl}/api/projects/{projectId}/sprints   { "name": "Sprint 1", "goal": "…" }    crear sprint (no se puede iniciar ni completar con este token)
 - POST  ${baseUrl}/api/issues/{issueId}/comments      { "body": "…" }
 - POST  ${baseUrl}/api/projects/{projectId}/notes     { "title": "…", "body": "…", "kind": "GENERAL" }
@@ -98,7 +98,7 @@ Al final, espera mis preguntas.`;
 
 Te voy a contar qué avanzó (qué se terminó, qué está en proceso, qué cambió de responsable o prioridad) y quiero que actualices el JSON. Cuando te lo pida, respóndeme SOLO con un bloque de código JSON que sea el MISMO JSON que te pasé, pero:
 - Conservando el "project.id" y la "key" de cada ticket que ya existe (así la app sabe cuál actualizar).
-- Cambiando solo los campos que cambiaron (por ejemplo "status": "DONE" | "IN_PROGRESS" | "IN_REVIEW" | "TODO", "priority", "storyPoints", "assignee", "sprint").
+- Cambiando solo los campos que cambiaron (por ejemplo "status": "DONE" | "IN_PROGRESS" | "BLOCKED" | "IN_REVIEW" | "TODO", "priority", "storyPoints", "assignee", "sprint").
 - Incluyendo SOLO los tickets modificados y los nuevos (los demás se pueden omitir).
 - Los tickets nuevos van SIN "key", con "title" y, si quieres, descripción, prioridad y puntos, dentro de su épica o historia.
 JSON válido (comillas dobles, sin comas finales ni comentarios). No cambies las claves existentes ni inventes tickets que no te pedí.
@@ -120,7 +120,7 @@ Quiero que propongas CAMBIOS sobre tickets que YA existen (reordenar prioridades
 
 Reglas:
 - "key" es obligatorio y debe ser un ticket del JSON que te pasé. Incluye SOLO los campos que cambian.
-- status: TODO | IN_PROGRESS | IN_REVIEW | DONE. priority: URGENTE | ALTA | MEDIA | BAJA.
+- status: TODO | IN_PROGRESS | BLOCKED | IN_REVIEW | DONE. priority: URGENTE | ALTA | MEDIA | BAJA.
 - assignee: nombre o email de alguien del proyecto, o null para dejarlo sin responsable. sprint: nombre exacto de un sprint existente, o null para llevarlo al backlog.
 - También se aceptan title, description, labels (lista), dueDate (AAAA-MM-DD) y comment.
 - Máximo 300 cambios. JSON válido (comillas dobles, sin comas finales ni comentarios).`;

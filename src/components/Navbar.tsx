@@ -16,16 +16,19 @@ import { PlusIcon } from "@/components/ui/Icons";
 const LINKS = [
   { href: "/home", label: "Inicio" },
   { href: "/projects", label: "Proyectos" },
+  { href: "/groups", label: "Grupos" },
   { href: "/my-work", label: "Mi trabajo" },
+  { href: "/daily", label: "Daily" },
   { href: "/chat", label: "Chat" },
   { href: "/calendar", label: "Calendario" },
   { href: "/library", label: "Biblioteca" },
   { href: "/people", label: "Equipo" },
 ];
 
-export default function Navbar({ userName, userId, isLead, teams, activeId, canCreate, maxOwned, projects }: { userName: string; userId: string; isLead: boolean; teams: TeamOption[]; activeId: string; canCreate: boolean; maxOwned: number; projects: Array<{ id: string; name: string; key: string | null }> }) {
+export default function Navbar({ userName, userId, isLead, teams, activeId, canCreate, maxOwned, projects }: { userName: string; userId: string; isLead: boolean; teams: TeamOption[]; activeId: string; canCreate: boolean; maxOwned: number; projects: Array<{ id: string; name: string; key: string | null; kind?: string }> }) {
   const pathname = usePathname();
-  const links = LINKS;
+  const isOwner = teams.find((t) => t.id === activeId)?.role === "OWNER";
+  const links = isOwner ? [...LINKS, { href: "/activity", label: "Actividad" }] : LINKS; // la actividad del equipo la ve solo el dueño
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +48,11 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
     };
   }, [menuOpen]);
 
+  // Dentro de un grupo de tareas (/projects/<id>/…) se marca "Grupos", no "Proyectos".
+  const onGroupPage = projects.some((p) => p.kind === "GROUP" && pathname?.startsWith(`/projects/${p.id}`));
   function isActive(href: string) {
+    if (href === "/projects" && onGroupPage) return false;
+    if (href === "/groups" && onGroupPage) return true;
     return pathname === href || pathname?.startsWith(`${href}/`);
   }
 
@@ -67,7 +74,7 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
             <Link href="/home" className="flex shrink-0 items-center gap-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.png" alt="SCRUM ProShop" className="h-8 w-8 border border-line object-cover rounded-md" />
-              <span className="hidden font-display text-lg font-extrabold tracking-tight text-ink sm:inline">SCRUM ProShop</span>
+              <span className="hidden font-display text-lg font-extrabold tracking-tight text-ink sm:inline lg:hidden 2xl:inline">SCRUM ProShop</span>
             </Link>
             <TeamSwitcher teams={teams} activeId={activeId} canCreate={canCreate} maxOwned={maxOwned} />
             <div className="hidden items-center gap-3 lg:flex xl:gap-5">

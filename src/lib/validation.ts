@@ -106,6 +106,23 @@ export const createProjectSchema = z.object({
   memberIds: z.array(z.string().min(1).max(40)).max(100).optional(),
 });
 
+export const createGroupSchema = z.object({
+  name: z.string().trim().min(1, "Nombre requerido").max(120),
+  isPrivate: z.boolean().optional(),
+  memberIds: z.array(z.string().min(1).max(40)).max(100).optional(),
+});
+
+export const updateGroupSchema = z.object({
+  name: z.string().trim().min(1, "Nombre requerido").max(120).optional(),
+  isPrivate: z.boolean().optional(),
+  archived: z.boolean().optional(),
+});
+
+export const convertGroupSchema = z.object({
+  name: z.string().trim().min(1, "Nombre requerido").max(200).optional(),
+  key: projectKeySchema.optional(),
+});
+
 export const updateProjectSchema = z.object({
   name: z.string().trim().min(1, "Nombre requerido").max(200).optional(),
   statusId: z.string().min(1).optional(),

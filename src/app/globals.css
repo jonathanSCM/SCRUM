@@ -41,6 +41,7 @@
   --c-bug: #dc2626;
   --c-todo: #6f6a88;
   --c-progress: #6d28d9;
+  --c-blocked: #dc2626;
   --c-review: #b45309;
   --c-done: #059669;
   --c-urgent: #dc2626;
@@ -97,6 +98,7 @@
   --c-bug: #f87171;
   --c-todo: #9490b0;
   --c-progress: #a78bfa;
+  --c-blocked: #f87171;
   --c-review: #fbbf24;
   --c-done: #34d399;
   --c-urgent: #f87171;

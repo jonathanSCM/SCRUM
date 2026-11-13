@@ -10,12 +10,12 @@ export default async function ProjectsPage() {
   const { workspaceId } = await requireWorkspace();
   const [projects, statuses, taskCounts] = await Promise.all([
     prisma.project.findMany({
-      where: { workspaceId },
+      where: { workspaceId, kind: "PROJECT" },
       orderBy: { name: "asc" },
       include: { lead: { select: { name: true } }, sprints: { where: { state: "ACTIVE" }, select: { name: true, endDate: true }, take: 1 } },
     }),
     prisma.statusOption.findMany({ where: { workspaceId }, orderBy: { order: "asc" } }),
-    prisma.task.groupBy({ by: ["projectId", "status"], where: { issueType: { not: "EPIC" }, project: { workspaceId } }, _count: { _all: true } }),
+    prisma.task.groupBy({ by: ["projectId", "status"], where: { issueType: { not: "EPIC" }, project: { workspaceId, kind: "PROJECT" } }, _count: { _all: true } }),
   ]);
 
   const counts = new Map<string, { done: number; total: number }>();

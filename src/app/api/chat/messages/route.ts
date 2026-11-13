@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 import { chatMessageSchema, parseBody, readJson } from "@/lib/validation";
+import { visibleProjectWhere } from "@/lib/scrum/groups";
 import { loadMessages, messageInclude, resolveRefs, toDTOs } from "@/lib/chatData";
 import { findKeyMentions, makeToken, parseRefs, plainText } from "@/lib/scrum/chat";
 import { isRestricted, messageVisibleTo } from "@/lib/chatChannels";
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
     // "#SAI" o "#SAI-12" escritos a mano se convierten en mención del proyecto o ticket de ese código (si existe en el equipo).
     const keyed = findKeyMentions(body);
     if (keyed.length) {
-      const projects = await prisma.project.findMany({ where: { workspaceId, key: { in: [...new Set(keyed.map((k) => k.key))] } }, select: { id: true, key: true } });
+      const projects = await prisma.project.findMany({ where: { ...visibleProjectWhere(auth.user.id, workspaceId), key: { in: [...new Set(keyed.map((k) => k.key))] } }, select: { id: true, key: true } });
       const byKey = new Map(projects.map((p) => [p.key!.toUpperCase(), p.id]));
       const wantedIssues = keyed.filter((k) => k.number !== null && byKey.has(k.key));
       const issues = wantedIssues.length
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
     }
 
     const wanted = parseRefs(body);
-    const resolved = await resolveRefs(wanted.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id })), workspaceId);
+    const resolved = await resolveRefs(wanted.map((r) => ({ kind: r.kind.toUpperCase(), targetId: r.id })), workspaceId, auth.user.id);
     const found = wanted.filter((r) => resolved.has(`${r.kind.toUpperCase()}:${r.id}`));
 
     const [issues, sprints] = await Promise.all([
@@ -107,7 +108,7 @@ export async function POST(req: Request) {
       return tx.chatMessage.findUniqueOrThrow({ where: { id: created.id }, include: messageInclude });
     });
 
-    const [dto] = await toDTOs([message], workspaceId);
+    const [dto] = await toDTOs([message], workspaceId, auth.user.id);
 
     // Aviso del navegador a las personas mencionadas.
     const ch = await prisma.chatChannel.findUnique({ where: { id: channelId }, select: { kind: true, members: { select: { userId: true } } } });

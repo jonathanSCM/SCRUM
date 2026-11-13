@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { membersOf } from "@/lib/workspace";
+import { workspaceOfResource } from "@/lib/workspace";
+import { assignableMembers } from "@/lib/projectMembers";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { findIssueByKey } from "@/lib/issues";
@@ -18,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
 
   try {
     const issue = await findIssueByKey(key, auth.user.workspaceId!);
-    if (!issue) return notFound("Ticket no encontrado");
+    if (!issue || !(await workspaceOfResource("issue", issue.id, auth.user.id))) return notFound("Ticket no encontrado"); // un grupo privado ajeno no existe
 
     const [project, comments, attachments, history, members, sprints, epics, stories, involvedRows] = await Promise.all([
       prisma.project.findUnique({ where: { id: issue.projectId }, select: { id: true, key: true, name: true, readyItems: true } }),
@@ -33,7 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
         select: { id: true, filename: true, mimeType: true, size: true, createdAt: true, uploadedBy: { select: { id: true, name: true } } },
       }),
       prisma.historyEntry.findMany({ where: { taskId: issue.id }, orderBy: { changedAt: "desc" }, take: 40 }),
-      membersOf(auth.user.workspaceId!).then((m) => m.map(({ id, name }) => ({ id, name }))),
+      assignableMembers(issue.projectId, auth.user.workspaceId!),
       prisma.sprint.findMany({
         where: { projectId: issue.projectId, state: { in: ["PLANNED", "ACTIVE"] } },
         orderBy: [{ state: "asc" }, { createdAt: "asc" }],

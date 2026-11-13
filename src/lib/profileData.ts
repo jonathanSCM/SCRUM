@@ -20,7 +20,7 @@ export async function getProfile(userId: string, workspaceId: string) {
   if (!user) return null;
 
   const { since, prevSince, sinceDay, prevSinceDay } = weekWindow();
-  const inWs = { project: { workspaceId } };
+  const inWs = { project: { workspaceId, isPrivate: false } }; // los grupos privados no cuentan en el perfil de nadie
   const real = { issueType: { not: "EPIC" }, ...inWs };
   const mine = { assigneeUserId: userId, ...real };
 
@@ -38,10 +38,10 @@ export async function getProfile(userId: string, workspaceId: string) {
     prisma.comment.count({ where: { authorId: userId, task: inWs, createdAt: { gte: prevSince, lt: since } } }),
     prisma.note.count({ where: { authorId: userId, ...inWs, createdAt: { gte: since } } }),
     prisma.note.count({ where: { authorId: userId, ...inWs, createdAt: { gte: prevSince, lt: since } } }),
-    prisma.standupEntry.count({ where: { userId, ...inWs, date: { gte: sinceDay } } }),
-    prisma.standupEntry.count({ where: { userId, ...inWs, date: { gte: prevSinceDay, lt: sinceDay } } }),
+    prisma.standupEntry.count({ where: { userId, workspaceId, date: { gte: sinceDay } } }),
+    prisma.standupEntry.count({ where: { userId, workspaceId, date: { gte: prevSinceDay, lt: sinceDay } } }),
     prisma.task.findMany({
-      where: { ...mine, status: { in: ["IN_PROGRESS", "IN_REVIEW"] } },
+      where: { ...mine, status: { in: ["IN_PROGRESS", "BLOCKED", "IN_REVIEW"] } },
       orderBy: { updatedAt: "desc" },
       take: 6,
       select: { number: true, title: true, status: true, projectId: true, project: { select: { key: true } } },
@@ -98,7 +98,7 @@ export async function getPeople(workspaceId: string, options: { withEmail?: bool
     select: { role: true, user: { select: { id: true, name: true, tagline: true, chatColor: true, ...(options.withEmail ? { email: true } : {}) } } },
   });
   const since = weekWindow().since;
-  const inWs = { project: { workspaceId } };
+  const inWs = { project: { workspaceId, isPrivate: false } }; // los grupos privados no cuentan en el perfil de nadie
   const [open, done] = await Promise.all([
     prisma.task.groupBy({ by: ["assigneeUserId"], where: { ...inWs, assigneeUserId: { not: null }, issueType: { not: "EPIC" }, status: { not: "DONE" } }, _count: { _all: true } }),
     prisma.task.groupBy({ by: ["assigneeUserId"], where: { ...inWs, assigneeUserId: { not: null }, issueType: { not: "EPIC" }, status: "DONE", completedAt: { gte: since } }, _count: { _all: true } }),

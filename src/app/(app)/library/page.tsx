@@ -10,7 +10,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
   const { tarjeta } = await searchParams;
   const [cards, projects] = await Promise.all([
     listCards(ws.workspaceId),
-    prisma.project.findMany({ where: { workspaceId: ws.workspaceId }, orderBy: { name: "asc" }, select: { id: true, name: true, key: true } }),
+    prisma.project.findMany({ where: { workspaceId: ws.workspaceId, kind: "PROJECT" }, orderBy: { name: "asc" }, select: { id: true, name: true, key: true } }),
   ]);
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-8 sm:px-6">

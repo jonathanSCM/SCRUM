@@ -3,6 +3,7 @@ import { PushAutoPrompt } from "@/components/PwaControls";
 import TimezoneProvider from "@/components/TimezoneProvider";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspace } from "@/lib/session";
+import { visibleProjectWhere } from "@/lib/scrum/groups";
 import { maxOwnedTeams, normalizeRole } from "@/lib/scrum/roles";
 
 // Todas las pantallas con sesión comparten la barra superior (con el selector de equipo).
@@ -12,7 +13,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const teams = rows.map((r) => ({ id: r.workspace.id, name: r.workspace.name, role: normalizeRole(r.role) }));
   const maxOwned = maxOwnedTeams(process.env.MAX_OWNED_TEAMS);
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { timezone: true } });
-  const projects = await prisma.project.findMany({ where: { workspaceId }, orderBy: { name: "asc" }, select: { id: true, name: true, key: true } });
+  // Para "Crear": los proyectos y los grupos de tareas (activos) que esta persona puede ver.
+  const projectRows = await prisma.project.findMany({ where: { ...visibleProjectWhere(session.user.id, workspaceId), archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, key: true, kind: true } });
+  const projects = projectRows.map((p) => ({ id: p.id, key: p.key, name: p.kind === "GROUP" ? `${p.name} (grupo)` : p.name, kind: p.kind }));
   return (
     <TimezoneProvider tz={me?.timezone ?? null}>
     <div className="flex min-h-screen flex-col">
