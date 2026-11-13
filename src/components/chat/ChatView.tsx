@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/Toaster";
 import { isCommand, COMMAND_HELP, COMMAND_LIST, personaQuery } from "@/lib/scrum/chatCommands";
 import { useConfirm } from "@/components/ConfirmDialog";
 import NoticeModal from "@/components/chat/NoticeModal";
+import { useTimezone } from "@/components/TimezoneProvider";
 
 // Tipos que devuelve la API (ver src/lib/chatData.ts).
 type ResolvedRef = { kind: RefKind; id: string; label: string; sub: string | null; href: string | null; missing: boolean };
@@ -99,6 +100,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
   // pane: ocupa todo el espacio de su contenedor (vista tipo WhatsApp/Discord). mentionProjectId: canal de un proyecto (el # busca dentro de ese proyecto).
   const scopeProject = projectId ?? mentionProjectId;
   const toast = useToast();
+  const { tz } = useTimezone();
   const confirm = useConfirm();
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
@@ -362,7 +364,7 @@ export default function ChatView({ initial, currentUserId, currentUserName = "",
       setBusy(true);
       // Las menciones de personas no van en los comandos (los nombres se escriben tal cual); el resto sí.
       const cmdRefs = inserted.current.filter((r) => !r.token.startsWith("[[user:"));
-      const cr = await api<{ summary: string }>("/api/chat/command", "POST", { body: applyInsertedRefs(draft.trim(), cmdRefs), channelId: channelId ?? undefined });
+      const cr = await api<{ summary: string }>("/api/chat/command", "POST", { body: applyInsertedRefs(draft.trim(), cmdRefs), channelId: channelId ?? undefined, tz });
       setBusy(false);
       if (!cr.ok) return toast.error(cr.error);
       toast.success(cr.data.summary);

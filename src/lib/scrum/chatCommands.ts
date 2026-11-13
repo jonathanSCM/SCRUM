@@ -7,6 +7,11 @@
 
 // Nivel del aviso: "normal", "ayuda" (ámbar) o "urgente" (rojo). Atajos: /urgente mensaje y /ayuda mensaje
 // (van a todo el equipo); o la marca !urgente / !ayuda después del comando: /noti !urgente general …
+import { parseWhen } from "./meetingWhen";
+
+// Fecha fija solo para comprobar si un texto "se entiende como fecha" (la fecha real la calcula el servidor con la hora de verdad).
+const REF_NOW = new Date("2026-06-15T12:00:00Z");
+
 export type Level = "normal" | "ayuda" | "urgente";
 
 export type ChatCommand =
@@ -43,12 +48,24 @@ export function parseCommand(raw: string): ParsedCommand {
   const reunion = body.match(/^\/reunion(?:\s+([\s\S]*))?$/i);
   if (reunion) {
     const rest = (reunion[1] ?? "").trim();
-    const i = rest.indexOf(":");
-    // La hora también lleva ":", así que el separador es el último ":" seguido de espacio; si no hay, el primero.
+    // Separador: ":" seguido de espacio ("mañana 10:30: revisión"). Sin él, la fecha son las primeras palabras que se entienden
+    // como fecha y hora ("mañana 10:30 revisión", "20/11 10:00 retro") y el resto es el tema (se admite un "-" o ":" antes del tema).
     const sep = rest.search(/:\s/);
-    const at = sep >= 0 ? sep : i;
-    const when = at > 0 ? rest.slice(0, at).trim() : "";
-    const topic = at > 0 ? rest.slice(at + 1).trim() : "";
+    let when = "";
+    let topic = "";
+    if (sep > 0) {
+      when = rest.slice(0, sep).trim();
+      topic = rest.slice(sep + 1).trim();
+    } else {
+      const words = rest.split(/\s+/);
+      for (let k = 1; k < Math.min(words.length, 9); k++) {
+        if (parseWhen(words.slice(0, k).join(" "), "UTC", REF_NOW)) {
+          when = words.slice(0, k).join(" ");
+          topic = words.slice(k).join(" ").replace(/^[-–—:]+\s*/, "").trim();
+          break;
+        }
+      }
+    }
     if (!when || !topic) return { ok: false, error: "Uso: /reunion <cuándo>: <tema>. Ej.: /reunion mañana 10:30: revisión del sprint" };
     return { ok: true, command: { kind: "reunion", when: when.slice(0, 80), topic: topic.slice(0, 500), level } };
   }

@@ -1056,3 +1056,32 @@ describe("fecha de una reunión escrita a mano (parseWhen)", () => {
     expect(lima("")).toBeNull();
   });
 });
+
+describe("/reunion: separar la fecha del tema y entender cómo se escribe de verdad", () => {
+  // Lunes 16 de noviembre de 2026, 09:00 en Lima (14:00 UTC)
+  const now = new Date("2026-11-16T14:00:00Z");
+  const lima = (t: string) => parseWhen(t, "America/Lima", now)?.toISOString() ?? null;
+  const split = (c: string) => { const r = parseCommand(c); return r.ok && r.command.kind === "reunion" ? { when: r.command.when, topic: r.command.topic } : null; };
+  it("sin ': ' después de la hora, la fecha son las primeras palabras que se entienden", () => {
+    expect(split("/reunion mañana 10:30 revisión del sprint")).toEqual({ when: "mañana 10:30", topic: "revisión del sprint" });
+    expect(split("/reunion 20/11 10:00 retro")).toEqual({ when: "20/11 10:00", topic: "retro" });
+    expect(split("/reunion viernes 3pm - retro con el cliente")).toEqual({ when: "viernes 3pm", topic: "retro con el cliente" });
+    expect(split("/reunion mañana a las 10:30: revisión")).toEqual({ when: "mañana a las 10:30", topic: "revisión" });
+  });
+  it("sin fecha reconocible da el error de uso", () => {
+    const r = parseCommand("/reunion cuando se pueda algo");
+    expect(r.ok).toBe(false);
+  });
+  it("de la mañana / de la tarde / de la noche", () => {
+    expect(lima("hoy a las 3 de la tarde")).toBe("2026-11-16T20:00:00.000Z"); // 15:00 Lima
+    expect(lima("jueves a las 8 de la noche")).toBe("2026-11-20T01:00:00.000Z"); // jueves 20:00 Lima
+    expect(lima("hoy a las 10 de la mañana")).toBe("2026-11-16T15:00:00.000Z"); // hoy 10:00 Lima (no confundir 'de la mañana' con «mañana»)
+    expect(lima("mañana 9 de la mañana")).toBe("2026-11-17T14:00:00.000Z");
+    expect(lima("esta tarde 4pm")).toBe("2026-11-16T21:00:00.000Z");
+  });
+  it("10h30 y relativos", () => {
+    expect(lima("martes 10h30")).toBe("2026-11-17T15:30:00.000Z");
+    expect(lima("en 2 horas")).toBe("2026-11-16T16:00:00.000Z");
+    expect(lima("en 30 minutos")).toBe("2026-11-16T14:30:00.000Z");
+  });
+});
