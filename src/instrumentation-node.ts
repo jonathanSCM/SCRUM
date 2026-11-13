@@ -1,5 +1,7 @@
 import { flushNotifications } from "@/lib/notifications";
 import { flushProjectFeeds } from "@/lib/notify";
+import { flushMeetingReminders } from "@/lib/meetings";
+import { processPendingTranscriptions } from "@/lib/transcribe";
 
 // Cada minuto envía los resúmenes de avisos que ya cumplieron su ventana (personas y canales de proyecto).
 // Si hay varias copias del servidor no pasa nada: cada pendiente se reclama una sola vez.
@@ -11,6 +13,8 @@ if (process.env.DISABLE_NOTIF_TIMER !== "1" && !g.__notifTimer) {
       const now = new Date();
       await flushNotifications(now);
       await flushProjectFeeds(now);
+      await flushMeetingReminders(now);
+      await processPendingTranscriptions();
     } catch (err) {
       console.error("[avisos] temporizador:", err);
     }

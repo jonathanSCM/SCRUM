@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <script src="theme.js"></script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SCRUM ProShop — Asistente de reuniones</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --bg2: #f7f6fb;
+        --fg: #1b1730;
+        --muted: #6f6a88;
+        --line: #e4e2ee;
+        --accent: #6d28d9;
+        --accent-fg: #ffffff;
+        --danger: #dc2626;
+        --danger-bg: #fef2f2;
+        --ok: #0a7a5a;
+        --warn-bg: #fff7e6;
+        --warn: #b45309;
+        --shadow: 0 1px 2px rgba(27, 23, 48, 0.06);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #0f0e17;
+          --bg2: #1a1927;
+          --accent: #8b5cf6;
+          --danger: #f87171;
+          --fg: #edebf8;
+          --muted: #8f8aa9;
+          --line: #2c2a40;
+          --danger-bg: rgba(248, 113, 113, 0.12);
+          --warn-bg: rgba(251, 191, 36, 0.12);
+          --warn: #fbbf24;
+          --shadow: none;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #0f0e17;
+        --bg2: #1a1927;
+        --accent: #8b5cf6;
+        --danger: #f87171;
+        --fg: #edebf8;
+        --muted: #8f8aa9;
+        --line: #2c2a40;
+        --danger-bg: rgba(248, 113, 113, 0.12);
+        --warn-bg: rgba(251, 191, 36, 0.12);
+        --warn: #fbbf24;
+        --shadow: none;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        color: var(--fg);
+        font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+      header img { width: 34px; height: 34px; border-radius: 9px; flex: none; }
+      header .meta { min-width: 0; flex: 1; }
+      header h1 { margin: 0; font-size: 14px; font-weight: 650; display: flex; align-items: center; }
+      header .sub { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; flex: none; }
+      .dot.rec { background: #ef4444; animation: pulse 1.4s infinite; }
+      .dot.pause { background: #f59e0b; }
+      .dot.done { background: var(--ok); }
+      @keyframes pulse { 50% { opacity: 0.35; } }
+      #clock { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--fg); }
+      .card { margin: 10px 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg2); display: grid; gap: 8px; box-shadow: var(--shadow); }
+      .card .lead { margin: 0; font-size: 13px; }
+      .card h2 { margin: 0; font-size: 13px; font-weight: 650; }
+      .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 0; }
+      .chip { background: var(--bg2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+      .chip.ok { color: var(--ok); }
+      .chip.bad { color: var(--danger); }
+      .chip.warn { color: var(--warn); }
+      .notice { margin: 10px 14px 0; padding: 8px 10px; border-radius: 10px; font-size: 12.5px; }
+      .notice.error { background: var(--danger-bg); color: var(--danger); }
+      .notice.warn { background: var(--warn-bg); color: var(--warn); }
+      .notice.info { background: var(--bg2); color: var(--muted); }
+      .notice button { margin-top: 8px; padding: 7px 10px; background: var(--accent); border-color: var(--accent); color: var(--accent-fg); width: 100%; }
+      main { flex: 1; min-height: 120px; display: flex; flex-direction: column; padding: 10px 14px; }
+      #captions { flex: 1; min-height: 0; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg2); }
+      #captions p { margin: 0 0 8px; font-size: 14px; line-height: 1.5; }
+      #captions .who { font-weight: 600; margin-right: 4px; }
+      #captions .empty { color: var(--muted); font-size: 12.5px; }
+      footer { padding: 10px 14px 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+      .row { display: flex; gap: 8px; }
+      button {
+        flex: 1; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line);
+        background: var(--bg); color: var(--fg); font: inherit; font-weight: 550; cursor: pointer;
+      }
+      button:hover:not(:disabled) { border-color: var(--muted); }
+      button.primary { background: var(--danger); border-color: var(--danger); color: #fff; }
+      button.accent { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+      button.big { padding: 12px 10px; font-size: 14px; font-weight: 650; }
+      button.link { flex: none; border: 0; background: none; color: var(--muted); text-decoration: underline; padding: 0; font-size: 11.5px; font-weight: 400; }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      input[type="text"], select {
+        width: 100%; padding: 8px 9px; border-radius: 10px; border: 1px solid var(--line);
+        background: var(--bg); color: var(--fg); font: inherit;
+      }
+      input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+      label.field { display: grid; gap: 4px; color: var(--muted); font-size: 11.5px; }
+      details { border: 1px solid var(--line); border-radius: 12px; background: var(--bg2); }
+      details summary { cursor: pointer; padding: 8px 12px; font-weight: 650; font-size: 12.5px; }
+      .gear { flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border-radius: 10px; }
+      #themeBtn .i-sun { display: none; }
+      #themeBtn[data-mode="dark"] .i-sun { display: block; }
+      #themeBtn[data-mode="dark"] .i-moon { display: none; }
+      .gear svg, .back svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+      #mainView { display: contents; }
+      #settingsView { display: none; flex: 1; min-height: 0; overflow-y: auto; flex-direction: column; }
+      body.settings-open #mainView { display: none; }
+      body.settings-open #settingsView { display: flex; }
+      body.meet-open #mainView, body.meet-open #settingsView { display: none; }
+      #meetView { display: none; flex: 1; min-height: 0; flex-direction: column; }
+      body.meet-open #meetView { display: flex; }
+      .meetpick { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; padding: 9px 11px; }
+      .meetpick .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .meetpick .go { flex: none; color: var(--accent); font-weight: 650; }
+      .meetpick.chosen { border-color: var(--accent); }
+      .mv-tools { display: grid; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+      .mv-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; background: var(--bg2); border-radius: 10px; }
+      .mv-tabs button { border: 0; background: none; padding: 6px 8px; border-radius: 8px; font-weight: 600; color: var(--muted); }
+      .mv-tabs button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: var(--shadow); }
+      #mvList { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 14px 14px; display: grid; gap: 6px; align-content: start; }
+      .mv-day { margin: 10px 0 0; font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+      .mv-card { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: start; width: 100%; text-align: left; padding: 9px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg2); }
+      .mv-card:hover { border-color: var(--muted); }
+      .mv-card .t { font-variant-numeric: tabular-nums; font-weight: 650; font-size: 13px; }
+      .mv-card .n { font-weight: 600; font-size: 13.5px; line-height: 1.3; }
+      .mv-card .c { color: var(--muted); font-size: 12px; }
+      .mv-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+      .mv-tag { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+      .mv-tag.here { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+      .mv-tag.warn { background: var(--warn-bg); border-color: transparent; color: var(--warn); }
+      .mv-msg { color: var(--muted); text-align: center; padding: 22px 8px; font-size: 12.5px; }
+      .settings-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 1; }
+      .settings-bar h2 { margin: 0; font-size: 14px; font-weight: 650; }
+      .back { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; }
+      .settings { padding: 12px 14px 16px; display: grid; gap: 12px; }
+      label.toggle { display: flex; align-items: flex-start; gap: 8px; color: var(--fg); font-size: 12px; }
+      .meter { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+      .meter > div { height: 100%; width: 0; background: var(--accent); transition: width 0.08s linear; }
+      .hint { color: var(--muted); font-size: 11.5px; margin: 0; }
+      .ver { color: var(--muted); font-size: 11px; text-align: center; }
+      .link-a { color: var(--accent); text-decoration: none; font-weight: 600; font-size: 12.5px; }
+      .link-a:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon128.png" alt="" />
+      <div class="meta">
+        <h1><span class="dot" id="dot"></span><span id="title">SCRUM ProShop</span></h1>
+        <div class="sub" id="subtitle">Asistente de reuniones</div>
+        <div class="sub" id="dest" style="color: var(--fg); font-weight: 500"></div>
+      </div>
+      <button class="gear" id="themeBtn" title="Tema oscuro" aria-label="Cambiar a tema oscuro">
+        <svg class="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <button class="gear" id="gearBtn" title="Ajustes" aria-label="Ajustes">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </header>
+    <div id="mainView">
+    <div class="notice warn" id="recoverBox" style="display: none">
+      <span id="recoverText"></span>
+      <button id="recoverSend">Enviar a SCRUM</button>
+      <button id="recoverDiscard" class="link" style="margin-top: 4px">Descartar</button>
+      <p class="hint" id="recoverStatus" style="margin: 6px 0 0"></p>
+    </div>
+
+    <!-- Aviso de consentimiento: lo primero que se ve, antes de pedir micrófono, sesión o grabar nada -->
+    <section class="card" id="consentBox" style="display: none">
+      <h2>Antes de empezar</h2>
+      <p class="lead">Esta extensión graba reuniones de Google Meet <strong>solo cuando tú pulsas «Grabar»</strong>. Así funciona:</p>
+      <ul style="margin: 0; padding-left: 18px; display: grid; gap: 4px">
+        <li><strong>Qué graba:</strong> los subtítulos de la reunión (con el nombre de quien habla), el audio de la pestaña (las voces de los demás), tu micrófono <em>solo mientras no estás silenciado</em>, y el enlace y el nombre de la reunión.</li>
+        <li><strong>A dónde va:</strong> al equipo que elijas dentro de SCRUM ProShop. Para transcribir el audio se envía a OpenAI, solo para eso, y el audio se borra en cuanto se transcribe (quedan el texto y los subtítulos).</li>
+        <li><strong>Qué no hace:</strong> no empieza sola, no lee otras páginas ni tu historial, y no vende ni usa tus datos para publicidad.</li>
+        <li><strong>Control:</strong> puedes pausar o detener cuando quieras, y borrar la reunión (con su audio y transcripción) desde SCRUM.</li>
+      </ul>
+      <p class="hint">Más detalle en la <a class="link-a" href="https://scrum.proshop.lat/privacy" target="_blank" rel="noopener">política de privacidad</a>.</p>
+      <label class="toggle"><input type="checkbox" id="consentCheck" /> <span>Entiendo que <strong>debo avisar a los participantes</strong> de que voy a grabar y contar con su consentimiento cuando la ley lo exija.</span></label>
+      <button class="accent big" id="consentAccept" disabled>Aceptar y continuar</button>
+    </section>
+
+    <!-- Sesión + micrófono en un solo paso -->
+    <section class="card" id="accountBox" style="display: none">
+      <h2>Conecta la extensión con SCRUM</h2>
+      <p class="lead">Se abre SCRUM para iniciar sesión (si ya la tienes abierta, queda conectado solo).</p>
+      <button class="accent big" id="loginBtn">Iniciar sesión</button>
+    </section>
+
+    <!-- Reunión terminada: resumen y volver a grabar -->
+    <section class="card" id="doneBox" style="display: none">
+      <h2>✓ Grabación enviada a SCRUM</h2>
+      <p class="hint" id="doneSummary"></p>
+      <a class="link-a" id="crmLink" href="#" target="_blank" rel="noopener">Ver las reuniones en SCRUM</a>
+    </section>
+
+    <!-- Antes de grabar -->
+    <section class="card" id="recordBox" style="display: none">
+      <div class="field">
+        Reunión de SCRUM
+        <button class="meetpick" id="meetPickBtn" type="button"><span class="lbl" id="meetPickLabel">Detectar sola (recomendado)</span><span class="go">Elegir…</span></button>
+        <span class="hint" id="meetPickHint">Elige una reunión agendada si lo que vas a grabar pertenece a ella.</span>
+      </div>
+      <label class="field" id="titleField">
+        Nombre de la reunión (opcional)
+        <input id="titleInput" type="text" maxlength="160" placeholder="Ej.: Demo con Ana - Financiera" />
+      </label>
+      <label class="field" id="orgField" style="display: none">
+        Equipo de esta reunión
+        <select id="orgSelect"></select>
+      </label>
+      <p class="hint" id="orgOnly" style="display: none"></p>
+      <div class="notice warn" id="micSetup" style="display: none; margin: 0; flex-direction: column">
+        <span id="micSetupText"></span>
+        <button id="micSetupBtn">Activar micrófono</button>
+      </div>
+      <button class="accent big" id="recordBtn">Grabar esta reunión</button>
+      <p class="hint">Avisa a los participantes de que vas a grabar. Para capturar el audio sin selector, abre el asistente con el ícono de la extensión (barra de Chrome); si no, Chrome te pedirá elegir la pestaña de Meet.</p>
+      <p class="hint" id="recordStatus"></p>
+      <button id="reloadMeetBtn" style="display: none">Recargar la pestaña de Meet</button>
+    </section>
+
+    <div class="chips" id="chips"></div>
+    <div id="notices"></div>
+    <main>
+      <div id="captions"><p class="empty">Los subtítulos aparecen aquí.</p></div>
+    </main>
+    <footer>
+      <div class="row">
+        <button id="pauseBtn" disabled>Pausar</button>
+        <button class="primary" id="stopBtn" disabled>Detener y enviar</button>
+      </div>
+      <button id="screenBtn">Grabar pantalla (se guarda en tu computador)</button>
+    </footer>
+    </div>
+    <section id="meetView">
+      <div class="settings-bar">
+        <button class="back" id="mvBack"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>Volver</button>
+        <h2>Reunión de SCRUM</h2>
+      </div>
+      <div class="mv-tools">
+        <input id="mvSearch" type="text" placeholder="Buscar por nombre o proyecto…" autocomplete="off" />
+        <div class="mv-tabs">
+          <button id="mvUpcoming" aria-pressed="true">Hoy y próximas</button>
+          <button id="mvAll" aria-pressed="false">Todas</button>
+        </div>
+      </div>
+      <div class="mv-tools" style="border-bottom: 0; padding-top: 0"><button id="mvClear">Detectar sola (quitar elección)</button></div>
+      <div id="mvList"></div>
+    </section>
+    <section id="settingsView">
+      <div class="settings-bar">
+        <button class="back" id="backBtn"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>Volver</button>
+        <h2>Ajustes</h2>
+      </div>
+      <div class="settings">
+          <div class="row" style="align-items: center; justify-content: space-between">
+            <span class="hint" id="accountLine"></span>
+            <button class="link" id="logoutBtn" style="display: none">Cerrar sesión</button>
+          </div>
+          <div class="row" style="align-items: center; justify-content: space-between">
+            <span class="hint" id="consentLine"></span>
+            <button class="link" id="consentReset">Ver el aviso</button>
+          </div>
+          <label class="toggle"><input type="checkbox" id="recordAudioToggle" checked /> <span><strong>Grabar audio</strong> (más precisión; transcribe con IA). Apagado: solo subtítulos de Meet, sin pedir micrófono ni captura de pestaña</span></label>
+          <div id="audioSettings" style="display: grid; gap: 8px">
+          <label class="toggle"><input type="checkbox" id="recordMicToggle" checked /> <span>Grabar mi micrófono (se corta al instante cuando te silencias en Meet)</span></label>
+          <label class="field">
+            Cómo capturar el audio de la reunión
+            <select id="audioMethodSelect">
+              <option value="auto">Automático (recomendado)</option>
+              <option value="picker">Elegir la pestaña con el selector de Chrome</option>
+            </select>
+          </label>
+          <p class="hint">Si el audio no arranca solo, usa el selector: Chrome te deja elegir la pestaña de Meet y marcar «Compartir audio de la pestaña».</p>
+          <label class="field">
+            Micrófono
+            <select id="micSelect"></select>
+          </label>
+          <div class="meter" title="Nivel del micrófono elegido"><div id="meterBar"></div></div>
+          <p class="hint" id="micHint">Habla para ver si se mueve la barra: así sabes que ese es el micrófono correcto.</p>
+          </div>
+          <label class="field">
+            Idioma de los subtítulos
+            <select id="langSelect">
+              <option value="es">Español</option>
+              <option value="en">Inglés</option>
+              <option value="none">No cambiar (el que tenga Meet)</option>
+            </select>
+          </label>
+          <label class="toggle"><input type="checkbox" id="hideToggle" checked /> <span>Ocultar los subtítulos de la pantalla de Meet</span></label>
+          <label class="toggle"><input type="checkbox" id="autoOpenToggle" /> <span>Abrir esta ventana sola al entrar a una reunión</span></label>
+          <p class="hint">El micrófono, el idioma y «Grabar mi micrófono» se aplican en la próxima grabación; el micrófono también cambia en vivo si ya estás grabando. Atajo para abrir el asistente: Alt+Shift+P.</p>
+          <details>
+            <summary>Diagnóstico</summary>
+            <textarea id="debugBox" readonly rows="8" style="width: 100%; margin-top: 6px; font: 11px/1.4 ui-monospace, Consolas, monospace; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px"></textarea>
+            <button id="copyDebug" style="margin-top: 6px">Copiar diagnóstico</button>
+          </details>
+        
+        <div class="ver" id="ver"></div>
+      </div>
+    </section>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

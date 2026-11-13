@@ -75,8 +75,9 @@ const CHIP_STYLE: Record<RefKind, string> = {
   sprint: "border-blue bg-surface text-blue",
   user: "border-line-strong bg-surface text-ink-soft",
   card: "border-amber-500/60 bg-surface text-amber-700 dark:text-amber-400",
+  meeting: "border-blue bg-surface text-blue",
 };
-const KIND_LABEL: Record<RefKind, string> = { project: "Proyecto", issue: "Ticket", sprint: "Sprint", user: "Persona", card: "Biblioteca" };
+const KIND_LABEL: Record<RefKind, string> = { project: "Proyecto", issue: "Ticket", sprint: "Sprint", user: "Persona", card: "Biblioteca", meeting: "Reunión" };
 
 // En pantallas táctiles Enter hace salto de línea (se envía con el botón).
 const isTouch = () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;

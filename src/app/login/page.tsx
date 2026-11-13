@@ -85,6 +85,9 @@ export default function LoginPage() {
         <Link href="/forgot-password" className="block text-center text-xs text-ink-faint hover:text-ink">
           ¿Olvidaste tu contraseña?
         </Link>
+        <p className="text-center text-[11px] text-ink-faint">
+          Al entrar aceptas los <Link href="/terms" className="underline hover:text-ink">Términos</Link> y la <Link href="/privacy" className="underline hover:text-ink">Privacidad</Link>.
+        </p>
       </form>
     </div>
   );

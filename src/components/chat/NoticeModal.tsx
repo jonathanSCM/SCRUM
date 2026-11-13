@@ -6,6 +6,8 @@ import Avatar from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toaster";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/ui";
+import { useTimezone } from "@/components/TimezoneProvider";
+import { dayKey, formatDay, offsetLabel, zoneName, zonedToUtc } from "@/lib/scrum/countries";
 import { AlertIcon, CalendarIcon, LifebuoyIcon, MegaphoneIcon, UsersIcon } from "@/components/chat/ChatIcons";
 
 type Person = { id: string; label: string };
@@ -19,8 +21,17 @@ export default function NoticeModal({ open, onClose, isLead, currentUserId, chan
   const [to, setTo] = useState<To>(isLead ? "general" : "personas");
   const [level, setLevel] = useState<Level>("normal");
   const [message, setMessage] = useState("");
-  const [when, setWhen] = useState("");
+  const { tz } = useTimezone();
+  const [date, setDate] = useState(() => dayKey(new Date(), tz));
+  const [time, setTime] = useState("10:00");
+  const [duration, setDuration] = useState(60);
+  const [meetUrl, setMeetUrl] = useState("");
   const [topic, setTopic] = useState("");
+  const startsAt = (() => {
+    const m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const t = time.match(/^(\d{2}):(\d{2})$/);
+    return m && t ? zonedToUtc(Number(m[1]), Number(m[2]), Number(m[3]), Number(t[1]), Number(t[2]), tz) : null;
+  })();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [people, setPeople] = useState<Person[] | null>(null);
   const [q, setQ] = useState("");
@@ -39,18 +50,18 @@ export default function NoticeModal({ open, onClose, isLead, currentUserId, chan
     { id: "reunion", label: "Reunión", hint: "Convocatoria con fecha", Icon: CalendarIcon, show: isLead },
   ];
   const effectiveLevel: Level = memberTeamHelp ? "ayuda" : level;
-  const ready = to === "reunion" ? !!when.trim() && !!topic.trim() : !!message.trim() && (to !== "personas" || picked.size > 0);
+  const ready = to === "reunion" ? !!startsAt && !!topic.trim() : !!message.trim() && (to !== "personas" || picked.size > 0);
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const notice = to === "reunion" ? { to, level: effectiveLevel, when, topic } : to === "personas" ? { to, level: effectiveLevel, message, userIds: [...picked] } : { to, level: effectiveLevel, message };
+    const notice = to === "reunion" ? { to, level: effectiveLevel, topic, startsAt: startsAt!.toISOString(), durationMin: duration, ...(meetUrl.trim() ? { meetUrl: meetUrl.trim() } : {}) } : to === "personas" ? { to, level: effectiveLevel, message, userIds: [...picked] } : { to, level: effectiveLevel, message };
     const res = await api<{ summary: string }>("/api/chat/command", "POST", { notice, channelId });
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     toast.success(res.data.summary);
     setMessage("");
-    setWhen("");
+    setMeetUrl("");
     setTopic("");
     setPicked(new Set());
     setLevel("normal");
@@ -59,7 +70,7 @@ export default function NoticeModal({ open, onClose, isLead, currentUserId, chan
 
   const shown = (people ?? []).filter((p) => p.label.toLowerCase().includes(q.trim().toLowerCase()));
   const toggle = (id: string) => setPicked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const command = to === "reunion" ? "/reunion cuándo: tema" : to === "personas" ? "/noti persona nombre: mensaje" : memberTeamHelp ? "/ayuda mensaje" : "/noti general mensaje";
+  const command = to === "reunion" ? "/reunion mañana 10:30: tema" : to === "personas" ? "/noti persona nombre: mensaje" : memberTeamHelp ? "/ayuda mensaje" : "/noti general mensaje";
 
   return (
     <Modal open={open} onClose={onClose} title="Enviar un aviso" width="max-w-lg">
@@ -96,12 +107,29 @@ export default function NoticeModal({ open, onClose, isLead, currentUserId, chan
         {to === "reunion" ? (
           <div className="space-y-3">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-ink-soft" htmlFor="aviso-cuando">¿Cuándo?</label>
-              <input id="aviso-cuando" className="field w-full" maxLength={80} placeholder="ej. mañana 10:30" value={when} onChange={(e) => setWhen(e.target.value)} />
+              <label className="text-xs font-semibold text-ink-soft" htmlFor="aviso-tema">Tema de la reunión</label>
+              <input id="aviso-tema" className="field w-full" maxLength={200} placeholder="ej. Revisión del sprint" value={topic} onChange={(e) => setTopic(e.target.value)} />
             </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-3 space-y-1 sm:col-span-1">
+                <label className="text-xs font-semibold text-ink-soft" htmlFor="aviso-fecha">Fecha</label>
+                <input id="aviso-fecha" type="date" className="field w-full" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-ink-soft" htmlFor="aviso-hora">Hora</label>
+                <input id="aviso-hora" type="time" className="field w-full" value={time} onChange={(e) => setTime(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-ink-soft" htmlFor="aviso-dur">Dura</label>
+                <select id="aviso-dur" className="field w-full" value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
+                  {[15, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{m < 60 ? `${m} min` : m === 60 ? "1 hora" : m % 60 ? `${m / 60} h` : `${m / 60} horas`}</option>)}
+                </select>
+              </div>
+            </div>
+            <p className="text-[11px] text-ink-faint">{startsAt ? `${formatDay(startsAt, tz)} · hora de ${zoneName(tz)} (${offsetLabel(startsAt, tz)}). Cada persona la verá en su hora.` : "Elige fecha y hora."} Puedes cambiar tu país en tu perfil.</p>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-ink-soft" htmlFor="aviso-tema">Tema</label>
-              <textarea id="aviso-tema" className="field min-h-[4.5rem] w-full" maxLength={500} placeholder="ej. revisión del sprint" value={topic} onChange={(e) => setTopic(e.target.value)} />
+              <label className="text-xs font-semibold text-ink-soft" htmlFor="aviso-meet">Enlace de Meet (opcional)</label>
+              <input id="aviso-meet" className="field w-full" maxLength={300} placeholder="https://meet.google.com/…" value={meetUrl} onChange={(e) => setMeetUrl(e.target.value)} />
             </div>
           </div>
         ) : (

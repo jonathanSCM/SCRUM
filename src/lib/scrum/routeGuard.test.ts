@@ -12,6 +12,7 @@ const ROOT = join(__dirname, "../../app/api");
 // Rutas "solo identidad": no leen ni escriben datos de equipos.
 const IDENTITY_ONLY = [
   "app-version/", // versión desplegada de la app (pública, sin datos)
+  "extension/", // la extensión de Meet: token propio (scope EXTENSION) y equipo comprobado dentro de cada ruta
   "auth/", // login, registro de la primera cuenta, recuperar contraseña
   "invite/", // aceptar una invitación: se valida con el enlace secreto, sin sesión previa
   "push/", // suscripciones del navegador de la propia persona
@@ -34,7 +35,7 @@ function routes(dir: string): string[] {
   });
 }
 
-const SCOPE = /apiUser\(\{[^)]*\b(workspace|project|issue|sprint|comment|attachment|note|retro|contact|projectMessage|chatMessage|chatFile|status|invitation|channel|resource|fileCard|fileCardItem)\b/;
+const SCOPE = /apiUser\(\{[^)]*\b(workspace|project|issue|sprint|comment|attachment|note|retro|contact|projectMessage|chatMessage|chatFile|status|invitation|channel|resource|fileCard|fileCardItem|meeting|recording)\b/;
 
 describe("guardia de aislamiento entre equipos", () => {
   const files = routes(ROOT);

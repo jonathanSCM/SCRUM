@@ -43,12 +43,13 @@ const messageInclude = {
 
 export async function resolveRefs(refs: Array<{ kind: string; targetId: string }>, workspaceId: string): Promise<Map<string, ResolvedRef>> {
   const ids = (kind: string) => [...new Set(refs.filter((r) => r.kind === kind).map((r) => r.targetId))];
-  const [projects, issues, sprints, users, cards] = await Promise.all([
+  const [projects, issues, sprints, users, cards, meetings] = await Promise.all([
     prisma.project.findMany({ where: { id: { in: ids("PROJECT") }, workspaceId }, select: { id: true, name: true, key: true } }),
     prisma.task.findMany({ where: { id: { in: ids("ISSUE") }, project: { workspaceId } }, select: { id: true, number: true, title: true, status: true, projectId: true, project: { select: { key: true } } } }),
     prisma.sprint.findMany({ where: { id: { in: ids("SPRINT") }, project: { workspaceId } }, select: { id: true, name: true, state: true, projectId: true, project: { select: { name: true } } } }),
     prisma.user.findMany({ where: { id: { in: ids("USER") }, memberships: { some: { workspaceId } } }, select: { id: true, name: true } }),
     prisma.fileCard.findMany({ where: { id: { in: ids("CARD") }, workspaceId }, select: { id: true, title: true, category: true, _count: { select: { items: true } } } }),
+    prisma.meeting.findMany({ where: { id: { in: ids("MEETING") }, workspaceId }, select: { id: true, title: true, startsAt: true, status: true } }),
   ]);
 
   const out = new Map<string, ResolvedRef>();
@@ -60,6 +61,7 @@ export async function resolveRefs(refs: Array<{ kind: string; targetId: string }
   for (const s of sprints) out.set(`SPRINT:${s.id}`, { kind: "sprint", id: s.id, label: s.name, sub: s.project?.name ?? null, href: s.projectId ? `/projects/${s.projectId}/backlog` : null, missing: false });
   for (const u of users) out.set(`USER:${u.id}`, { kind: "user", id: u.id, label: `@${u.name}`, sub: null, href: null, missing: false });
   for (const c of cards) out.set(`CARD:${c.id}`, { kind: "card", id: c.id, label: c.title, sub: `${categoryLabel(c.category)} · ${c._count.items} ${c._count.items === 1 ? "archivo" : "archivos"}`, href: `/library?tarjeta=${c.id}`, missing: false });
+  for (const m of meetings) out.set(`MEETING:${m.id}`, { kind: "meeting", id: m.id, label: m.title, sub: m.status === "CANCELED" ? "cancelada" : m.startsAt.toISOString(), href: `/calendar?reunion=${m.id}`, missing: false });
   return out;
 }
 

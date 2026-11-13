@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/ui/Toaster";
 
-type Status = { gemini: { own: boolean; hint: string | null; active: boolean }; slackBot: { own: boolean; hint: string | null; active: boolean }; slackWebhook: { own: boolean; hint: string | null; active: boolean } };
+type Status = { openai: { own: boolean; hint: string | null; active: boolean }; gemini: { own: boolean; hint: string | null; active: boolean }; slackBot: { own: boolean; hint: string | null; active: boolean }; slackWebhook: { own: boolean; hint: string | null; active: boolean } };
 
 export default function IntegrationsForm() {
   const toast = useToast();
   const [st, setSt] = useState<Status | null>(null);
   const [gemini, setGemini] = useState("");
+  const [openai, setOpenai] = useState("");
   const [slack, setSlack] = useState("");
   const [hook, setHook] = useState("");
 
@@ -23,6 +24,7 @@ export default function IntegrationsForm() {
     if (!r.ok) return toast.error((await r.json().catch(() => ({}))).error || "No se pudo guardar");
     toast.success(done);
     setGemini("");
+    setOpenai("");
     setSlack("");
     setHook("");
     load();
@@ -33,6 +35,16 @@ export default function IntegrationsForm() {
 
   return (
     <div className="space-y-8">
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">OpenAI (transcripción de las reuniones de Meet)</h2>
+        <p className="text-xs text-ink-soft">{st ? line(st.openai) : "Cargando…"} El audio que graba la extensión se transcribe con tu cuenta de OpenAI y luego se borra. La clave se crea en platform.openai.com (API keys).</p>
+        <div className="flex flex-wrap gap-2">
+          <input className="field min-w-0 flex-1 font-mono" type="password" autoComplete="off" placeholder="Pega la clave de OpenAI (sk-…)" value={openai} onChange={(e) => setOpenai(e.target.value)} />
+          <button className="btn-primary" disabled={!openai} onClick={() => save({ openaiKey: openai }, "Clave de OpenAI guardada")}>Guardar</button>
+          {st?.openai.own && <button className="btn-ghost" onClick={() => save({ openaiKey: null }, "Clave de OpenAI borrada")}>Borrar</button>}
+        </div>
+      </section>
+
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-ink">Gemini (sugerencias de IA en el PDF del sprint)</h2>
         <p className="text-xs text-ink-soft">{st ? line(st.gemini) : "Cargando…"} La consigues en Google AI Studio.</p>

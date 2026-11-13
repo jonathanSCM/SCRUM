@@ -822,7 +822,7 @@ async function main() {
     check("/reunion avisa al instante a todo el equipo menos a quien la convoca", ru.status === 200 && ruRows.length >= 3 && ruRows.every((r) => r.deliveredAt !== null && r.pushed === true) && ruUsers.includes(nu.id) && ruUsers.includes(plain.id) && !ruUsers.includes(aOwner.id), `${ru.status} ${ru.text.slice(0, 160)} filas=${ruRows.length}`);
     check("y no a alguien que solo es de otro equipo", !ruUsers.includes(bOnly.id));
     const ruInbox = await cPlain.req("GET", "/api/notifications");
-    check("aparece en la bandeja con su etiqueta y con enlace al canal Reuniones", ruInbox.json.items.some((i) => i.kind === "REUNION" && i.label === "Reuniones" && i.url?.includes("canal=")), JSON.stringify(ruInbox.json.items.filter((i) => i.kind === "REUNION")));
+    check("aparece en la bandeja con su etiqueta y con enlace a la reunión en el calendario", ruInbox.json.items.some((i) => i.kind === "REUNION" && i.url?.includes("/calendar?reunion=")), JSON.stringify(ruInbox.json.items.filter((i) => i.kind === "REUNION")));
     const ru2 = await cAOwner.req("POST", "/api/chat/command", { body: "/noti persona Pablo: te toca" });
     check("/noti persona también es instantáneo (mensaje directo)", ru2.status === 200 && (await prisma.notification.count({ where: { userId: plain.id, kind: "DIRECT", deliveredAt: { not: null }, pushed: true } })) >= 1);
     // Canales del proyecto: resumen cada X minutos
@@ -1073,7 +1073,7 @@ async function main() {
   const cmdNote = await prisma.notification.findFirst({ where: { userId: plain.id, kind: "ANNOUNCE", body: { contains: "video guía" } }, orderBy: { createdAt: "desc" } });
   check("en la bandeja y el teléfono se ve el título de la tarjeta, no la marca", !!cmdNote && cmdNote.body.includes("CRM demo extensión para MEET") && !cmdNote.body.includes("[["), cmdNote?.body);
   const cmdReu = await cAOwner.req("POST", "/api/chat/command", { body: `/reunion viernes 10:00: ver [[card:${cmdCard.id}]]` });
-  check("/reunion con una tarjeta también funciona (la hora no se confunde con la marca)", cmdReu.status === 200 && (await prisma.chatMessage.count({ where: { workspaceId: A.ws.id, body: { startsWith: "Reunión · viernes 10:00: ver [[card:" } } })) === 1, `dio ${cmdReu.status} ${cmdReu.text.slice(0, 120)}`);
+  check("/reunion con una tarjeta también funciona (la hora no se confunde con la marca) y queda en el calendario", cmdReu.status === 200 && !!cmdReu.json.meetingId && (await prisma.meeting.findUnique({ where: { id: cmdReu.json.meetingId } })).title.startsWith("ver ") && !(await prisma.meeting.findUnique({ where: { id: cmdReu.json.meetingId } })).title.includes("[["), `dio ${cmdReu.status} ${cmdReu.text.slice(0, 120)}`);
   const cmdForeign = await cAOwner.req("POST", "/api/chat/command", { body: `/noti general ajena [[card:${libCardB.id}]] fin` });
   check("una tarjeta de otro equipo no se guarda como mención", cmdForeign.status === 200 && (await prisma.chatRef.count({ where: { targetId: libCardB.id, message: { body: { contains: "ajena" } } } })) === 0);
 
@@ -1088,7 +1088,7 @@ async function main() {
   check("pero sí pedir ayuda al equipo", (await cPlain.req("POST", "/api/chat/command", { notice: { to: "general", level: "ayuda", message: "Necesito ayuda" } })).status === 200);
   check("un miembro no puede convocar una reunión (403)", (await cPlain.req("POST", "/api/chat/command", { notice: { to: "reunion", level: "normal", when: "mañana", topic: "x" } })).status === 403);
   const nbReu = await cAOwner.req("POST", "/api/chat/command", { notice: { to: "reunion", level: "normal", when: "viernes 10:00", topic: "retro desde el botón" } });
-  check("un líder convoca una reunión con el botón", nbReu.status === 200 && (await prisma.chatMessage.count({ where: { workspaceId: A.ws.id, body: "Reunión · viernes 10:00: retro desde el botón" } })) === 1);
+  check("un líder convoca una reunión con el botón", nbReu.status === 200 && !!nbReu.json.meetingId && (await prisma.meeting.findUnique({ where: { id: nbReu.json.meetingId } }))?.title === "retro desde el botón");
   check("sin personas elegidas el aviso no se envía (400)", (await cPlain.req("POST", "/api/chat/command", { notice: { to: "personas", level: "normal", message: "hola", userIds: [] } })).status === 400);
 
   console.log("30) Borradores privados de tickets y crear desde cualquier pantalla");
@@ -1166,6 +1166,151 @@ async function main() {
   check("al ver General se marcan sus avisos (incluidos los antiguos)", seenGen.status === 200 && (await prisma.notification.findUnique({ where: { id: oldGeneral.id } })).readAt !== null);
   check("otro equipo no puede marcar los avisos de este canal (404)", (await cBOnly.req("POST", "/api/chat/read", { channelId: seenDm })).status === 404);
   check("un tercero que no es parte del chat directo tampoco (404)", (await cAldo.req("POST", "/api/chat/read", { channelId: seenDm })).status === 404);
+
+  console.log("33) Reuniones, calendario y zonas horarias");
+  const peruTz = await cAOwner.req("PATCH", "/api/users/me", { country: "PE" });
+  const boTz = await cPlain.req("PATCH", "/api/users/me", { country: "BO" });
+  check("cada persona elige su país y se le fija su zona horaria", peruTz.status === 200 && peruTz.json.timezone === "America/Lima" && boTz.json.timezone === "America/La_Paz", `${peruTz.status} ${peruTz.text.slice(0, 80)}`);
+  check("la zona de los avisos sigue a la del perfil", (await prisma.notifPrefs.findUnique({ where: { userId: aOwner.id } }))?.tz === "America/Lima");
+  check("un país que no está en la lista se rechaza (400)", (await cPlain.req("PATCH", "/api/users/me", { country: "ZZ" })).status === 400);
+  check("una zona que no es de ese país se rechaza (400)", (await cPlain.req("PATCH", "/api/users/me", { country: "BO", timezone: "America/Lima" })).status === 400);
+  const mtStart = new Date(Date.now() + 3 * 3600_000 + 17 * 60_000); // dentro de ~3 h
+  const mtCreate = await cAOwner.req("POST", "/api/meetings", { title: "Planificación del sprint", startsAt: mtStart.toISOString(), durationMin: 45, meetUrl: "https://meet.google.com/abc-defg-hij", everyone: true });
+  check("un líder agenda una reunión para todo el equipo", mtCreate.status === 201 && mtCreate.json.attendees.length >= 3 && mtCreate.json.createdBy.id === aOwner.id, `${mtCreate.status} ${mtCreate.text.slice(0, 120)}`);
+  const mtId = mtCreate.json?.id;
+  const mtRow = await prisma.meeting.findUnique({ where: { id: mtId } });
+  check("se guarda en UTC con su duración", mtRow.startsAt.getTime() === mtStart.getTime() && mtRow.endsAt.getTime() - mtRow.startsAt.getTime() === 45 * 60000);
+  check("los invitados quedan con su zona (Lima y La Paz)", mtCreate.json.attendees.some((a) => a.id === aOwner.id && a.tz === "America/Lima") && mtCreate.json.attendees.some((a) => a.id === plain.id && a.tz === "America/La_Paz"));
+  const mtNote = await prisma.notification.findFirst({ where: { userId: plain.id, kind: "REUNION", url: `/calendar?reunion=${mtId}` } });
+  check("a cada invitado le llega el aviso con SU hora (Bolivia)", !!mtNote && mtNote.title.includes("Nueva reunión") && mtNote.body.includes("Bolivia"), mtNote?.title + " | " + mtNote?.body);
+  const mtMsg = await prisma.chatMessage.findFirst({ where: { workspaceId: A.ws.id, body: { contains: `[[meeting:${mtId}]]` } }, include: { channel: true } });
+  check("se anuncia en el canal Reuniones del chat con la reunión como mención", !!mtMsg && mtMsg.channel?.kind === "REUNIONES" && mtMsg.announce);
+  const mtList = await cPlain.req("GET", `/api/meetings?from=${new Date(Date.now() - 86400000).toISOString()}&to=${new Date(Date.now() + 7 * 86400000).toISOString()}`);
+  check("el equipo la ve en el calendario", mtList.status === 200 && mtList.json.meetings.some((m) => m.id === mtId));
+  check("otro equipo NO la ve", !(await cBOnly.req("GET", `/api/meetings?from=${new Date(Date.now() - 86400000).toISOString()}&to=${new Date(Date.now() + 7 * 86400000).toISOString()}`)).json.meetings.some((m) => m.id === mtId) && (await cBOnly.req("GET", `/api/meetings/${mtId}`)).status === 404);
+  check("un miembro no puede invitar a todo el equipo (403)", (await cPlain.req("POST", "/api/meetings", { title: "x", startsAt: mtStart.toISOString(), everyone: true })).status === 403);
+  const mtMember = await cPlain.req("POST", "/api/meetings", { title: "Sincronización rápida", startsAt: new Date(Date.now() + 5 * 3600_000).toISOString(), everyone: false, userIds: [aMember.id, bOnly.id] });
+  check("un miembro agenda con personas elegidas (las de otro equipo se descartan)", mtMember.status === 201 && mtMember.json.attendees.some((a) => a.id === aMember.id) && !mtMember.json.attendees.some((a) => a.id === bOnly.id));
+  check("un miembro sin invitados elegidos no puede (400)", (await cPlain.req("POST", "/api/meetings", { title: "x", startsAt: mtStart.toISOString(), everyone: false, userIds: [] })).status === 400);
+  const mtEditX = await cPlain.req("PATCH", `/api/meetings/${mtId}`, { title: "robada" });
+  check("quien no agendó ni lidera no la edita (403)", mtEditX.status === 403, `${mtEditX.status} ${mtEditX.text.slice(0, 120)} id=${mtId}`);
+  const mtMove = await cAOwner.req("PATCH", `/api/meetings/${mtId}`, { startsAt: new Date(mtStart.getTime() + 3600_000).toISOString() });
+  check("quien la agendó la reprograma y se avisa", mtMove.status === 200 && (await prisma.notification.count({ where: { userId: plain.id, kind: "REUNION", title: { contains: "Reunión reprogramada" } } })) >= 1);
+  // Recordatorio: se mueve a dentro de 10 minutos y corre el temporizador manual
+  await prisma.meeting.update({ where: { id: mtId }, data: { startsAt: new Date(Date.now() + 10 * 60_000), endsAt: new Date(Date.now() + 55 * 60_000), reminderSentAt: null } });
+  const cron1 = await fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: { Authorization: "Bearer testcron" } }).then((r) => r.json());
+  const cron2 = await fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: { Authorization: "Bearer testcron" } }).then((r) => r.json());
+  check("falta poco: el recordatorio sale una sola vez", cron1.reminders >= 1 && cron2.reminders === 0 && (await prisma.notification.count({ where: { userId: plain.id, title: { contains: "Empieza en 15 min" } } })) === 1, JSON.stringify([cron1.reminders, cron2.reminders]));
+  const cmdMeet = await cAOwner.req("POST", "/api/chat/command", { body: "/reunion mañana 10:30: revisión con el cliente" });
+  check("/reunion con una fecha que entiende crea la reunión en el calendario", cmdMeet.status === 200 && !!cmdMeet.json.meetingId && cmdMeet.json.summary.includes("calendario"), cmdMeet.text.slice(0, 200));
+  const cmdRow = await prisma.meeting.findUnique({ where: { id: cmdMeet.json.meetingId } });
+  const limaTomorrow = (() => { const p = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(Date.now() + 86400000)); return p; })();
+  check("la hora se interpreta en la zona de quien la escribe (Lima 10:30 = 15:30 UTC)", cmdRow.title === "revisión con el cliente" && cmdRow.startsAt.toISOString() === `${limaTomorrow}T15:30:00.000Z`, cmdRow.startsAt.toISOString());
+  const cmdBad = await cAOwner.req("POST", "/api/chat/command", { body: "/reunion cuando se pueda: algo" });
+  check("si no entiende la fecha avisa igual, pero dice que no entró al calendario", cmdBad.status === 200 && !cmdBad.json.meetingId && cmdBad.json.summary.includes("NO se agregó al calendario"), cmdBad.text.slice(0, 200));
+  const btnMeet = await cAOwner.req("POST", "/api/chat/command", { notice: { to: "reunion", level: "normal", topic: "Demo desde el botón", startsAt: new Date(Date.now() + 26 * 3600_000).toISOString(), durationMin: 30 } });
+  check("el botón Avisar → Reunión (con calendario) también agenda", btnMeet.status === 200 && !!btnMeet.json.meetingId && (await prisma.meeting.findUnique({ where: { id: btnMeet.json.meetingId } })).endsAt.getTime() - (await prisma.meeting.findUnique({ where: { id: btnMeet.json.meetingId } })).startsAt.getTime() === 30 * 60000);
+  const mtCancel = await cAOwner.req("PATCH", `/api/meetings/${mtId}`, { canceled: true });
+  check("se puede cancelar (y se avisa)", mtCancel.status === 200 && mtCancel.json.status === "CANCELED" && (await prisma.notification.count({ where: { userId: plain.id, title: { contains: "Reunión cancelada" } } })) >= 1);
+  check("quien no agendó ni lidera no puede borrarla (403)", (await cPlain.req("DELETE", `/api/meetings/${mtId}`)).status === 403);
+  check("quien la agendó la borra", (await cAOwner.req("DELETE", `/api/meetings/${mtId}`)).status === 200 && (await prisma.meeting.count({ where: { id: mtId } })) === 0);
+
+  console.log("34) Extensión de Meet: token propio, subtítulos, audio y transcripción");
+  const nora = await mkUser("Nora Sin Acceso", `nora-${stamp}@a.test`);
+  await member(nora.id, A.ws.id, "MEMBER");
+  const cNora = await new Client("Nora (miembro A, no invitada)").login(nora.email);
+  const extAuth = await cAOwner.req("POST", "/api/extension/authorize");
+  const extTok = extAuth.json?.token;
+  check("quien tiene sesión conecta la extensión y recibe su token", extAuth.status === 200 && /^scrum_/.test(extTok ?? ""), `${extAuth.status}`);
+  const plainAuth = await cPlain.req("POST", "/api/extension/authorize");
+  const plainTok = plainAuth.json?.token;
+  const ext = (tok) => ({ req: async (method, path, body, headers = {}) => { const res = await fetch(`${BASE}${path}`, { method, headers: { Authorization: `Bearer ${tok}`, ...(body !== undefined && !(body instanceof Uint8Array) ? { "Content-Type": "application/json" } : {}), ...headers }, body: body === undefined ? undefined : body instanceof Uint8Array ? body : JSON.stringify(body) }); const text = await res.text(); let json = null; try { json = JSON.parse(text); } catch {} return { status: res.status, json, text }; } });
+  const eOwner = ext(extTok);
+  const ePlain = ext(plainTok);
+  const meMe = await eOwner.req("GET", "/api/extension/me");
+  check("la extensión sabe quién es y a qué equipos puede mandar", meMe.status === 200 && meMe.json.organizations.some((o) => o.id === A.ws.id) && !meMe.json.organizations.some((o) => o.id === B.ws.id), meMe.text.slice(0, 160));
+  check("un token inventado no entra (401)", (await ext("scrum_" + "0".repeat(48)).req("GET", "/api/extension/me")).status === 401);
+  // Un token IA no sirve en la extensión, y el de la extensión no abre el resto de la API.
+  const aiTok = await cAOwner.req("POST", "/api/tokens", { name: "IA de prueba 34" });
+  check("un token IA NO sirve en las rutas de la extensión (401)", (await ext(aiTok.json.token).req("GET", "/api/extension/me")).status === 401);
+  const extOnAi = await eOwner.req("GET", "/api/ai/projects");
+  check("el token de la extensión NO abre la API de IA ni el resto (no es 200)", extOnAi.status !== 200 && (await eOwner.req("GET", `/api/projects/${A.project.id}/export-json`)).status !== 200, `${extOnAi.status}`);
+  const extMeeting = await cAOwner.req("POST", "/api/meetings", { title: "Reunión con extensión", startsAt: new Date(Date.now() + 2 * 3600_000).toISOString(), everyone: false, userIds: [plain.id], meetUrl: "https://meet.google.com/abc-defg-hij" });
+  const exList = await ePlain.req("GET", "/api/extension/meetings/list?scope=upcoming");
+  check("la extensión lista las reuniones del calendario del equipo", exList.status === 200 && exList.json.meetings.some((m) => m.id === extMeeting.json.id && m.title === "Reunión con extensión"), exList.text.slice(0, 200));
+  check("un equipo que no es de la persona se rechaza (404)", (await ePlain.req("GET", `/api/extension/meetings/list?organizationId=${B.ws.id}`)).status === 404);
+  // Subtítulos: partes y cierre, ligados a la reunión del calendario por su id
+  const recId = `rec-${stamp}-ab12cd`;
+  const xt1 = await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "https://meet.google.com/abc-defg-hij", transcript: "Ana: hola a todos", recordingId: recId, final: false, start: true, meetingId: extMeeting.json.id, organizationId: A.ws.id });
+  const xt2 = await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "https://meet.google.com/abc-defg-hij", transcript: "Luis: empecemos", recordingId: recId, final: true, organizationId: A.ws.id });
+  const recRow = await prisma.meetingRecording.findFirst({ where: { externalId: recId } });
+  check("los subtítulos se guardan en la reunión elegida, en partes y con su cierre", xt1.status === 200 && xt2.status === 200 && recRow?.meetingId === extMeeting.json.id && recRow.captions === "Ana: hola a todos\nLuis: empecemos" && recRow.finalized && recRow.recordedById === plain.id, JSON.stringify(recRow));
+  check("sin audio, al cerrar queda lista", recRow.status === "DONE");
+  const hijack = await eOwner.req("POST", "/api/extension/transcript", { meetingUrl: "x", transcript: "robo", recordingId: recId, final: false, organizationId: A.ws.id });
+  check("otra persona no puede escribir en la grabación de alguien más (404)", hijack.status === 404 && (await prisma.meetingRecording.findFirst({ where: { externalId: recId } })).captions.includes("robo") === false);
+  // Reunión suelta: sin reunión elegida ni código conocido
+  const adhoc = await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "https://meet.google.com/zzz-yyyy-xxx", transcript: "Pablo: nota suelta", recordingId: `rec-${stamp}-suelta`, final: true, title: "Charla improvisada", organizationId: A.ws.id });
+  const adhocMeeting = await prisma.meeting.findUnique({ where: { id: adhoc.json.meetingId } });
+  check("sin reunión del calendario se crea una suelta, solo para quien grabó (y líderes)", adhoc.status === 200 && adhocMeeting.title === "Charla improvisada" && adhocMeeting.everyone === false && adhocMeeting.createdById === plain.id);
+  // Quién ve las transcripciones
+  const seeAdhocOwner = await cAOwner.req("GET", `/api/meetings/${adhoc.json.meetingId}/recordings`);
+  const seeAdhocAldo = await cNora.req("GET", `/api/meetings/${adhoc.json.meetingId}/recordings`);
+  check("un líder ve la grabación suelta y un miembro que no estuvo no (solo sabe que existe)", seeAdhocOwner.json.recordings.length === 1 && seeAdhocAldo.json.recordings.length === 0 && seeAdhocAldo.json.hidden === 1);
+  const seeInvitee = await cPlain.req("GET", `/api/meetings/${extMeeting.json.id}/recordings`);
+  check("los invitados ven la transcripción de su reunión", seeInvitee.json.recordings.length === 1 && seeInvitee.json.recordings[0].captions.includes("Luis: empecemos"));
+  check("otro equipo no ve nada (404)", (await cBOnly.req("GET", `/api/meetings/${extMeeting.json.id}/recordings`)).status === 404);
+  // Audio: se guarda, es idempotente y espera sin clave
+  const audio0 = new Uint8Array(Buffer.from("audio-falso-parte-0"));
+  const audioId = `rec-${stamp}-audio1`;
+  const hdr = (part) => ({ "X-Meeting-Url": "https://meet.google.com/abc-defg-hij", "X-Audio-Part": String(part), "X-Recording-Id": audioId, "X-Meeting-Id": extMeeting.json.id, "X-Organization-Id": A.ws.id, "X-Meeting-Title": encodeURIComponent("Reunión con extensión"), "Content-Type": "audio/webm" });
+  const a0 = await ePlain.req("POST", "/api/extension/audio", audio0, hdr(0));
+  const a0b = await ePlain.req("POST", "/api/extension/audio", audio0, hdr(0));
+  const audioRec = await prisma.meetingRecording.findFirst({ where: { externalId: audioId }, include: { parts: true } });
+  check("el audio se guarda por partes y repetir una parte no la duplica", a0.status === 200 && a0b.status === 200 && audioRec.parts.length === 1 && audioRec.meetingId === extMeeting.json.id, `${a0.status} ${a0.text.slice(0, 100)}`);
+  check("sin clave de OpenAI el audio espera en cola (no se pierde)", audioRec.status === "PENDING" && audioRec.parts[0].status === "PENDING" && audioRec.parts[0].data !== null);
+  check("una parte sin cuerpo se rechaza (400)", (await ePlain.req("POST", "/api/extension/audio", new Uint8Array(0), hdr(1))).status === 400);
+  check("una parte sin número se rechaza (400)", (await ePlain.req("POST", "/api/extension/audio", audio0, { ...hdr(0), "X-Audio-Part": "x" })).status === 400);
+  // Transcripción con un OpenAI simulado
+  if (process.env.OPENAI_BASE_URL) {
+    const seen = [];
+    const mockAi = http.createServer((req, res) => {
+      const chunks = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        seen.push({ auth: req.headers.authorization, url: req.url, size: Buffer.concat(chunks).length });
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ text: `Transcripción simulada ${seen.length}` }));
+      });
+    });
+    await new Promise((r) => mockAi.listen(Number(new URL(process.env.OPENAI_BASE_URL).port), r));
+    try {
+      const badKey = await cAOwner.req("PUT", "/api/workspaces/integrations", { openaiKey: "no-es-una-clave" });
+      check("una clave de OpenAI con mal formato se rechaza (400)", badKey.status === 400);
+      check("un miembro no puede guardar la clave de OpenAI (403)", (await cPlain.req("PUT", "/api/workspaces/integrations", { openaiKey: "sk-" + "a".repeat(30) })).status === 403);
+      const okKey = await cAOwner.req("PUT", "/api/workspaces/integrations", { openaiKey: "sk-prueba-" + "b".repeat(30) });
+      check("un líder guarda la clave de OpenAI del equipo (cifrada)", okKey.status === 200 && !!(await prisma.workspace.findUnique({ where: { id: A.ws.id } })).openaiKeyEnc && !(await prisma.workspace.findUnique({ where: { id: A.ws.id } })).openaiKeyEnc.includes("sk-prueba"));
+      const cronTx = await fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: { Authorization: "Bearer testcron" } }).then((r) => r.json());
+      await new Promise((r) => setTimeout(r, 600));
+      const doneRec = await prisma.meetingRecording.findFirst({ where: { externalId: audioId }, include: { parts: true } });
+      check("con la clave puesta, la cola se transcribe sola", cronTx.transcribed >= 0 && doneRec.parts[0].status === "DONE" && doneRec.parts[0].text.startsWith("Transcripción simulada"), JSON.stringify([cronTx, doneRec.parts[0].status]));
+      check("el audio se BORRA en cuanto se transcribe (queda solo el texto)", doneRec.parts[0].data === null);
+      check("se usó la clave del equipo, no otra", seen.length >= 1 && seen[0].auth === `Bearer sk-prueba-${"b".repeat(30)}` && seen[0].url.endsWith("/audio/transcriptions"));
+      await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "x", transcript: "", recordingId: audioId, final: true, organizationId: A.ws.id });
+      const a1 = await ePlain.req("POST", "/api/extension/audio", new Uint8Array(Buffer.from("audio-falso-parte-1")), hdr(1));
+      await new Promise((r) => setTimeout(r, 900));
+      const fin = await prisma.meetingRecording.findFirst({ where: { externalId: audioId }, include: { parts: { orderBy: { part: "asc" } } } });
+      check("al llegar otra parte con la clave puesta se transcribe de inmediato y la grabación queda lista con el texto en orden", a1.status === 200 && fin.status === "DONE" && fin.parts.every((p) => p.data === null) && fin.transcript.includes("Transcripción simulada 1") && fin.transcript.indexOf("simulada 1") < fin.transcript.indexOf("simulada 2"), JSON.stringify([fin.status, fin.transcript]));
+      const viewT = await cPlain.req("GET", `/api/meetings/${extMeeting.json.id}/recordings`);
+      check("los invitados ven la transcripción del audio y la clave está configurada", viewT.json.transcriptionConfigured === true && viewT.json.recordings.some((r) => r.transcript.includes("Transcripción simulada")));
+      check("quien no grabó ni lidera no puede borrar una grabación (403)", (await cNora.req("DELETE", `/api/meetings/${extMeeting.json.id}/recordings/${fin.id}`)).status === 403);
+      check("quien grabó la borra", (await cPlain.req("DELETE", `/api/meetings/${extMeeting.json.id}/recordings/${fin.id}`)).status === 200 && (await prisma.audioPart.count({ where: { recordingId: fin.id } })) === 0);
+    } finally {
+      mockAi.close();
+    }
+  } else {
+    console.log("  (omitido: el servidor de la prueba no tiene OPENAI_BASE_URL apuntando a un OpenAI simulado)");
+  }
+  check("desconectar la extensión revoca su token (después da 401)", (await cAOwner.req("DELETE", "/api/extension/authorize")).status === 200 && (await eOwner.req("GET", "/api/extension/me")).status === 401);
 
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();

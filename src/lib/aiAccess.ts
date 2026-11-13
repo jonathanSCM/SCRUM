@@ -34,5 +34,7 @@ export function isDeletableByToken(method: string, pathname: string): boolean {
 
 export function isAllowedForToken(method: string, pathname: string): boolean {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  // La extensión de Meet usa su propio token (scope EXTENSION); la ruta comprueba que lo sea (un token IA no pasa).
+  if (/^\/api\/extension\//.test(path)) return true;
   return RULES.some((r) => r.method === method.toUpperCase() && r.path.test(path));
 }

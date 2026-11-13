@@ -18,6 +18,7 @@ const LINKS = [
   { href: "/projects", label: "Proyectos" },
   { href: "/my-work", label: "Mi trabajo" },
   { href: "/chat", label: "Chat" },
+  { href: "/calendar", label: "Calendario" },
   { href: "/library", label: "Biblioteca" },
   { href: "/people", label: "Equipo" },
 ];
@@ -62,14 +63,14 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
     <nav className="sticky top-0 z-40 border-b border-line bg-paper">
       <div className="mx-auto max-w-[1600px] px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-9">
+          <div className="flex min-w-0 items-center gap-6 xl:gap-9">
             <Link href="/home" className="flex shrink-0 items-center gap-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.png" alt="SCRUM ProShop" className="h-8 w-8 border border-line object-cover rounded-md" />
               <span className="hidden font-display text-lg font-extrabold tracking-tight text-ink sm:inline">SCRUM ProShop</span>
             </Link>
             <TeamSwitcher teams={teams} activeId={activeId} canCreate={canCreate} maxOwned={maxOwned} />
-            <div className="hidden items-center gap-4 lg:flex xl:gap-6">
+            <div className="hidden items-center gap-3 lg:flex xl:gap-5">
               {links.map((link) => (
                 <Link key={link.href} href={link.href} className={linkClass(link.href)}>
                   {link.label}
@@ -80,8 +81,8 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
           </div>
 
           <div className="flex shrink-0 items-center gap-3 sm:gap-4">
-            <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_CREATE_EVENT))} className="btn-primary btn-sm hidden lg:inline-flex" title="Crear un ticket en cualquier proyecto">
-              <PlusIcon size={14} /> Crear
+            <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_CREATE_EVENT))} className="btn-primary btn-sm hidden lg:inline-flex" title="Crear un ticket en cualquier proyecto" aria-label="Crear un ticket">
+              <PlusIcon size={14} /> <span className="hidden xl:inline">Crear</span>
             </button>
             <CommandPalette />
             <NotificationBell />
