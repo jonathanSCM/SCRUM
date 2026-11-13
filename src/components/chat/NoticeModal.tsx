@@ -37,6 +37,11 @@ export default function NoticeModal({ open, onClose, isLead, currentUserId, chan
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Cada vez que se abre, la fecha propuesta es "hoy" en tu zona (el navegador la conoce un instante después de cargar la página).
+  useEffect(() => {
+    if (open) setDate(dayKey(new Date(), tz));
+  }, [open, tz]);
+
   useEffect(() => {
     if (!open || people) return;
     void api<{ users: Person[] }>("/api/chat/index").then((r) => r.ok && setPeople(r.data.users.filter((u) => u.id !== currentUserId)));
