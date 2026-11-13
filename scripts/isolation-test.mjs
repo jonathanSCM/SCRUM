@@ -1259,6 +1259,10 @@ async function main() {
   const adhoc = await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "https://meet.google.com/zzz-yyyy-xxx", transcript: "Pablo: nota suelta", recordingId: `rec-${stamp}-suelta`, final: true, title: "Charla improvisada", organizationId: A.ws.id });
   const adhocMeeting = await prisma.meeting.findUnique({ where: { id: adhoc.json.meetingId } });
   check("sin reunión del calendario se crea una suelta, solo para quien grabó (y líderes)", adhoc.status === 200 && adhocMeeting.title === "Charla improvisada" && adhocMeeting.everyone === false && adhocMeeting.createdById === plain.id);
+  const adhocNotifs = await prisma.notification.count({ where: { url: { contains: adhoc.json.meetingId } } });
+  const cronAdhoc = await fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: { Authorization: "Bearer testcron" } });
+  const adhocAfter = await prisma.notification.count({ where: { url: { contains: adhoc.json.meetingId } } });
+  check("una reunión registrada por la extensión no avisa a nadie (ni al crearse ni como recordatorio)", adhocMeeting.reminderSentAt !== null && adhocNotifs === 0 && adhocAfter === 0 && cronAdhoc.status === 200);
   // Quién ve las transcripciones
   const seeAdhocOwner = await cAOwner.req("GET", `/api/meetings/${adhoc.json.meetingId}/recordings`);
   const seeAdhocAldo = await cNora.req("GET", `/api/meetings/${adhoc.json.meetingId}/recordings`);

@@ -22,7 +22,7 @@ export async function meetingForRecording(i: { workspaceId: string; userId: stri
     if (near[0]) return near[0].id;
   }
   const created = await prisma.meeting.create({
-    data: { workspaceId: i.workspaceId, title: (i.title?.trim() || "Reunión de Meet").slice(0, 200), startsAt: now, endsAt: new Date(now.getTime() + 60 * 60_000), meetUrl: i.meetUrl?.slice(0, 300) || null, everyone: false, createdById: i.userId },
+    data: { workspaceId: i.workspaceId, title: (i.title?.trim() || "Reunión de Meet").slice(0, 200), startsAt: now, endsAt: new Date(now.getTime() + 60 * 60_000), meetUrl: i.meetUrl?.slice(0, 300) || null, everyone: false, createdById: i.userId, reminderSentAt: now }, // ya está en curso: no avisa a nadie (ni "empieza en 15 min")
     select: { id: true },
   });
   return created.id;
