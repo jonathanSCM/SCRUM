@@ -1428,6 +1428,68 @@ async function main() {
   const autoMsgB = await cBOwner.req("POST", "/api/chat/messages", { body: `ajena [[card:${autoId}]]` });
   check("otro equipo no puede citarla (no se guarda la referencia)", (await prisma.chatRef.count({ where: { messageId: autoMsgB.json?.id, targetId: autoId } })) === 0);
 
+  // ---------- 37) Grupos de tareas (tareas sueltas), privados y conversión en proyecto ----------
+  console.log("37) Grupos de tareas: del equipo, privados, convertir en proyecto");
+  const keyOf = async (taskId) => { const t = await prisma.task.findUnique({ where: { id: taskId }, include: { project: { select: { key: true } } } }); return `${t.project.key}-${t.number}`; };
+  const gTeam = await cPlain.req("POST", "/api/groups", { name: "Demo cliente Acme" });
+  const gTeamRow = await prisma.project.findUnique({ where: { id: gTeam.json.id } });
+  check("cualquier miembro crea un grupo de tareas (del equipo por defecto)", gTeam.status === 201 && gTeamRow.kind === "GROUP" && gTeamRow.isPrivate === false && gTeamRow.ownerId === plain.id && !!gTeamRow.key && gTeamRow.workspaceId === A.ws.id);
+  const gT1 = await cPlain.req("POST", `/api/projects/${gTeam.json.id}/issues`, { title: "Preparar la presentación" });
+  const gT2 = await cPlain.req("POST", `/api/projects/${gTeam.json.id}/issues`, { title: "Armar los datos de ejemplo", assigneeUserId: plain.id });
+  check("se crean tareas dentro del grupo (sin proyecto ni sprint)", gT1.status === 201 && gT2.status === 201);
+  check("el grupo NO aparece como proyecto (índice del chat, buscador, IA)", !(await cPlain.req("GET", "/api/chat/index")).json.projects.some((p) => p.id === gTeam.json.id) && !(await cPlain.req("GET", "/api/search")).json.projects.some((p) => p.id === gTeam.json.id) && !(await cPlain.req("GET", "/api/ai/projects")).text.includes(gTeam.json.id));
+  const gKey1 = await keyOf(gT1.json.id);
+  check("sus tareas sí se buscan, se citan y se abren por clave", (await cNora.req("GET", "/api/search")).json.issues.some((i) => i.id === gT1.json.id) && (await cNora.req("GET", "/api/chat/index")).json.issues.some((i) => i.id === gT1.json.id) && (await cNora.req("GET", `/api/issues/by-key/${gKey1}`)).status === 200);
+  const gBoard = await fetch(`${BASE}/projects/${gTeam.json.id}/board`, { headers: { Cookie: cNora.header() } });
+  const gBoardHtml = await gBoard.text();
+  check("el tablero del grupo muestra las 5 columnas y sus tareas", gBoard.status === 200 && gBoardHtml.includes("Preparar la presentación") && gBoardHtml.includes("Bloqueadas") && gBoardHtml.includes("Crear tarea") && !gBoardHtml.includes("Completar sprint"));
+  check("el listado de grupos lo muestra a todo el equipo y no a otro equipo", (await cNora.req("GET", "/api/groups")).json.groups.some((g) => g.id === gTeam.json.id) && !(await cBOwner.req("GET", "/api/groups")).json.groups.some((g) => g.id === gTeam.json.id));
+  check("otro equipo no puede ni verlo ni cambiarlo (404)", (await cBOnly.req("PATCH", `/api/groups/${gTeam.json.id}`, { name: "x" })).status === 404 && (await cBOnly.req("GET", `/api/issues/by-key/${gKey1}`)).status === 404);
+  check("quien no lo creó ni lidera no lo cambia (403); un líder sí", (await cNora.req("PATCH", `/api/groups/${gTeam.json.id}`, { name: "robo" })).status === 403 && (await cNora.req("DELETE", `/api/groups/${gTeam.json.id}`)).status === 403 && (await cAOwner.req("PATCH", `/api/groups/${gTeam.json.id}`, { name: "Demo cliente Acme" })).status === 200);
+
+  // Privado: solo quien lo creó y las personas con acceso (ni siquiera el dueño del equipo)
+  const gPriv = await cPlain.req("POST", "/api/groups", { name: "Ideas reservadas", isPrivate: true, memberIds: [nora.id] });
+  const gPT = await cPlain.req("POST", `/api/projects/${gPriv.json.id}/issues`, { title: "Despedir al proveedor X" });
+  const gPKey = await keyOf(gPT.json.id);
+  check("un grupo privado se crea con su gente", gPriv.status === 201 && gPriv.json.isPrivate === true && (await prisma.projectMember.count({ where: { projectId: gPriv.json.id, userId: nora.id } })) === 1 && gPT.status === 201);
+  check("quien tiene acceso lo ve y trabaja en él", (await cNora.req("GET", "/api/groups")).json.groups.some((g) => g.id === gPriv.json.id) && (await cNora.req("GET", `/api/issues/by-key/${gPKey}`)).status === 200 && (await cNora.req("PATCH", `/api/issues/${gPT.json.id}`, { priority: "ALTA" })).status === 200);
+  const leaks = [
+    ["el dueño del equipo no lo lista", !(await cAOwner.req("GET", "/api/groups")).json.groups.some((g) => g.id === gPriv.json.id)],
+    ["ni abre sus tareas por clave", (await cAOwner.req("GET", `/api/issues/by-key/${gPKey}`)).status === 404],
+    ["ni por id (editar, comentar, borrar)", (await cAOwner.req("PATCH", `/api/issues/${gPT.json.id}`, { title: "x" })).status === 404 && (await cAOwner.req("POST", `/api/issues/${gPT.json.id}/comments`, { body: "x" })).status === 404 && (await cAOwner.req("DELETE", `/api/issues/${gPT.json.id}`)).status === 404],
+    ["ni el grupo (crear tareas, cambiarlo, convertirlo, borrarlo)", (await cAOwner.req("POST", `/api/projects/${gPriv.json.id}/issues`, { title: "x" })).status === 404 && (await cAOwner.req("PATCH", `/api/groups/${gPriv.json.id}`, { isPrivate: false })).status === 404 && (await cAOwner.req("POST", `/api/groups/${gPriv.json.id}/convert`, {})).status === 404 && (await cAOwner.req("DELETE", `/api/groups/${gPriv.json.id}`)).status === 404],
+    ["ni en el buscador, el índice del chat o el tablero de otros", !(await cAOwner.req("GET", "/api/search")).text.includes("Despedir al proveedor X") && !(await cAOwner.req("GET", "/api/chat/index")).text.includes("Despedir al proveedor X")],
+    ["ni en su inicio ni en Mi trabajo", !(await (await fetch(`${BASE}/home`, { headers: { Cookie: cAOwner.header() } })).text()).includes("Despedir al proveedor X")],
+    ["ni abriendo la página del tablero", !(await (await fetch(`${BASE}/projects/${gPriv.json.id}/board`, { headers: { Cookie: cAOwner.header() } })).text()).includes("Despedir al proveedor X")],
+  ];
+  for (const [name, ok] of leaks) check(`grupo privado: ${name}`, ok);
+  const pRef = await cAOwner.req("POST", "/api/chat/messages", { body: `mira [[issue:${gPT.json.id}]]` });
+  check("grupo privado: citar su tarea en el chat no guarda la referencia", pRef.status === 201 && (await prisma.chatRef.count({ where: { messageId: pRef.json.id } })) === 0);
+  const pRefOk = await cNora.req("POST", "/api/chat/messages", { body: `mira [[issue:${gPT.json.id}]]` });
+  check("pero quien tiene acceso sí puede citarla", pRefOk.status === 201 && (await prisma.chatRef.count({ where: { messageId: pRefOk.json.id } })) === 1);
+  check("no se asigna a alguien sin acceso al grupo privado (400)", (await cPlain.req("PATCH", `/api/issues/${gPT.json.id}`, { assigneeUserId: aMember.id })).status === 400 && (await cPlain.req("PATCH", `/api/issues/${gPT.json.id}`, { assigneeUserId: nora.id })).status === 200);
+  check("los grupos privados no cuentan en el daily ni en la actividad del equipo", !(await cPlain.req("GET", `/api/daily?date=${new Date().toISOString().slice(0, 10)}`)).text.includes("Despedir al proveedor X"));
+  check("se le da acceso a otra persona (solo quien lo creó o un líder)", (await cNora.req("PUT", `/api/groups/${gPriv.json.id}/access`, { userIds: [aMember.id] })).status === 403 && (await cPlain.req("PUT", `/api/groups/${gPriv.json.id}/access`, { userIds: [nora.id, aMember.id] })).status === 200 && (await cAMember.req("GET", `/api/issues/by-key/${gPKey}`)).status === 200);
+
+  // Convertir en proyecto
+  const gCom = await cPlain.req("POST", `/api/issues/${gT1.json.id}/comments`, { body: "Pendiente de confirmar con el cliente" });
+  const noConv = await cNora.req("POST", `/api/groups/${gTeam.json.id}/convert`, { name: "Acme CRM" });
+  check("solo quien creó el grupo o un líder lo convierte (403)", noConv.status === 403);
+  const conv = await cPlain.req("POST", `/api/groups/${gTeam.json.id}/convert`, { name: "Acme CRM" });
+  const newProj = await prisma.project.findUnique({ where: { id: conv.json.id } });
+  const movedTasks = await prisma.task.findMany({ where: { projectId: conv.json.id }, orderBy: { number: "asc" }, include: { comments: true } });
+  check("convertir crea un proyecto con las tareas, renumeradas, con sus comentarios", conv.status === 201 && newProj?.kind === "PROJECT" && newProj.name === "Acme CRM" && newProj.workspaceId === A.ws.id && movedTasks.length === 2 && movedTasks.map((t) => t.number).join() === "1,2" && newProj.taskSeq === 2 && movedTasks.some((t) => t.comments.some((c) => c.body.includes("Pendiente de confirmar"))) && gCom.status === 201, JSON.stringify(conv.json));
+  const gAfter = await prisma.project.findUnique({ where: { id: gTeam.json.id } });
+  check("el grupo queda archivado y apunta al proyecto (sin tareas ni clave)", !!gAfter.archivedAt && gAfter.convertedToId === conv.json.id && gAfter.key === null && (await prisma.task.count({ where: { projectId: gTeam.json.id } })) === 0);
+  const arch = (await cPlain.req("GET", "/api/groups?archived=1")).json.groups.find((g) => g.id === gTeam.json.id);
+  check("aparece entre los archivados con el proyecto en el que se convirtió", arch?.convertedTo?.id === conv.json.id && !(await cPlain.req("GET", "/api/groups")).json.groups.some((g) => g.id === gTeam.json.id));
+  check("no se convierte dos veces ni se edita lo ya convertido (400)", (await cPlain.req("POST", `/api/groups/${gTeam.json.id}/convert`, {})).status === 400 && (await cPlain.req("PATCH", `/api/groups/${gTeam.json.id}`, { name: "otro" })).status === 400);
+  check("el proyecto nuevo sí es un proyecto (en el índice del chat y las tareas se abren con su clave nueva)", (await cNora.req("GET", "/api/chat/index")).json.projects.some((p) => p.id === conv.json.id) && (await cNora.req("GET", `/api/issues/by-key/${newProj.key}-1`)).status === 200);
+  // Archivar / restaurar y borrar
+  const gArch = await cPlain.req("PATCH", `/api/groups/${gPriv.json.id}`, { archived: true });
+  check("se archiva y se restaura un grupo", gArch.status === 200 && !!gArch.json.archivedAt && (await cPlain.req("PATCH", `/api/groups/${gPriv.json.id}`, { archived: false })).json.archivedAt === null);
+  check("se borra con todas sus tareas", (await cPlain.req("DELETE", `/api/groups/${gPriv.json.id}`)).status === 200 && (await prisma.task.count({ where: { id: gPT.json.id } })) === 0);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

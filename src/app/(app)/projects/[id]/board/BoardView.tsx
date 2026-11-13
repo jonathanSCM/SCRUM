@@ -47,6 +47,8 @@ export default function BoardView({
   options,
   currentUserId,
   plannedSprints,
+  group = false,
+  readOnly = false,
 }: {
   projectId: string;
   sprint: SprintData;
@@ -54,6 +56,8 @@ export default function BoardView({
   options: ProjectOptions;
   currentUserId: string;
   plannedSprints: Array<{ id: string; name: string }>;
+  group?: boolean; // grupo de tareas: sin sprint, el tablero muestra todas sus tareas
+  readOnly?: boolean; // grupo archivado
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -165,7 +169,7 @@ export default function BoardView({
     return { done, total, donePts, totalPts, percent: totalPts > 0 ? pct(donePts, totalPts) : pct(done, total) };
   }, [issues]);
 
-  const left = daysRemaining(sprint.endDate ? new Date(sprint.endDate) : null);
+  const left = group ? null : daysRemaining(sprint.endDate ? new Date(sprint.endDate) : null);
   const activeIssue = activeId ? byId[activeId] : null;
   const openCount = totals.total - totals.done;
 
@@ -184,13 +188,15 @@ export default function BoardView({
             {totals.done}/{totals.total} tickets{totals.totalPts > 0 ? ` · ${totals.donePts}/${totals.totalPts} pts` : ""}
           </span>
           <div className="ml-auto flex gap-2">
-            <button className="btn-ghost btn-sm" onClick={() => setCreating(true)}>
-              <PlusIcon size={14} /> Crear ticket
-            </button>
-            <button className="btn-mint btn-sm" onClick={() => setCompleting(true)}>Completar sprint</button>
+            {!readOnly && (
+              <button className="btn-ghost btn-sm" onClick={() => setCreating(true)}>
+                <PlusIcon size={14} /> {group ? "Crear tarea" : "Crear ticket"}
+              </button>
+            )}
+            {!group && <button className="btn-mint btn-sm" onClick={() => setCompleting(true)}>Completar sprint</button>}
           </div>
         </div>
-        {sprint.goal && <p className="mt-2 text-sm text-ink-soft"><b className="text-ink">Objetivo:</b> {sprint.goal}</p>}
+        {!group && sprint.goal && <p className="mt-2 text-sm text-ink-soft"><b className="text-ink">Objetivo:</b> {sprint.goal}</p>}
         <div className="mt-3">
           <ProgressBar value={totals.percent} />
         </div>
@@ -251,9 +257,9 @@ export default function BoardView({
         <DragOverlay dropAnimation={{ duration: 160 }}>{activeIssue ? <IssueCardView issue={activeIssue} overlay /> : null}</DragOverlay>
       </DndContext>
 
-      {issues.length === 0 && <p className="mt-4 text-center text-sm text-ink-faint">El sprint no tiene tickets. Sumalos desde el backlog.</p>}
+      {issues.length === 0 && <p className="mt-4 text-center text-sm text-ink-faint">{group ? "Este grupo todavía no tiene tareas. Crea la primera con «Crear tarea»." : "El sprint no tiene tickets. Sumalos desde el backlog."}</p>}
 
-      <CreateIssueModal open={creating} onClose={() => setCreating(false)} projectId={projectId} options={options} defaultSprintId={sprint.id} currentUserId={currentUserId} />
+      <CreateIssueModal open={creating} onClose={() => setCreating(false)} projectId={projectId} options={options} defaultSprintId={group ? null : sprint.id} currentUserId={currentUserId} />
       {completing && (
         <CompleteSprintModal
           open

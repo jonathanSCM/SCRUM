@@ -8,6 +8,7 @@ import { listProjectMembers } from "@/lib/projectMembers";
 import { slackBotTokenFor } from "@/lib/teamIntegrations";
 import { sprintPdfEnabled } from "@/lib/features";
 import SettingsForm from "./SettingsForm";
+import GroupSettings from "./GroupSettings";
 
 export const metadata = { title: "Ajustes del proyecto" };
 
@@ -15,6 +16,20 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
   const { id } = await params;
   const session = await requireSession();
   const project = await getProjectOrNotFound(id);
+
+  // Grupo de tareas: ajustes propios (nombre, privacidad y acceso, convertir en proyecto, archivar, borrar).
+  if (project.kind === "GROUP") {
+    const [people, access] = await Promise.all([membersOf(project.access.workspaceId).then((m) => m.map(({ id, name }) => ({ id, name }))), listProjectMembers(id)]);
+    const canManage = project.access.isLead || project.ownerId === session.user.id;
+    return (
+      <GroupSettings
+        canManage={canManage}
+        people={people.filter((p) => p.id !== project.ownerId)}
+        group={{ id, name: project.name, isPrivate: project.isPrivate, archived: !!project.archivedAt, converted: !!project.convertedToId, accessIds: access.map((a) => a.id) }}
+      />
+    );
+  }
+
   const [statuses, users] = await Promise.all([
     prisma.statusOption.findMany({ where: { workspaceId: project.access.workspaceId }, orderBy: { order: "asc" } }),
     membersOf(project.access.workspaceId).then((m) => m.map(({ id, name }) => ({ id, name }))),

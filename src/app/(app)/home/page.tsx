@@ -1,3 +1,4 @@
+import { visibleProjectWhere } from "@/lib/scrum/groups";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspace } from "@/lib/session";
 import { membersOf } from "@/lib/workspace";
@@ -11,14 +12,14 @@ export const metadata = { title: "Inicio" };
 
 export default async function HomePage() {
   const { session, workspaceId } = await requireWorkspace();
-  const inWs = { project: { workspaceId } };
+  const inWs = { project: visibleProjectWhere(session.user.id, workspaceId) };
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 86400000);
 
   const [projectCount, activeSprints, open, overdue, doneWeek, workload, history] = await Promise.all([
-    prisma.project.count({ where: { workspaceId } }),
+    prisma.project.count({ where: { workspaceId, kind: "PROJECT" } }),
     prisma.sprint.findMany({
-      where: { state: "ACTIVE", project: { workspaceId } },
+      where: { state: "ACTIVE", project: { ...visibleProjectWhere(session.user.id, workspaceId), kind: "PROJECT" } },
       include: { project: { select: { id: true, name: true, key: true } }, tasks: { where: { issueType: { not: "EPIC" } }, select: { status: true, storyPoints: true } } },
       orderBy: { endDate: "asc" },
     }),
@@ -31,11 +32,11 @@ export default async function HomePage() {
     }),
     prisma.task.count({ where: { ...inWs, issueType: { not: "EPIC" }, status: "DONE", completedAt: { gte: weekAgo } } }),
     prisma.task.groupBy({ by: ["assigneeUserId"], where: { ...inWs, issueType: { not: "EPIC" }, status: { not: "DONE" }, assigneeUserId: { not: null } }, _count: { _all: true }, _sum: { storyPoints: true } }),
-    prisma.historyEntry.findMany({ where: { project: { workspaceId } }, orderBy: { changedAt: "desc" }, take: 10, include: { project: { select: { id: true, key: true, name: true } } } }),
+    prisma.historyEntry.findMany({ where: { project: visibleProjectWhere(session.user.id, workspaceId) }, orderBy: { changedAt: "desc" }, take: 10, include: { project: { select: { id: true, key: true, name: true } } } }),
   ]);
 
   const overdueTotal = await prisma.task.count({ where: { ...inWs, issueType: { not: "EPIC" }, status: { not: "DONE" }, dueDate: { lt: now } } });
-  const [users, drafts, projectRefs] = await Promise.all([membersOf(workspaceId), listMyDrafts(session.user.id, { workspaceId }), prisma.project.findMany({ where: { workspaceId }, orderBy: { name: "asc" }, select: { id: true, name: true, key: true } })]);
+  const [users, drafts, projectRefs] = await Promise.all([membersOf(workspaceId), listMyDrafts(session.user.id, { workspaceId }), prisma.project.findMany({ where: { workspaceId, kind: "PROJECT" }, orderBy: { name: "asc" }, select: { id: true, name: true, key: true } })]);
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
 
   return (

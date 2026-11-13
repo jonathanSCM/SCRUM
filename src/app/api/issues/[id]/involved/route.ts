@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { parseBody, readJson } from "@/lib/validation";
-import { membersOf } from "@/lib/workspace";
+import { assignableMembers } from "@/lib/projectMembers";
 import { notifyUsers } from "@/lib/notifications";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 
@@ -18,7 +18,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   try {
     const task = await prisma.task.findUnique({ where: { id }, select: { number: true, title: true, projectId: true, project: { select: { key: true, workspaceId: true } } } });
     if (!task?.project.workspaceId) return notFound("Ticket no encontrado");
-    const people = await membersOf(task.project.workspaceId);
+    const people = await assignableMembers(task.projectId, task.project.workspaceId);
     const valid = new Set(people.map((p) => p.id));
     const wanted = [...new Set(parsed.data.userIds)].filter((u) => valid.has(u));
     const current = (await prisma.taskInvolved.findMany({ where: { taskId: id }, select: { userId: true } })).map((r) => r.userId);

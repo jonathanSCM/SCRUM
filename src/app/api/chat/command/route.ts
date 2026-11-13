@@ -81,7 +81,7 @@ export async function POST(req: Request) {
     const slackIds = async (ids: string[]) => (await prisma.user.findMany({ where: { id: { in: ids } }, select: { slackUserId: true } })).map((u) => u.slackUserId).filter((x): x is string => !!x);
 
     // Texto con menciones → texto plano (con el nombre de cada tarjeta, proyecto…) para avisos, Slack y teléfono.
-    const refInfo = await refRowsFor(c.kind === "reunion" ? c.topic : c.message, workspaceId); // reunión: se usa para el tema
+    const refInfo = await refRowsFor(c.kind === "reunion" ? c.topic : c.message, workspaceId, auth.user.id); // reunión: se usa para el tema
     const plain = (t: string) => plainText(t, (r) => refInfo.resolved.get(`${r.kind.toUpperCase()}:${r.id}`)?.label ?? "");
     const level = c.level;
     const tag = level === "urgente" ? "URGENTE" : level === "ayuda" ? "AYUDA" : "";

@@ -2,7 +2,7 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAccessTo } from "@/lib/session";
-import { membersOf } from "@/lib/workspace";
+import { assignableMembers } from "@/lib/projectMembers";
 import { issueInclude } from "@/lib/issues";
 import { toIssueCard, toSprintData } from "@/lib/issueView";
 import { parseStringList } from "@/lib/scrum/ready";
@@ -25,7 +25,7 @@ export async function getProjectOrNotFound(id: string) {
 
 export async function getProjectOptions(projectId: string, projectKey: string | null): Promise<ProjectOptions> {
   const [members, epics, sprints, proj] = await Promise.all([
-    prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } }).then((p) => (p?.workspaceId ? membersOf(p.workspaceId) : [])).then((m) => m.map(({ id, name }) => ({ id, name }))),
+    prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } }).then((p) => (p?.workspaceId ? assignableMembers(projectId, p.workspaceId) : [])),
     prisma.task.findMany({ where: { projectId, issueType: "EPIC" }, orderBy: { number: "asc" }, select: { id: true, number: true, title: true, epicColor: true } }),
     prisma.sprint.findMany({ where: { projectId, state: { in: ["PLANNED", "ACTIVE"] } }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, state: true } }),
     prisma.project.findUnique({ where: { id: projectId }, select: { readyItems: true } }),

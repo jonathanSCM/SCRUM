@@ -126,6 +126,14 @@ model Project {
   // Definition of Ready: JSON con los textos que un ticket debe cubrir antes de empezar.
   readyItems String @default("[]")
 
+  // "Grupo de tareas": un contenedor de tickets sueltos (demos, ideas) que no es un proyecto todavía.
+  // Es una fila de Project con kind GROUP para reutilizar tickets, tablero y permisos; no aparece en la lista de proyectos.
+  kind        String    @default("PROJECT") // PROJECT | GROUP
+  isPrivate   Boolean   @default(false) // solo grupos: lo ven quien lo creó y las personas con acceso (ProjectMember)
+  ownerId     String? // quien creó el grupo
+  archivedAt  DateTime? // grupo archivado (o ya convertido en proyecto)
+  convertedToId String? // proyecto en el que se convirtió el grupo
+
   workspaceId String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 

@@ -1,3 +1,4 @@
+import { visibleProjectWhere } from "@/lib/scrum/groups";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspace } from "@/lib/session";
 import { issueInclude } from "@/lib/issues";
@@ -10,7 +11,7 @@ export const metadata = { title: "Mi trabajo" };
 export default async function MyWorkPage() {
   const { session, workspaceId } = await requireWorkspace();
   const rows = await prisma.task.findMany({
-    where: { assigneeUserId: session.user.id, issueType: { not: "EPIC" }, project: { workspaceId } },
+    where: { assigneeUserId: session.user.id, issueType: { not: "EPIC" }, project: visibleProjectWhere(session.user.id, workspaceId) },
     include: { ...issueInclude, project: { select: { key: true, name: true } }, sprint: { select: { name: true, state: true } } },
   });
 

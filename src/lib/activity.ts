@@ -14,7 +14,7 @@ export async function getTeamActivity(workspaceId: string, monday: string, tz: s
 
   const [history, standups] = await Promise.all([
     prisma.historyEntry.findMany({
-      where: { project: { workspaceId }, changedById: { in: ids }, changedAt: { gte: from, lt: to } },
+      where: { project: { workspaceId, isPrivate: false }, changedById: { in: ids }, changedAt: { gte: from, lt: to } },
       orderBy: { changedAt: "asc" },
       select: { id: true, changedAt: true, changedById: true, field: true, oldValue: true, newValue: true, taskId: true, taskTitle: true, projectId: true, project: { select: { name: true, key: true } } },
     }),

@@ -2,6 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { normalizeRole, toLegacyRole, type WsRole } from "@/lib/scrum/roles";
+import { canSeeProject } from "@/lib/scrum/groups";
 
 // Capa de acceso a equipos. TODA lectura o escritura de datos de un equipo pasa por acá:
 //   1. se resuelve a qué equipo pertenece el recurso (o cuál es el equipo activo),
@@ -62,28 +63,38 @@ export type ResourceKind =
   | "meeting"
   | "recording";
 
-const viaProject = { select: { project: { select: { workspaceId: true } } } } as const;
+const projectScope = { workspaceId: true, kind: true, isPrivate: true, ownerId: true, members: { select: { userId: true } } } as const;
+const viaProject = { select: { project: { select: projectScope } } } as const;
+type ProjectScope = { workspaceId: string | null; kind: string; isPrivate: boolean; ownerId: string | null; members: Array<{ userId: string }> };
 
-export async function workspaceOfResource(kind: ResourceKind, id: string): Promise<string | null> {
+// Equipo de un proyecto (o de un recurso suyo). Si se indica quién mira y es un grupo privado al que no tiene acceso,
+// el recurso "no existe" para esa persona (null → 404).
+function scopeOf(p: ProjectScope | null | undefined, viewerId?: string): string | null {
+  if (!p) return null;
+  if (viewerId && !canSeeProject({ kind: p.kind, isPrivate: p.isPrivate, ownerId: p.ownerId, memberIds: p.members.map((m) => m.userId) }, viewerId)) return null;
+  return p.workspaceId ?? null;
+}
+
+export async function workspaceOfResource(kind: ResourceKind, id: string, viewerId?: string): Promise<string | null> {
   switch (kind) {
     case "project":
-      return (await prisma.project.findUnique({ where: { id }, select: { workspaceId: true } }))?.workspaceId ?? null;
+      return scopeOf(await prisma.project.findUnique({ where: { id }, select: projectScope }), viewerId);
     case "issue":
-      return (await prisma.task.findUnique({ where: { id }, ...viaProject }))?.project.workspaceId ?? null;
+      return scopeOf((await prisma.task.findUnique({ where: { id }, ...viaProject }))?.project, viewerId);
     case "sprint":
-      return (await prisma.sprint.findUnique({ where: { id }, ...viaProject }))?.project?.workspaceId ?? null;
+      return scopeOf((await prisma.sprint.findUnique({ where: { id }, ...viaProject }))?.project, viewerId);
     case "comment":
-      return (await prisma.comment.findUnique({ where: { id }, select: { task: viaProject } }))?.task.project.workspaceId ?? null;
+      return scopeOf((await prisma.comment.findUnique({ where: { id }, select: { task: viaProject } }))?.task.project, viewerId);
     case "attachment":
-      return (await prisma.attachment.findUnique({ where: { id }, ...viaProject }))?.project.workspaceId ?? null;
+      return scopeOf((await prisma.attachment.findUnique({ where: { id }, ...viaProject }))?.project, viewerId);
     case "note":
-      return (await prisma.note.findUnique({ where: { id }, ...viaProject }))?.project.workspaceId ?? null;
+      return scopeOf((await prisma.note.findUnique({ where: { id }, ...viaProject }))?.project, viewerId);
     case "retro":
-      return (await prisma.retroItem.findUnique({ where: { id }, ...viaProject }))?.project.workspaceId ?? null;
+      return scopeOf((await prisma.retroItem.findUnique({ where: { id }, ...viaProject }))?.project, viewerId);
     case "contact":
-      return (await prisma.projectContact.findUnique({ where: { id }, ...viaProject }))?.project.workspaceId ?? null;
+      return scopeOf((await prisma.projectContact.findUnique({ where: { id }, ...viaProject }))?.project, viewerId);
     case "projectMessage":
-      return (await prisma.projectMessage.findUnique({ where: { id }, ...viaProject }))?.project.workspaceId ?? null;
+      return scopeOf((await prisma.projectMessage.findUnique({ where: { id }, ...viaProject }))?.project, viewerId);
     case "chatMessage":
       return (await prisma.chatMessage.findUnique({ where: { id }, select: { workspaceId: true } }))?.workspaceId ?? null;
     case "chatFile":
@@ -93,7 +104,7 @@ export async function workspaceOfResource(kind: ResourceKind, id: string): Promi
     case "fileCardItem":
       return (await prisma.fileCardItem.findUnique({ where: { id }, select: { card: { select: { workspaceId: true } } } }))?.card.workspaceId ?? null;
     case "resource":
-      return (await prisma.projectResource.findUnique({ where: { id }, ...viaProject }))?.project.workspaceId ?? null;
+      return scopeOf((await prisma.projectResource.findUnique({ where: { id }, ...viaProject }))?.project, viewerId);
     case "channel":
       return (await prisma.chatChannel.findUnique({ where: { id }, select: { workspaceId: true } }))?.workspaceId ?? null;
     case "invitation":

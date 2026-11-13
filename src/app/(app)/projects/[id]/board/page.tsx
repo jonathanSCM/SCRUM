@@ -10,6 +10,14 @@ export default async function BoardPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const session = await requireSession();
   const project = await getProjectOrNotFound(id);
+
+  // Grupo de tareas: no hay sprints, el tablero muestra todas sus tareas.
+  if (project.kind === "GROUP") {
+    const [issues, options] = await Promise.all([getProjectIssues(id, project.key), getProjectOptions(id, project.key)]);
+    const all = { id: id, name: "Todas las tareas del grupo", goal: "", state: "ACTIVE" as const, startDate: null, endDate: null, startedAt: null, completedAt: null, committedPoints: 0, completedPoints: 0, committedCount: 0, completedCount: 0 };
+    return <BoardView group readOnly={!!project.archivedAt} projectId={id} sprint={all} issues={issues} options={options} currentUserId={session.user.id} plannedSprints={[]} />;
+  }
+
   const sprints = await getProjectSprints(id);
   const active = sprints.find((s) => s.state === "ACTIVE") ?? null;
 

@@ -1187,3 +1187,15 @@ describe("estado Bloqueadas", () => {
     expect(isIssueStatus("BLOCKED")).toBe(true);
   });
 });
+
+describe("grupos de tareas: quién los ve", () => {
+  it("los proyectos y los grupos del equipo los ve todo el equipo; los privados, solo su gente", async () => {
+    const { canSeeProject } = await import("./groups");
+    expect(canSeeProject({ kind: "PROJECT", isPrivate: false, ownerId: null, memberIds: [] }, "u1")).toBe(true);
+    expect(canSeeProject({ kind: "GROUP", isPrivate: false, ownerId: "u2", memberIds: [] }, "u1")).toBe(true);
+    const priv = { kind: "GROUP", isPrivate: true, ownerId: "u2", memberIds: ["u3"] };
+    expect(canSeeProject(priv, "u2")).toBe(true);
+    expect(canSeeProject(priv, "u3")).toBe(true);
+    expect(canSeeProject(priv, "u1")).toBe(false);
+  });
+});

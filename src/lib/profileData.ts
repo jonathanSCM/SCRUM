@@ -20,7 +20,7 @@ export async function getProfile(userId: string, workspaceId: string) {
   if (!user) return null;
 
   const { since, prevSince, sinceDay, prevSinceDay } = weekWindow();
-  const inWs = { project: { workspaceId } };
+  const inWs = { project: { workspaceId, isPrivate: false } }; // los grupos privados no cuentan en el perfil de nadie
   const real = { issueType: { not: "EPIC" }, ...inWs };
   const mine = { assigneeUserId: userId, ...real };
 
@@ -98,7 +98,7 @@ export async function getPeople(workspaceId: string, options: { withEmail?: bool
     select: { role: true, user: { select: { id: true, name: true, tagline: true, chatColor: true, ...(options.withEmail ? { email: true } : {}) } } },
   });
   const since = weekWindow().since;
-  const inWs = { project: { workspaceId } };
+  const inWs = { project: { workspaceId, isPrivate: false } }; // los grupos privados no cuentan en el perfil de nadie
   const [open, done] = await Promise.all([
     prisma.task.groupBy({ by: ["assigneeUserId"], where: { ...inWs, assigneeUserId: { not: null }, issueType: { not: "EPIC" }, status: { not: "DONE" } }, _count: { _all: true } }),
     prisma.task.groupBy({ by: ["assigneeUserId"], where: { ...inWs, assigneeUserId: { not: null }, issueType: { not: "EPIC" }, status: "DONE", completedAt: { gte: since } }, _count: { _all: true } }),

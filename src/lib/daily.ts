@@ -17,7 +17,7 @@ export async function dailySuggestion(userId: string, workspaceId: string, date:
   const parts = (d: string) => d.split("-").map(Number) as [number, number, number];
   const from = zonedToUtc(...parts(prev), 0, 0, tz);
   const to = zonedToUtc(...parts(date), 0, 0, tz);
-  const inWs = { project: { workspaceId } };
+  const inWs = { project: { workspaceId, isPrivate: false } }; // lo de un grupo privado no se cuela en el daily del equipo
   const real = { issueType: { not: "EPIC" }, ...inWs };
   const taskSelect = { id: true, number: true, title: true, status: true, project: { select: { key: true, name: true } } } as const;
 

@@ -17,12 +17,18 @@ const TABS = [
   { slug: "settings", label: "Ajustes" },
 ];
 
-export default function ProjectTabs({ projectId }: { projectId: string }) {
+const GROUP_TABS = [
+  { slug: "board", label: "Tablero" },
+  { slug: "backlog", label: "Lista" },
+  { slug: "settings", label: "Ajustes" },
+];
+
+export default function ProjectTabs({ projectId, group = false }: { projectId: string; group?: boolean }) {
   const pathname = usePathname();
   return (
     <nav className="-mx-4 overflow-x-auto border-b border-line-strong px-4 sm:mx-0 sm:px-0" aria-label="Secciones del proyecto">
       <ul className="flex min-w-max gap-6">
-        {TABS.map((t) => {
+        {(group ? GROUP_TABS : TABS).map((t) => {
           const href = `/projects/${projectId}/${t.slug}`;
           const active = pathname === href || pathname?.startsWith(`${href}/`);
           return (

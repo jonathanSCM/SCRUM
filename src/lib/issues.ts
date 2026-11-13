@@ -92,9 +92,10 @@ async function validateRefs(
   }
   if (refs.assigneeUserId) {
     // El responsable tiene que ser miembro del equipo del proyecto (no cualquier cuenta del sistema).
-    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } });
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { workspaceId: true, isPrivate: true, ownerId: true, members: { select: { userId: true } } } });
     const member = project?.workspaceId ? await prisma.membership.findUnique({ where: { userId_workspaceId: { userId: refs.assigneeUserId, workspaceId: project.workspaceId } }, select: { id: true } }) : null;
     if (!member) throw new IssueError("Esa persona no es parte del equipo");
+    if (project?.isPrivate && project.ownerId !== refs.assigneeUserId && !project.members.some((m) => m.userId === refs.assigneeUserId)) throw new IssueError("Este grupo es privado: primero dale acceso a esa persona");
   }
 }
 
