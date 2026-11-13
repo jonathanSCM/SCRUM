@@ -4,7 +4,7 @@ Graba **los subtítulos y el audio** de tus reuniones de Google Meet y los guard
 muestra los subtítulos en vivo. Corre en tu navegador como un participante más: no hay bot, nadie tiene que admitirlo.
 
 > Esta extensión es una adaptación de la del CRM de ProShop. Aquí manda las reuniones a SCRUM: el audio se transcribe con OpenAI
-> (la clave la pone un líder del equipo en *Ajustes → Integraciones*) y se borra en cuanto se transcribe.
+> (la clave la pone un líder del equipo en *Ajustes → Integraciones*) y se conserva en la reunión para escucharlo y descargarlo.
 
 ## Instalar y conectar
 

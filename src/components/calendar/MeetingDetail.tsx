@@ -10,6 +10,7 @@ import { useTimezone } from "@/components/TimezoneProvider";
 import { formatDay, formatTime, offsetLabel, offsetMinutes, zoneName } from "@/lib/scrum/countries";
 import type { MeetingDTO } from "@/lib/meetings";
 import Recordings from "./Recordings";
+import MeetingFiles from "./MeetingFiles";
 
 // Detalle de una reunión: quién la agendó, la hora en tu zona y en la de cada invitado, el enlace y las grabaciones.
 export default function MeetingDetail({ id, currentUserId, isLead, onClose, onEdit, onChanged }: { id: string; currentUserId: string; isLead: boolean; onClose: () => void; onEdit: (m: MeetingDTO) => void; onChanged: () => void }) {
@@ -63,6 +64,7 @@ export default function MeetingDetail({ id, currentUserId, isLead, onClose, onEd
         <div className="space-y-5">
           <div className="flex flex-wrap items-center gap-2">
             {m.status === "CANCELED" && <span className="lozenge text-danger">Cancelada</span>}
+            {m.status !== "CANCELED" && new Date(m.endsAt) < new Date() && <span className="lozenge text-moss-ink">Realizada</span>}
             {m.project && <span className="lozenge text-ink-soft">{m.project.key ?? m.project.name}</span>}
           </div>
           <div>
@@ -76,7 +78,13 @@ export default function MeetingDetail({ id, currentUserId, isLead, onClose, onEd
           {m.meetUrl && (
             <a href={m.meetUrl} target="_blank" rel="noopener noreferrer nofollow" className="btn-primary inline-flex">Unirme a la reunión</a>
           )}
-          {m.description && <p className="whitespace-pre-wrap text-sm text-ink-soft">{m.description}</p>}
+          {m.description && (
+            <section>
+              <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-faint">Notas de la reunión</h3>
+              <p className="whitespace-pre-wrap text-sm text-ink-soft">{m.description}</p>
+            </section>
+          )}
+          <MeetingFiles meetingId={m.id} />
 
           <section>
             <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-faint">Hora para cada persona</h3>

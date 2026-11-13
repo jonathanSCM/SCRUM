@@ -37,7 +37,7 @@ export default function IntegrationsForm() {
     <div className="space-y-8">
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-ink">OpenAI (transcripción de las reuniones de Meet)</h2>
-        <p className="text-xs text-ink-soft">{st ? line(st.openai) : "Cargando…"} El audio que graba la extensión se transcribe con tu cuenta de OpenAI y luego se borra. La clave se crea en platform.openai.com (API keys).</p>
+        <p className="text-xs text-ink-soft">{st ? line(st.openai) : "Cargando…"} El audio que graba la extensión se transcribe con tu cuenta de OpenAI y queda en la reunión para escucharlo y descargarlo. La clave se crea en platform.openai.com (API keys).</p>
         <div className="flex flex-wrap gap-2">
           <input className="field min-w-0 flex-1 font-mono" type="password" autoComplete="off" placeholder="Pega la clave de OpenAI (sk-…)" value={openai} onChange={(e) => setOpenai(e.target.value)} />
           <button className="btn-primary" disabled={!openai} onClick={() => save({ openaiKey: openai }, "Clave de OpenAI guardada")}>Guardar</button>

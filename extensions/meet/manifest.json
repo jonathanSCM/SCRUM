@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SCRUM ProShop — Asistente de reuniones de Meet",
   "short_name": "SCRUM Meet",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minimum_chrome_version": "116",
   "description": "Guarda en el calendario de SCRUM ProShop los subtítulos y el audio de tus reuniones de Google Meet, con subtítulos en vivo.",
   "icons": {

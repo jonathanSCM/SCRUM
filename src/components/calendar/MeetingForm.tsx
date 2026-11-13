@@ -38,13 +38,15 @@ export default function MeetingForm({ meeting, day, isLead, currentUserId, peopl
   })();
   const toggle = (id: string) => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const ready = !!title.trim() && !!startsAt && (everyone || picked.size > 0);
+  // Una reunión que ya pasó se registra sin avisar a nadie (para guardar lo que se trató y sus archivos).
+  const past = !!startsAt && startsAt.getTime() < Date.now() - 10 * 60_000;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!ready) return;
     setBusy(true);
     const body = { title, startsAt: startsAt!.toISOString(), durationMin: duration, meetUrl: meetUrl.trim(), description, projectId: projectId || null, everyone, userIds: [...picked] };
-    const res = meeting ? await api<MeetingDTO>(`/api/meetings/${meeting.id}`, "PATCH", body) : await api<MeetingDTO>("/api/meetings", "POST", { ...body, announce });
+    const res = meeting ? await api<MeetingDTO>(`/api/meetings/${meeting.id}`, "PATCH", body) : await api<MeetingDTO>("/api/meetings", "POST", { ...body, announce: announce && !past });
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     onSaved(res.data);
@@ -89,8 +91,8 @@ export default function MeetingForm({ meeting, day, isLead, currentUserId, peopl
           </div>
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-ink-soft" htmlFor="reu-desc">Descripción (opcional)</label>
-          <textarea id="reu-desc" className="field min-h-[4rem] w-full" maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <label className="text-xs font-semibold text-ink-soft" htmlFor="reu-desc">{past ? "Notas de la reunión (lo que se trató)" : "Descripción o notas (opcional)"}</label>
+          <textarea id="reu-desc" className="field min-h-[6rem] w-full" maxLength={10000} value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div className="space-y-1.5">
           <p className="text-xs font-semibold text-ink-soft">Invitados</p>
@@ -114,7 +116,8 @@ export default function MeetingForm({ meeting, day, isLead, currentUserId, peopl
             </ul>
           )}
         </div>
-        {!meeting && (
+        {past && <p className="rounded-lg border border-line-strong bg-card-2/60 p-2.5 text-xs text-ink-soft">Es una reunión <b className="text-ink">pasada</b>: se guarda en el calendario <b className="text-ink">sin avisar a nadie</b>. Después podrás subir archivos y escribir lo que se trató.</p>}
+        {!meeting && !past && (
           <label className="flex items-center gap-2 text-sm text-ink-soft">
             <input type="checkbox" className="accent-[var(--rust)]" checked={announce} onChange={(e) => setAnnounce(e.target.checked)} />
             Anunciarla en el canal Reuniones del chat
@@ -122,7 +125,7 @@ export default function MeetingForm({ meeting, day, isLead, currentUserId, peopl
         )}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn-primary btn-sm" disabled={!ready || busy}>{busy ? "Guardando…" : meeting ? "Guardar cambios" : "Agendar y avisar"}</button>
+          <button className="btn-primary btn-sm" disabled={!ready || busy}>{busy ? "Guardando…" : meeting ? "Guardar cambios" : past ? "Guardar reunión" : "Agendar y avisar"}</button>
         </div>
       </form>
     </Modal>

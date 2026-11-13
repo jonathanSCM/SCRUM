@@ -24,7 +24,7 @@ const patchSchema = z.object({
   startsAt: z.string().datetime().optional(),
   durationMin: z.number().int().min(5).max(720).optional(),
   meetUrl: z.string().trim().max(300).refine((v) => v === "" || /^https?:\/\//i.test(v), "El enlace debe empezar con https://").nullish(),
-  description: z.string().trim().max(2000).optional(),
+  description: z.string().trim().max(10000).optional(),
   projectId: z.string().min(1).max(40).nullish(),
   everyone: z.boolean().optional(),
   userIds: z.array(z.string().min(1).max(40)).max(100).optional(),

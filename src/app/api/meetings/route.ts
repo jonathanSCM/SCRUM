@@ -26,7 +26,7 @@ const createSchema = z.object({
   startsAt: z.string().datetime({ message: "Fecha inválida" }),
   durationMin: z.number().int().min(5).max(720).default(60),
   meetUrl: z.string().trim().max(300).refine((v) => v === "" || /^https?:\/\//i.test(v), "El enlace debe empezar con https://").optional(),
-  description: z.string().trim().max(2000).optional(),
+  description: z.string().trim().max(10000).optional(),
   projectId: z.string().min(1).max(40).nullish(),
   everyone: z.boolean().default(true),
   userIds: z.array(z.string().min(1).max(40)).max(100).default([]),

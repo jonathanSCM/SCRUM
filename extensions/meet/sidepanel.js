@@ -60,7 +60,7 @@ calendarLink.href = `${SCRUM_BASE}/calendar`;
 // ───────── Consentimiento (aviso dentro de la extensión, antes de pedir nada) ─────────
 // Se muestra la primera vez y cada vez que cambie su texto (sube CONSENT_VERSION). Hasta aceptarlo no se pide el micrófono, ni la
 // sesión, ni se puede grabar.
-const CONSENT_VERSION = 1;
+const CONSENT_VERSION = 2;
 async function getConsent() {
   const { consent } = await chrome.storage.local.get(["consent"]);
   return consent && consent.version >= CONSENT_VERSION ? consent : null;

@@ -39,7 +39,7 @@ export default function ExtensionConnect() {
           <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-ink-soft">
             <li>La extensión <b className="text-ink">nunca graba sola</b>: solo cuando pulsas «Grabar esta reunión».</li>
             <li>Quien graba avisa a los participantes y cuenta con su consentimiento si la ley lo pide.</li>
-            <li>El audio se transcribe y se borra; solo quedan el texto y los subtítulos.</li>
+            <li>El audio se transcribe y queda en la reunión (se puede escuchar, descargar y borrar). Solo lo ven los invitados, quien agendó, quien grabó y los líderes.</li>
           </ul>
           <button className="btn-primary" disabled={busy} onClick={connect}>{busy ? "Conectando…" : "Conectar la extensión"}</button>
         </div>

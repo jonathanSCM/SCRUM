@@ -14,6 +14,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const meeting = await prisma.meeting.findUnique({ where: { id }, select: { id: true, workspaceId: true, everyone: true, createdById: true } });
     if (!meeting) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
     const rows = await prisma.meetingRecording.findMany({ where: { meetingId: id }, orderBy: { createdAt: "asc" }, include: { recordedBy: { select: { id: true, name: true } }, parts: { select: { status: true } } } });
+    // Partes de audio que todavía se conservan (sin cargar el audio en memoria).
+    const audioParts = await prisma.audioPart.findMany({ where: { recordingId: { in: rows.map((r) => r.id) }, data: { not: null } }, orderBy: { part: "asc" }, select: { recordingId: true, part: true, size: true } });
     const visible = [];
     let hidden = 0;
     for (const r of rows) {
@@ -33,6 +35,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           recordedBy: r.recordedBy,
           captions: r.captions,
           transcript: r.transcript,
+          audio: audioParts.filter((a) => a.recordingId === r.id).map((a) => ({ part: a.part, size: a.size })),
           parts: { total: r.parts.length, done: r.parts.filter((p) => p.status === "DONE").length, failed: r.parts.filter((p) => p.status === "FAILED").length },
           canManage: auth.user.role === "LEAD" || r.recordedBy?.id === auth.user.id,
         })),

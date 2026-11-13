@@ -3,8 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { openaiKeyFor } from "@/lib/teamIntegrations";
 import { refreshRecording } from "@/lib/recordings";
 
-// Transcripción del audio de las reuniones con OpenAI. Cada parte (≈10 min) se transcribe sola; en cuanto está lista,
-// el AUDIO SE BORRA (queda solo el texto). Sin clave de OpenAI las partes esperan y se procesan cuando se configure.
+// Transcripción del audio de las reuniones con OpenAI. Cada parte (≈10 min) se transcribe sola. El audio SE CONSERVA para que
+// el equipo lo escuche y lo descargue desde la reunión (quien grabó o un líder puede borrarlo). Con DELETE_AUDIO_AFTER_TRANSCRIBE=1
+// se borra apenas se transcribe, y con AUDIO_RETENTION_DAYS=N se borra el de más de N días. Sin clave de OpenAI las partes esperan.
 
 const MAX_ATTEMPTS = 5;
 const STALE_MS = 10 * 60_000;
@@ -78,8 +79,9 @@ export async function processPendingTranscriptions(limit = 4): Promise<number> {
       await refreshRecording(c.recording.id);
       try {
         const text = await transcribeAudio(new Uint8Array(part.data), part.mimeType, key);
-        // El audio se borra apenas se transcribe.
-        await prisma.audioPart.update({ where: { id: c.id }, data: { status: "DONE", text, data: null, workedAt: null } });
+        // El audio se conserva (se puede escuchar y descargar), salvo que el servidor pida borrarlo al transcribir.
+        const dropAudio = process.env.DELETE_AUDIO_AFTER_TRANSCRIBE === "1";
+        await prisma.audioPart.update({ where: { id: c.id }, data: { status: "DONE", text, workedAt: null, ...(dropAudio ? { data: null } : {}) } });
         await prisma.meetingRecording.update({ where: { id: c.recording.id }, data: { error: null } });
         done++;
       } catch (e) {
@@ -100,4 +102,12 @@ export async function processPendingTranscriptions(limit = 4): Promise<number> {
   } finally {
     running = false;
   }
+}
+
+// Retención opcional del audio: con AUDIO_RETENTION_DAYS=N se borra el audio (no la transcripción) de más de N días.
+export async function purgeOldAudio(now: Date = new Date()): Promise<number> {
+  const days = Number(process.env.AUDIO_RETENTION_DAYS);
+  if (!Number.isFinite(days) || days <= 0) return 0;
+  const res = await prisma.audioPart.updateMany({ where: { status: "DONE", data: { not: null }, createdAt: { lt: new Date(now.getTime() - days * 86_400_000) } }, data: { data: null } });
+  return res.count;
 }

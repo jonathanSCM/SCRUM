@@ -148,7 +148,9 @@ export async function createMeeting(input: CreateMeetingInput) {
   });
 
   const creatorZone = (await zonesOf([input.creator.id])).get(input.creator.id) ?? DEFAULT_TZ;
-  const post = input.post === false ? null : input.post ?? {};
+  // Una reunión que ya pasó (se registra para guardar lo que se trató y sus archivos) no avisa a nadie ni se anuncia en el chat.
+  const past = input.startsAt.getTime() < Date.now() - 10 * 60_000;
+  const post = input.post === false || past ? null : input.post ?? {};
   if (post) {
     const channels = await ensureChannels(input.workspaceId);
     const target = (post.channelId ? channels.find((c) => c.id === post.channelId && c.kind === "REUNIONES") : undefined) ?? channels.find((c) => c.kind === "REUNIONES");
@@ -164,7 +166,7 @@ export async function createMeeting(input: CreateMeetingInput) {
       },
     });
   }
-  if (input.notify !== false) {
+  if (input.notify !== false && !past) {
     const invitees = (await inviteesOf(meeting)).filter((id) => id !== input.creator.id);
     await notifyMeeting(meeting, invitees, { heading: "Nueva reunión", body: `agenda ${input.creator.name}`, priority: post?.level === "URGENTE" ? "urgent" : "high" });
   }

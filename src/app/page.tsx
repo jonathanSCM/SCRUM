@@ -119,7 +119,7 @@ export default async function Landing() {
             </ol>
           </div>
           <p className="mt-8 rounded-xl border border-line bg-card-2/60 p-4 text-sm text-ink-soft">
-            <b className="text-ink">Tu privacidad primero.</b> Quien graba avisa a los participantes. El audio se borra al terminar de transcribirse y las transcripciones solo las ven quienes estuvieron invitados. Más en la <Link href="/privacy" className="font-semibold text-rust hover:underline">política de privacidad</Link>.
+            <b className="text-ink">Tu privacidad primero.</b> Quien graba avisa a los participantes. El audio y las transcripciones solo los ven quienes estuvieron invitados, y quien grabó puede borrarlos cuando quiera. Más en la <Link href="/privacy" className="font-semibold text-rust hover:underline">política de privacidad</Link>.
           </p>
         </section>
 

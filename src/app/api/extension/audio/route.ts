@@ -14,7 +14,7 @@ const safeDecode = (v: string | null) => {
   }
 };
 
-// Una parte del audio de la reunión (audio/webm). Se guarda y se transcribe; luego el audio se borra.
+// Una parte del audio de la reunión (audio/webm). Se guarda y se transcribe; el audio queda disponible en la reunión para escucharlo y descargarlo.
 export async function POST(req: Request) {
   const user = await authExtension(req);
   if (!user) return NextResponse.json({ error: "Token inválido o revocado" }, { status: 401 });

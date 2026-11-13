@@ -27,7 +27,7 @@ Guardar en la cuenta de SCRUM ProShop del usuario los subtítulos y, de forma op
 | Host `https://scrum.proshop.lat/*` | Conectar con la cuenta y enviar los subtítulos y el audio. |
 
 ## Prácticas de privacidad (formulario)
-- **¿Recopila datos de usuario?** Sí: contenido de comunicaciones (subtítulos y audio de la reunión que el usuario decide grabar) e información de autenticación (token de la extensión).
+- **¿Recopila datos de usuario?** Sí: contenido de comunicaciones (subtítulos y audio de la reunión que el usuario decide grabar, que se guardan en su cuenta para escucharlos, descargarlos y borrarlos) e información de autenticación (token de la extensión).
 - **No** vende datos, **no** los usa para publicidad ni para decidir créditos, **no** los transfiere salvo para operar la función (SCRUM ProShop y su proveedor de transcripción, OpenAI).
 - **Código remoto**: no usa.
 - **Divulgación y consentimiento**: la primera vez, antes de pedir sesión o micrófono, el panel muestra qué se graba, a dónde va, qué no hace y cómo controlarlo, y exige marcar una casilla («debo avisar a los participantes»).
