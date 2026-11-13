@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
 import { useToast } from "@/components/ui/Toaster";
 import { CHAT_COLORS } from "@/lib/scrum/chat";
 import Avatar from "@/components/ui/Avatar";
+import { COUNTRIES, defaultZoneOf, findCountry, formatDay, formatTime, offsetLabel } from "@/lib/scrum/countries";
 import ProfileImages from "@/components/ProfileImages";
 
-export default function ProfileForm({ name: initialName, discordUserId: initialDiscord, telegramUsername: initialTelegram, slackUserId: initialSlack, chatColor: initialColor, userId, tagline: initialTagline, hasAvatar, hasBanner }: { name: string; discordUserId: string; telegramUsername: string; slackUserId: string; chatColor: string; userId: string; tagline: string; hasAvatar: boolean; hasBanner: boolean }) {
+export default function ProfileForm({ name: initialName, discordUserId: initialDiscord, telegramUsername: initialTelegram, slackUserId: initialSlack, chatColor: initialColor, userId, tagline: initialTagline, country: initialCountry, timezone: initialTz, hasAvatar, hasBanner }: { country: string; timezone: string; name: string; discordUserId: string; telegramUsername: string; slackUserId: string; chatColor: string; userId: string; tagline: string; hasAvatar: boolean; hasBanner: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState(initialName);
@@ -18,12 +19,20 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
   const [slack, setSlack] = useState(initialSlack);
   const [telegram, setTelegram] = useState(initialTelegram);
   const [saving, setSaving] = useState(false);
+  const [country, setCountry] = useState(initialCountry);
+  const [timezone, setTimezone] = useState(initialTz);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const countryData = findCountry(country);
 
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const res = await api("/api/users/me", "PATCH", { name, discordUserId: discord.trim(), telegramUsername: telegram.trim(), slackUserId: slack.trim(), chatColor, tagline: tagline.trim() });
+    const res = await api("/api/users/me", "PATCH", { name, discordUserId: discord.trim(), telegramUsername: telegram.trim(), slackUserId: slack.trim(), chatColor, tagline: tagline.trim(), ...(country ? { country, timezone: timezone || defaultZoneOf(country) } : {}) });
     setSaving(false);
     if (!res.ok) return toast.error(res.error);
     toast.success("Perfil guardado");
@@ -43,6 +52,25 @@ export default function ProfileForm({ name: initialName, discordUserId: initialD
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Frase de tu perfil</label>
           <input className="field" placeholder="Ej: Desarrollo frontend y diseño" maxLength={120} value={tagline} onChange={(e) => setTagline(e.target.value)} />
           <p className="mt-1 text-xs text-ink-faint">Se ve en tu perfil público, junto a tu nombre.</p>
+        </div>
+        <div className="space-y-2 rounded-lg border border-line bg-card-2/40 p-3">
+          <label className="block text-xs font-semibold text-ink-soft" htmlFor="perfil-pais">País o región</label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <select id="perfil-pais" className="field" value={country} onChange={(e) => { setCountry(e.target.value); setTimezone(defaultZoneOf(e.target.value)); }}>
+              <option value="">Elige tu país…</option>
+              {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+            </select>
+            {countryData && countryData.zones.length > 1 && (
+              <select className="field" aria-label="Zona horaria" value={timezone || countryData.zones[0].tz} onChange={(e) => setTimezone(e.target.value)}>
+                {countryData.zones.map((z) => <option key={z.tz} value={z.tz}>{z.label}</option>)}
+              </select>
+            )}
+          </div>
+          {country ? (
+            <p className="text-xs text-ink-soft">Ahora son <b className="text-ink">{formatTime(now, timezone || defaultZoneOf(country))}</b> ({formatDay(now, timezone || defaultZoneOf(country), { weekday: "short", day: "numeric", month: "short" })}, {offsetLabel(now, timezone || defaultZoneOf(country))}). Las reuniones del calendario se te mostrarán en esta hora.</p>
+          ) : (
+            <p className="text-xs text-ink-faint">Sirve para que las reuniones se vean en tu hora: Perú y Bolivia, por ejemplo, tienen 1 hora de diferencia.</p>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Mi color en el chat</label>

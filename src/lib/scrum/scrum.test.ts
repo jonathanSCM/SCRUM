@@ -919,6 +919,8 @@ describe("quién reaccionó (estilo Discord)", () => {
 
 import { movementRecipients, badgeCount, titleWithBadge } from "./movement";
 import { decideVersionAction } from "./appVersion";
+import { parseWhen } from "./meetingWhen";
+import { COUNTRIES, countryOfZone, defaultZoneOf, formatTime, isValidTimeZone, offsetLabel, offsetMinutes, zonedToUtc } from "./countries";
 
 describe("movimientos de tickets e insignia del icono", () => {
   it("a quién se avisa: sin repetidos y sin quien mueve", () => {
@@ -987,4 +989,70 @@ describe("versión de la app y limpieza de caché", () => {
   it("pero si la persona está escribiendo, limpia y solo avisa (no pierde lo escrito)", () => expect(decideVersionAction({ ...base, serverCache: "2", typing: true })).toBe("purge-banner"));
   it("versión nueva desplegada: avisa con un botón", () => expect(decideVersionAction({ ...base, serverBuild: "b3" })).toBe("banner"));
   it("sin id de compilación (desarrollo) no molesta", () => expect(decideVersionAction({ ...base, serverBuild: "", clientBuild: "" })).toBe("none"));
+});
+
+describe("países y zonas horarias", () => {
+  const noon = new Date("2026-11-20T15:00:00Z");
+  it("Perú y Bolivia se llevan 1 hora (Lima UTC-5, La Paz UTC-4)", () => {
+    expect(offsetMinutes(noon, "America/Lima")).toBe(-300);
+    expect(offsetMinutes(noon, "America/La_Paz")).toBe(-240);
+    expect(formatTime(noon, "America/Lima")).toBe("10:00");
+    expect(formatTime(noon, "America/La_Paz")).toBe("11:00");
+    expect(offsetLabel(noon, "America/Lima")).toBe("UTC-5");
+  });
+  it("agendar '10:00 en Lima' da el instante UTC correcto, y lo ve como 11:00 en La Paz", () => {
+    const d = zonedToUtc(2026, 11, 20, 10, 0, "America/Lima");
+    expect(d.toISOString()).toBe("2026-11-20T15:00:00.000Z");
+    expect(formatTime(d, "America/La_Paz")).toBe("11:00");
+  });
+  it("respeta el horario de verano (Madrid y Nueva York)", () => {
+    expect(offsetMinutes(new Date("2026-07-01T12:00:00Z"), "Europe/Madrid")).toBe(120);
+    expect(offsetMinutes(new Date("2026-12-01T12:00:00Z"), "Europe/Madrid")).toBe(60);
+    expect(zonedToUtc(2026, 7, 1, 9, 0, "America/New_York").toISOString()).toBe("2026-07-01T13:00:00.000Z");
+    expect(zonedToUtc(2026, 12, 1, 9, 0, "America/New_York").toISOString()).toBe("2026-12-01T14:00:00.000Z");
+  });
+  it("la lista de países tiene zonas válidas y sin repetir países", () => {
+    expect(new Set(COUNTRIES.map((c) => c.code)).size).toBe(COUNTRIES.length);
+    for (const c of COUNTRIES) for (const z of c.zones) expect(isValidTimeZone(z.tz), `${c.name} ${z.tz}`).toBe(true);
+    expect(defaultZoneOf("PE")).toBe("America/Lima");
+    expect(defaultZoneOf("XX")).toBe("America/La_Paz");
+    expect(countryOfZone("America/La_Paz")?.name).toBe("Bolivia");
+    expect(isValidTimeZone("Mars/Olympus")).toBe(false);
+  });
+});
+
+describe("fecha de una reunión escrita a mano (parseWhen)", () => {
+  // Jueves 12 de noviembre de 2026, 08:30 en Lima (13:30 UTC)
+  const now = new Date("2026-11-12T13:30:00Z");
+  const lima = (t: string) => parseWhen(t, "America/Lima", now)?.toISOString() ?? null;
+  it("hoy, mañana y pasado mañana", () => {
+    expect(lima("hoy 15:00")).toBe("2026-11-12T20:00:00.000Z");
+    expect(lima("mañana 10:30")).toBe("2026-11-13T15:30:00.000Z");
+    expect(lima("pasado mañana a las 9")).toBe("2026-11-14T14:00:00.000Z");
+  });
+  it("días de la semana (el próximo)", () => {
+    expect(lima("viernes 3pm")).toBe("2026-11-13T20:00:00.000Z");
+    expect(lima("lunes 9am")).toBe("2026-11-16T14:00:00.000Z");
+    expect(lima("jueves 07:00")).toBe("2026-11-19T12:00:00.000Z"); // hoy es jueves y las 7 ya pasaron: el próximo
+    expect(lima("jueves 18:00")).toBe("2026-11-12T23:00:00.000Z"); // hoy, más tarde
+  });
+  it("fechas con números y meses", () => {
+    expect(lima("15/11 14:00")).toBe("2026-11-15T19:00:00.000Z");
+    expect(lima("2026-12-01 09:15")).toBe("2026-12-01T14:15:00.000Z");
+    expect(lima("3 de enero 10:00")).toBe("2027-01-03T15:00:00.000Z");
+    expect(lima("20/11/2026 4:30 pm")).toBe("2026-11-20T21:30:00.000Z");
+  });
+  it("solo la hora: hoy si falta, si no mañana", () => {
+    expect(lima("16h")).toBe("2026-11-12T21:00:00.000Z");
+    expect(lima("07:00")).toBe("2026-11-13T12:00:00.000Z");
+  });
+  it("usa la zona de quien lo escribe", () => {
+    expect(parseWhen("mañana 10:00", "America/La_Paz", now)!.toISOString()).toBe("2026-11-13T14:00:00.000Z");
+  });
+  it("si no lo entiende, null", () => {
+    expect(lima("cuando se pueda")).toBeNull();
+    expect(lima("mañana")).toBeNull();
+    expect(lima("lunes algo 25:00")).toBeNull();
+    expect(lima("")).toBeNull();
+  });
 });

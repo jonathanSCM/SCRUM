@@ -58,7 +58,9 @@ export type ResourceKind =
   | "channel"
   | "resource"
   | "fileCard"
-  | "fileCardItem";
+  | "fileCardItem"
+  | "meeting"
+  | "recording";
 
 const viaProject = { select: { project: { select: { workspaceId: true } } } } as const;
 
@@ -96,6 +98,10 @@ export async function workspaceOfResource(kind: ResourceKind, id: string): Promi
       return (await prisma.chatChannel.findUnique({ where: { id }, select: { workspaceId: true } }))?.workspaceId ?? null;
     case "invitation":
       return (await prisma.invitation.findUnique({ where: { id }, select: { workspaceId: true } }))?.workspaceId ?? null;
+    case "meeting":
+      return (await prisma.meeting.findUnique({ where: { id }, select: { workspaceId: true } }))?.workspaceId ?? null;
+    case "recording":
+      return (await prisma.meetingRecording.findUnique({ where: { id }, select: { workspaceId: true } }))?.workspaceId ?? null;
     case "status":
       return (await prisma.statusOption.findUnique({ where: { id }, select: { workspaceId: true } }))?.workspaceId ?? null;
   }

@@ -8,7 +8,7 @@ export const metadata = { title: "Editar perfil" };
 export default async function ProfilePage() {
   const session = await requireSession();
   const mine = await prisma.membership.findMany({ where: { userId: session.user.id }, orderBy: { createdAt: "asc" }, select: { role: true, workspace: { select: { name: true } } } });
-  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true, discordUserId: true, telegramUsername: true, slackUserId: true, chatColor: true, tagline: true, images: { select: { kind: true } } } });
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true, discordUserId: true, telegramUsername: true, slackUserId: true, chatColor: true, tagline: true, country: true, timezone: true, images: { select: { kind: true } } } });
 
   return (
     <main className="mx-auto max-w-xl px-4 py-10 sm:px-6">
@@ -19,7 +19,7 @@ export default async function ProfilePage() {
           <span key={m.workspace.name} className={`lozenge ${m.role === "OWNER" ? "text-rust" : "text-ink-soft"}`}>{roleBadge(normalizeRole(m.role), m.workspace.name)}</span>
         ))}
       </p>
-      <ProfileForm name={me?.name ?? ""} discordUserId={me?.discordUserId ?? ""} telegramUsername={me?.telegramUsername ?? ""} slackUserId={me?.slackUserId ?? ""} chatColor={me?.chatColor ?? ""} userId={session.user.id} tagline={me?.tagline ?? ""} hasAvatar={!!me?.images.some((i) => i.kind === "AVATAR")} hasBanner={!!me?.images.some((i) => i.kind === "BANNER")} />
+      <ProfileForm name={me?.name ?? ""} discordUserId={me?.discordUserId ?? ""} telegramUsername={me?.telegramUsername ?? ""} slackUserId={me?.slackUserId ?? ""} chatColor={me?.chatColor ?? ""} userId={session.user.id} tagline={me?.tagline ?? ""} country={me?.country ?? ""} timezone={me?.timezone ?? ""} hasAvatar={!!me?.images.some((i) => i.kind === "AVATAR")} hasBanner={!!me?.images.some((i) => i.kind === "BANNER")} />
     </main>
   );
 }

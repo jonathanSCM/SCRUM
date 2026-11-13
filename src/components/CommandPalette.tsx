@@ -134,8 +134,8 @@ export default function CommandPalette() {
         className="flex items-center gap-2 border border-line-strong bg-card px-2.5 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-moss hover:text-ink rounded-lg"
       >
         <SearchIcon size={14} />
-        <span className="hidden xl:inline">Buscar</span>
-        <span className="kbd hidden xl:inline">Ctrl K</span>
+        <span className="hidden 2xl:inline">Buscar</span>
+        <span className="kbd hidden 2xl:inline">Ctrl K</span>
       </button>
 
       <AnimatePresence>

@@ -8,6 +8,9 @@ import { parseBody, readJson } from "@/lib/validation";
 import { parseCommand, matchNames, maskRefs, type ChatCommand } from "@/lib/scrum/chatCommands";
 import { plainText } from "@/lib/scrum/chat";
 import { refRowsFor } from "@/lib/chatData";
+import { createMeeting, inviteesOf, whenLabel, zonesOf } from "@/lib/meetings";
+import { parseWhen } from "@/lib/scrum/meetingWhen";
+import { DEFAULT_TZ } from "@/lib/scrum/countries";
 import { notifyUsers } from "@/lib/notifications";
 import type { NoticeKind } from "@/lib/scrum/notifPolicy";
 import { sendToSlackWebhook } from "@/lib/slack";
@@ -30,7 +33,16 @@ export async function POST(req: Request) {
         notice: z.discriminatedUnion("to", [
           z.object({ to: z.literal("general"), level, message: z.string().trim().min(1, "Escribe el mensaje").max(1000) }),
           z.object({ to: z.literal("personas"), level, message: z.string().trim().min(1, "Escribe el mensaje").max(1000), userIds: z.array(z.string().min(1).max(40)).min(1, "Elige a quién avisar").max(20) }),
-          z.object({ to: z.literal("reunion"), level, when: z.string().trim().min(1, "Falta cuándo").max(80), topic: z.string().trim().min(1, "Falta el tema").max(500) }),
+          z.object({
+            to: z.literal("reunion"),
+            level,
+            topic: z.string().trim().min(1, "Falta el tema").max(500),
+            // Fecha exacta (desde el calendario del botón) o escrita a mano ("mañana 10:30").
+            startsAt: z.string().datetime().optional(),
+            when: z.string().trim().max(80).optional(),
+            durationMin: z.number().int().min(5).max(720).optional(),
+            meetUrl: z.string().trim().max(300).refine((v) => v === "" || /^https?:\/\//i.test(v), "El enlace debe empezar con https://").optional(),
+          }),
         ]),
       }),
     ]),
@@ -38,10 +50,16 @@ export async function POST(req: Request) {
   );
   if ("error" in parsed) return parsed.error;
   let c: ChatCommand;
+  // Reunión pedida con fecha exacta desde el botón (calendario).
+  let exact: { startsAt: Date | null; durationMin?: number; meetUrl: string | null } | null = null;
   if ("notice" in parsed.data) {
     const n = parsed.data.notice;
     const lv = n.level ?? "normal";
-    c = n.to === "general" ? { kind: "general", message: n.message, level: lv } : n.to === "personas" ? { kind: "persona", names: [], userIds: n.userIds, message: n.message, level: lv } : { kind: "reunion", when: n.when, topic: n.topic, level: lv };
+    c = n.to === "general" ? { kind: "general", message: n.message, level: lv } : n.to === "personas" ? { kind: "persona", names: [], userIds: n.userIds, message: n.message, level: lv } : { kind: "reunion", when: n.when ?? "", topic: n.topic, level: lv };
+    if (n.to === "reunion") {
+      if (!n.startsAt && !n.when?.trim()) return NextResponse.json({ error: "Falta cuándo" }, { status: 400 });
+      exact = { startsAt: n.startsAt ? new Date(n.startsAt) : null, durationMin: n.durationMin, meetUrl: n.meetUrl || null };
+    }
   } else {
     // Las menciones [[tipo:id]] se apartan para interpretar el comando y se devuelven al mensaje y al tema.
     const { masked, unmask } = maskRefs(parsed.data.body);
@@ -69,12 +87,34 @@ export async function POST(req: Request) {
     const withTag = (t: string) => (tag ? `${tag} · ${t}` : t);
     // Urgente avisa a todo el canal de Slack con @channel.
     const slackText = (t: string) => (level === "urgente" ? `<!channel> ${t}` : t);
+    let unparsedWhen = false;
     let chatText: string | null = null;
     let title = "";
     let text = "";
     let targets: string[] | null = [];
     let toSlack = false;
     let label = "";
+
+    // Reunión: se registra en el calendario (con la hora de quien la agenda, convertida a UTC) y se anuncia en el chat.
+    if (c.kind === "reunion") {
+      const myZone = (await zonesOf([me.id])).get(me.id) ?? DEFAULT_TZ;
+      const startsAt = exact?.startsAt ?? parseWhen(c.when, myZone);
+      if (startsAt) {
+        const meeting = await createMeeting({
+          workspaceId,
+          creator: { id: me.id, name: me.name },
+          title: plain(c.topic), // sin las marcas [[…]] de las menciones: el calendario muestra los nombres
+          startsAt,
+          durationMin: exact?.durationMin ?? 60,
+          meetUrl: exact?.meetUrl ?? null,
+          post: { level: level === "normal" ? null : (level.toUpperCase() as "AYUDA" | "URGENTE"), channelId: parsed.data.channelId ?? null },
+        });
+        const inv = (await inviteesOf(meeting)).filter((u) => u !== me.id);
+        if (webhook) await sendToSlackWebhook(webhook, { title: withTag(`Reunión · ${whenLabel(startsAt, myZone)}`), description: slackText(`${c.topic} (convoca ${me.name})`) });
+        return NextResponse.json({ ok: true, meetingId: meeting.id, summary: `Reunión agendada en el calendario: ${whenLabel(startsAt, myZone)} · avisé a ${inv.length} ${inv.length === 1 ? "persona" : "personas"}${webhook ? " · enviado a Slack" : ""}` });
+      }
+      unparsedWhen = true; // no se entendió la fecha: se avisa como antes, pero sin calendario
+    }
 
     if (c.kind === "persona") {
       const all = members.map(({ id, name }) => ({ id, name }));
@@ -136,7 +176,7 @@ export async function POST(req: Request) {
     const noticeKind: NoticeKind = level === "urgente" ? "URGENT" : level === "ayuda" ? "HELP" : c.kind === "persona" ? "DIRECT" : c.kind === "reunion" ? "REUNION" : "ANNOUNCE";
     const priority = level === "urgente" ? "urgent" : level === "ayuda" || c.kind === "reunion" ? "high" : "default";
     const notified = await notifyUsers(targets, { kind: noticeKind, title, body: text.slice(0, 160), url: chatUrl, priority, workspaceId });
-    return NextResponse.json({ ok: true, summary: `Aviso a ${label}${notified ? ` · ${notified} ${notified === 1 ? "persona" : "personas"} (bandeja, navegador y teléfono)` : ""}${toSlack ? " · enviado a Slack" : ""}${postedIn ? ` · publicado en ${postedIn}` : ""}` });
+    return NextResponse.json({ ok: true, summary: `Aviso a ${label}${notified ? ` · ${notified} ${notified === 1 ? "persona" : "personas"} (bandeja, navegador y teléfono)` : ""}${toSlack ? " · enviado a Slack" : ""}${postedIn ? ` · publicado en ${postedIn}` : ""}${unparsedWhen ? " · NO se agregó al calendario: no entendí la fecha (usa el botón Avisar → Reunión o escribe, por ejemplo, «mañana 10:30»)" : ""}` });
   } catch (e) {
     return errorResponse(e);
   }
