@@ -7,7 +7,9 @@ Todo lo que pide el panel de desarrollador. Cuenta de desarrollador: pago único
 - **Categoría**: Productividad · **Idioma**: Español
 - **Resumen corto (máx. 132)**: Guarda en el calendario de SCRUM ProShop los subtítulos y el audio de tus reuniones de Google Meet, con subtítulos en vivo.
 - **URL de la política de privacidad**: https://scrum.proshop.lat/privacy (incluye la sección de la extensión)
-- **Sitio web / soporte**: https://scrum.proshop.lat — proshop.soporte@gmail.com
+- **URL oficial**: https://scrum.proshop.lat (el dominio hay que verificarlo en Google Search Console con la misma cuenta del desarrollador; si no, se deja vacío)
+- **URL de asistencia**: https://scrum.proshop.lat/support
+- **Correo de contacto**: proshop.soporte@gmail.com
 
 ## Propósito único
 Guardar en la cuenta de SCRUM ProShop del usuario los subtítulos y, de forma opcional, el audio de las reuniones de Google Meet que el usuario decide grabar, para tener su transcripción en el calendario del equipo.

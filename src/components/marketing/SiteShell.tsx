@@ -30,6 +30,7 @@ export function SiteFooter() {
         <span className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-2">
           <Link href="/privacy" className="hover:text-ink">Privacidad</Link>
           <Link href="/terms" className="hover:text-ink">Términos</Link>
+          <Link href="/support" className="hover:text-ink">Soporte</Link>
           <a href={`mailto:${SITE.contactEmail}`} className="hover:text-ink">{SITE.contactEmail}</a>
         </span>
       </div>
