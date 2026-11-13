@@ -1,0 +1,83 @@
+{
+  "manifest_version": 3,
+  "name": "SCRUM ProShop — Asistente de reuniones de Meet",
+  "short_name": "SCRUM Meet",
+  "version": "1.0.0",
+  "minimum_chrome_version": "116",
+  "description": "Graba los subtítulos y el audio de tus reuniones de Google Meet y los guarda en el calendario de SCRUM ProShop, con subtítulos en vivo en un panel.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabCapture",
+    "offscreen",
+    "sidePanel"
+  ],
+  "optional_permissions": [
+    "desktopCapture"
+  ],
+  "host_permissions": [
+    "https://meet.google.com/*",
+    "https://scrum.proshop.lat/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://meet.google.com/*"
+      ],
+      "js": [
+        "captions-dom.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://scrum.proshop.lat/extension-authorize*"
+      ],
+      "js": [
+        "authorize-bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "SCRUM ProShop — Asistente de reuniones",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/icon48.png"
+      ],
+      "matches": [
+        "https://meet.google.com/*"
+      ]
+    }
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
+      "description": "Abrir el asistente de reuniones de SCRUM ProShop"
+    }
+  }
+}

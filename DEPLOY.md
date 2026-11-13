@@ -91,3 +91,13 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - Los canales de Discord, Telegram y Slack de cada proyecto también reciben un resumen (configurable en Ajustes del proyecto > Integraciones); inicio y cierre de sprint salen al instante.
 - Los resúmenes los envía el propio servidor **cada minuto** (`src/instrumentation-node.ts`; se apaga con `DISABLE_NOTIF_TIMER=1`). Opcional, como respaldo: una tarea programada de Coolify cada minuto con `POST /api/cron/notifications` y la cabecera `Authorization: Bearer $CRON_SECRET` (define `CRON_SECRET`).
 - Esquema: tablas nuevas `Notification`, `NotifPrefs` y `ProjectFeedItem`, y la columna `Project.feedDigestMinutes` (`db push` sin tocar datos). Backup de PostgreSQL antes de desplegar.
+
+## Reuniones, calendario y extensión de Meet
+
+- **Antes de desplegar:** respaldo de PostgreSQL. Se agregan tablas (`Meeting`, `MeetingAttendee`, `MeetingRecording`, `AudioPart`, `DraftIssue`, `ChatChannelMember`…) y columnas (`User.country`, `User.timezone`, `ApiToken.scope`, claves de OpenAI en `Workspace`).
+- **Zona horaria:** cada persona elige su país en *Editar perfil*; las reuniones se guardan en UTC y se muestran en la zona de quien mira.
+- **Transcripción (OpenAI):** un líder pega la clave en *Ajustes → Integraciones → OpenAI* (se guarda cifrada y es de cada equipo). Opcional: `OPENAI_API_KEY` en el servidor (vale solo para el equipo más antiguo, como Gemini), `OPENAI_TRANSCRIBE_MODEL` (por defecto `whisper-1`; también sirven `gpt-4o-transcribe` y `gpt-4o-mini-transcribe`), `OPENAI_TRANSCRIBE_LANGUAGE` (por defecto `es`). Sin clave, el audio espera en cola y se transcribe solo cuando se configure. **El audio se borra al transcribirse.** El costo de OpenAI es por minuto de audio.
+- **Cola de transcripción:** la procesa el temporizador del servidor cada minuto (y al llegar cada parte). Con `DISABLE_NOTIF_TIMER=1` queda solo `POST /api/cron/notifications`.
+- **Extensión de Chrome:** el código está en `extensions/meet/`. Para publicar una versión nueva: subir `version` en `extensions/meet/manifest.json`, correr `bash scripts/pack-extension.sh` (genera `public/downloads/scrum-proshop-meet-extension.zip`, que se descarga desde `/extension-authorize`) y subir ese zip a la Chrome Web Store (ficha lista en `extensions/meet/STORE-LISTING.md`). Cada persona conecta la extensión en `/extension-authorize` (token propio, solo sirve en `/api/extension/*`).
+- **Páginas públicas:** `/` (landing), `/privacy` y `/terms`. Datos de contacto: `NEXT_PUBLIC_CONTACT_EMAIL` y `NEXT_PUBLIC_COMPANY_NAME` (opcionales; se leen al compilar).
+- **Borrar el caché de todos los dispositivos:** subir `CACHE_VERSION` y reiniciar (ver arriba).

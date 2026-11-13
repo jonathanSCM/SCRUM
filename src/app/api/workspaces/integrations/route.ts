@@ -5,7 +5,7 @@ import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 import { encryptSecret } from "@/lib/secretBox";
 import { SLACK_BOT_TOKEN_PATTERN, SLACK_WEBHOOK_PATTERN } from "@/lib/slack";
-import { geminiKeyFor, slackBotTokenFor } from "@/lib/teamIntegrations";
+import { geminiKeyFor, openaiKeyFor, slackBotTokenFor } from "@/lib/teamIntegrations";
 import { parseBody, readJson } from "@/lib/validation";
 
 // Estado de las integraciones del equipo activo. NUNCA devuelve las claves, solo si están y los últimos 4 caracteres.
@@ -14,9 +14,10 @@ export async function GET() {
   if ("error" in auth) return auth.error;
   try {
     const id = auth.user.workspaceId!;
-    const ws = await prisma.workspace.findUnique({ where: { id }, select: { geminiKeyEnc: true, geminiKeyHint: true, slackBotEnc: true, slackBotHint: true, slackWebhookEnc: true, slackWebhookHint: true } });
+    const ws = await prisma.workspace.findUnique({ where: { id }, select: { geminiKeyEnc: true, geminiKeyHint: true, openaiKeyEnc: true, openaiKeyHint: true, slackBotEnc: true, slackBotHint: true, slackWebhookEnc: true, slackWebhookHint: true } });
     return NextResponse.json({
       gemini: { own: !!ws?.geminiKeyEnc, hint: ws?.geminiKeyHint ?? null, active: !!(await geminiKeyFor(id)) },
+      openai: { own: !!ws?.openaiKeyEnc, hint: ws?.openaiKeyHint ?? null, active: !!(await openaiKeyFor(id)) },
       slackWebhook: { own: !!ws?.slackWebhookEnc, hint: ws?.slackWebhookHint ?? null, active: !!ws?.slackWebhookEnc },
       slackBot: { own: !!ws?.slackBotEnc, hint: ws?.slackBotHint ?? null, active: !!(await slackBotTokenFor(id)) },
     });
@@ -32,13 +33,14 @@ export async function PUT(req: Request) {
   const parsed = parseBody(
     z.object({
       geminiKey: z.string().trim().max(200).nullable().optional(),
+      openaiKey: z.string().trim().max(300).nullable().optional(),
       slackBotToken: z.string().trim().max(200).nullable().optional(),
       slackWebhook: z.string().trim().max(300).nullable().optional(),
     }),
     await readJson(req),
   );
   if ("error" in parsed) return parsed.error;
-  const { geminiKey, slackBotToken, slackWebhook } = parsed.data;
+  const { geminiKey, openaiKey, slackBotToken, slackWebhook } = parsed.data;
   const data: Record<string, string | null> = {};
 
   if (geminiKey !== undefined) {
@@ -46,6 +48,13 @@ export async function PUT(req: Request) {
     else {
       if (!/^[A-Za-z0-9_-]{20,}$/.test(geminiKey)) return NextResponse.json({ error: "La clave de Gemini no parece válida" }, { status: 400 });
       Object.assign(data, { geminiKeyEnc: encryptSecret(geminiKey), geminiKeyHint: geminiKey.slice(-4) });
+    }
+  }
+  if (openaiKey !== undefined) {
+    if (!openaiKey) Object.assign(data, { openaiKeyEnc: null, openaiKeyHint: null });
+    else {
+      if (!/^sk-[A-Za-z0-9_-]{20,}$/.test(openaiKey)) return NextResponse.json({ error: "La clave de OpenAI no parece válida (empieza con sk-)" }, { status: 400 });
+      Object.assign(data, { openaiKeyEnc: encryptSecret(openaiKey), openaiKeyHint: openaiKey.slice(-4) });
     }
   }
   if (slackBotToken !== undefined) {

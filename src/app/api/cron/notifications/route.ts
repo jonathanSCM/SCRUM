@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { flushNotifications } from "@/lib/notifications";
 import { flushProjectFeeds } from "@/lib/notify";
 import { flushMeetingReminders } from "@/lib/meetings";
+import { processPendingTranscriptions } from "@/lib/transcribe";
 
 export const maxDuration = 60;
 
@@ -23,10 +24,11 @@ async function run(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const now = new Date();
   const [people, feeds, reminders] = await Promise.all([flushNotifications(now), flushProjectFeeds(now), flushMeetingReminders(now)]);
+  const transcribed = await processPendingTranscriptions();
   // Limpieza: leídos de más de 60 días y todo lo de más de 120 días.
   const cleaned = await prisma.notification.deleteMany({ where: { OR: [{ readAt: { lt: new Date(now.getTime() - 60 * 86400_000) } }, { createdAt: { lt: new Date(now.getTime() - 120 * 86400_000) } }], deliveredAt: { not: null } } }).catch(() => ({ count: 0 }));
   await prisma.projectFeedItem.deleteMany({ where: { sentAt: { lt: new Date(now.getTime() - 7 * 86400_000) } } }).catch(() => null);
-  return NextResponse.json({ ok: true, people, feeds, reminders, cleaned: cleaned.count });
+  return NextResponse.json({ ok: true, people, feeds, reminders, transcribed, cleaned: cleaned.count });
 }
 
 export const POST = run;

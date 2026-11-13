@@ -14,7 +14,7 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export type TokenOwner = { id: string; name: string; email: string; workspaceId: string | null; allowDelete: boolean };
+export type TokenOwner = { id: string; name: string; email: string; workspaceId: string | null; allowDelete: boolean; scope: string };
 
 const TOUCH_EVERY_MS = 60_000;
 const KEEP_LOGS = 200;
@@ -51,5 +51,5 @@ export async function resolveApiToken(token: string, route: string | null): Prom
     const first = await prisma.membership.findFirst({ where: { userId: row.userId }, orderBy: { createdAt: "asc" }, select: { workspaceId: true } });
     workspaceId = first?.workspaceId ?? null;
   }
-  return { id: row.user.id, name: row.user.name, email: row.user.email, workspaceId, allowDelete: row.allowDelete };
+  return { id: row.user.id, name: row.user.name, email: row.user.email, workspaceId, allowDelete: row.allowDelete, scope: row.scope };
 }

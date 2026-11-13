@@ -1215,6 +1215,103 @@ async function main() {
   check("quien no agendó ni lidera no puede borrarla (403)", (await cPlain.req("DELETE", `/api/meetings/${mtId}`)).status === 403);
   check("quien la agendó la borra", (await cAOwner.req("DELETE", `/api/meetings/${mtId}`)).status === 200 && (await prisma.meeting.count({ where: { id: mtId } })) === 0);
 
+  console.log("34) Extensión de Meet: token propio, subtítulos, audio y transcripción");
+  const nora = await mkUser("Nora Sin Acceso", `nora-${stamp}@a.test`);
+  await member(nora.id, A.ws.id, "MEMBER");
+  const cNora = await new Client("Nora (miembro A, no invitada)").login(nora.email);
+  const extAuth = await cAOwner.req("POST", "/api/extension/authorize");
+  const extTok = extAuth.json?.token;
+  check("quien tiene sesión conecta la extensión y recibe su token", extAuth.status === 200 && /^scrum_/.test(extTok ?? ""), `${extAuth.status}`);
+  const plainAuth = await cPlain.req("POST", "/api/extension/authorize");
+  const plainTok = plainAuth.json?.token;
+  const ext = (tok) => ({ req: async (method, path, body, headers = {}) => { const res = await fetch(`${BASE}${path}`, { method, headers: { Authorization: `Bearer ${tok}`, ...(body !== undefined && !(body instanceof Uint8Array) ? { "Content-Type": "application/json" } : {}), ...headers }, body: body === undefined ? undefined : body instanceof Uint8Array ? body : JSON.stringify(body) }); const text = await res.text(); let json = null; try { json = JSON.parse(text); } catch {} return { status: res.status, json, text }; } });
+  const eOwner = ext(extTok);
+  const ePlain = ext(plainTok);
+  const meMe = await eOwner.req("GET", "/api/extension/me");
+  check("la extensión sabe quién es y a qué equipos puede mandar", meMe.status === 200 && meMe.json.organizations.some((o) => o.id === A.ws.id) && !meMe.json.organizations.some((o) => o.id === B.ws.id), meMe.text.slice(0, 160));
+  check("un token inventado no entra (401)", (await ext("scrum_" + "0".repeat(48)).req("GET", "/api/extension/me")).status === 401);
+  // Un token IA no sirve en la extensión, y el de la extensión no abre el resto de la API.
+  const aiTok = await cAOwner.req("POST", "/api/tokens", { name: "IA de prueba 34" });
+  check("un token IA NO sirve en las rutas de la extensión (401)", (await ext(aiTok.json.token).req("GET", "/api/extension/me")).status === 401);
+  const extOnAi = await eOwner.req("GET", "/api/ai/projects");
+  check("el token de la extensión NO abre la API de IA ni el resto (no es 200)", extOnAi.status !== 200 && (await eOwner.req("GET", `/api/projects/${A.project.id}/export-json`)).status !== 200, `${extOnAi.status}`);
+  const extMeeting = await cAOwner.req("POST", "/api/meetings", { title: "Reunión con extensión", startsAt: new Date(Date.now() + 2 * 3600_000).toISOString(), everyone: false, userIds: [plain.id], meetUrl: "https://meet.google.com/abc-defg-hij" });
+  const exList = await ePlain.req("GET", "/api/extension/meetings/list?scope=upcoming");
+  check("la extensión lista las reuniones del calendario del equipo", exList.status === 200 && exList.json.meetings.some((m) => m.id === extMeeting.json.id && m.title === "Reunión con extensión"), exList.text.slice(0, 200));
+  check("un equipo que no es de la persona se rechaza (404)", (await ePlain.req("GET", `/api/extension/meetings/list?organizationId=${B.ws.id}`)).status === 404);
+  // Subtítulos: partes y cierre, ligados a la reunión del calendario por su id
+  const recId = `rec-${stamp}-ab12cd`;
+  const xt1 = await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "https://meet.google.com/abc-defg-hij", transcript: "Ana: hola a todos", recordingId: recId, final: false, start: true, meetingId: extMeeting.json.id, organizationId: A.ws.id });
+  const xt2 = await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "https://meet.google.com/abc-defg-hij", transcript: "Luis: empecemos", recordingId: recId, final: true, organizationId: A.ws.id });
+  const recRow = await prisma.meetingRecording.findFirst({ where: { externalId: recId } });
+  check("los subtítulos se guardan en la reunión elegida, en partes y con su cierre", xt1.status === 200 && xt2.status === 200 && recRow?.meetingId === extMeeting.json.id && recRow.captions === "Ana: hola a todos\nLuis: empecemos" && recRow.finalized && recRow.recordedById === plain.id, JSON.stringify(recRow));
+  check("sin audio, al cerrar queda lista", recRow.status === "DONE");
+  const hijack = await eOwner.req("POST", "/api/extension/transcript", { meetingUrl: "x", transcript: "robo", recordingId: recId, final: false, organizationId: A.ws.id });
+  check("otra persona no puede escribir en la grabación de alguien más (404)", hijack.status === 404 && (await prisma.meetingRecording.findFirst({ where: { externalId: recId } })).captions.includes("robo") === false);
+  // Reunión suelta: sin reunión elegida ni código conocido
+  const adhoc = await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "https://meet.google.com/zzz-yyyy-xxx", transcript: "Pablo: nota suelta", recordingId: `rec-${stamp}-suelta`, final: true, title: "Charla improvisada", organizationId: A.ws.id });
+  const adhocMeeting = await prisma.meeting.findUnique({ where: { id: adhoc.json.meetingId } });
+  check("sin reunión del calendario se crea una suelta, solo para quien grabó (y líderes)", adhoc.status === 200 && adhocMeeting.title === "Charla improvisada" && adhocMeeting.everyone === false && adhocMeeting.createdById === plain.id);
+  // Quién ve las transcripciones
+  const seeAdhocOwner = await cAOwner.req("GET", `/api/meetings/${adhoc.json.meetingId}/recordings`);
+  const seeAdhocAldo = await cNora.req("GET", `/api/meetings/${adhoc.json.meetingId}/recordings`);
+  check("un líder ve la grabación suelta y un miembro que no estuvo no (solo sabe que existe)", seeAdhocOwner.json.recordings.length === 1 && seeAdhocAldo.json.recordings.length === 0 && seeAdhocAldo.json.hidden === 1);
+  const seeInvitee = await cPlain.req("GET", `/api/meetings/${extMeeting.json.id}/recordings`);
+  check("los invitados ven la transcripción de su reunión", seeInvitee.json.recordings.length === 1 && seeInvitee.json.recordings[0].captions.includes("Luis: empecemos"));
+  check("otro equipo no ve nada (404)", (await cBOnly.req("GET", `/api/meetings/${extMeeting.json.id}/recordings`)).status === 404);
+  // Audio: se guarda, es idempotente y espera sin clave
+  const audio0 = new Uint8Array(Buffer.from("audio-falso-parte-0"));
+  const audioId = `rec-${stamp}-audio1`;
+  const hdr = (part) => ({ "X-Meeting-Url": "https://meet.google.com/abc-defg-hij", "X-Audio-Part": String(part), "X-Recording-Id": audioId, "X-Meeting-Id": extMeeting.json.id, "X-Organization-Id": A.ws.id, "X-Meeting-Title": encodeURIComponent("Reunión con extensión"), "Content-Type": "audio/webm" });
+  const a0 = await ePlain.req("POST", "/api/extension/audio", audio0, hdr(0));
+  const a0b = await ePlain.req("POST", "/api/extension/audio", audio0, hdr(0));
+  const audioRec = await prisma.meetingRecording.findFirst({ where: { externalId: audioId }, include: { parts: true } });
+  check("el audio se guarda por partes y repetir una parte no la duplica", a0.status === 200 && a0b.status === 200 && audioRec.parts.length === 1 && audioRec.meetingId === extMeeting.json.id, `${a0.status} ${a0.text.slice(0, 100)}`);
+  check("sin clave de OpenAI el audio espera en cola (no se pierde)", audioRec.status === "PENDING" && audioRec.parts[0].status === "PENDING" && audioRec.parts[0].data !== null);
+  check("una parte sin cuerpo se rechaza (400)", (await ePlain.req("POST", "/api/extension/audio", new Uint8Array(0), hdr(1))).status === 400);
+  check("una parte sin número se rechaza (400)", (await ePlain.req("POST", "/api/extension/audio", audio0, { ...hdr(0), "X-Audio-Part": "x" })).status === 400);
+  // Transcripción con un OpenAI simulado
+  if (process.env.OPENAI_BASE_URL) {
+    const seen = [];
+    const mockAi = http.createServer((req, res) => {
+      const chunks = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        seen.push({ auth: req.headers.authorization, url: req.url, size: Buffer.concat(chunks).length });
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ text: `Transcripción simulada ${seen.length}` }));
+      });
+    });
+    await new Promise((r) => mockAi.listen(Number(new URL(process.env.OPENAI_BASE_URL).port), r));
+    try {
+      const badKey = await cAOwner.req("PUT", "/api/workspaces/integrations", { openaiKey: "no-es-una-clave" });
+      check("una clave de OpenAI con mal formato se rechaza (400)", badKey.status === 400);
+      check("un miembro no puede guardar la clave de OpenAI (403)", (await cPlain.req("PUT", "/api/workspaces/integrations", { openaiKey: "sk-" + "a".repeat(30) })).status === 403);
+      const okKey = await cAOwner.req("PUT", "/api/workspaces/integrations", { openaiKey: "sk-prueba-" + "b".repeat(30) });
+      check("un líder guarda la clave de OpenAI del equipo (cifrada)", okKey.status === 200 && !!(await prisma.workspace.findUnique({ where: { id: A.ws.id } })).openaiKeyEnc && !(await prisma.workspace.findUnique({ where: { id: A.ws.id } })).openaiKeyEnc.includes("sk-prueba"));
+      const cronTx = await fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: { Authorization: "Bearer testcron" } }).then((r) => r.json());
+      await new Promise((r) => setTimeout(r, 600));
+      const doneRec = await prisma.meetingRecording.findFirst({ where: { externalId: audioId }, include: { parts: true } });
+      check("con la clave puesta, la cola se transcribe sola", cronTx.transcribed >= 0 && doneRec.parts[0].status === "DONE" && doneRec.parts[0].text.startsWith("Transcripción simulada"), JSON.stringify([cronTx, doneRec.parts[0].status]));
+      check("el audio se BORRA en cuanto se transcribe (queda solo el texto)", doneRec.parts[0].data === null);
+      check("se usó la clave del equipo, no otra", seen.length >= 1 && seen[0].auth === `Bearer sk-prueba-${"b".repeat(30)}` && seen[0].url.endsWith("/audio/transcriptions"));
+      await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "x", transcript: "", recordingId: audioId, final: true, organizationId: A.ws.id });
+      const a1 = await ePlain.req("POST", "/api/extension/audio", new Uint8Array(Buffer.from("audio-falso-parte-1")), hdr(1));
+      await new Promise((r) => setTimeout(r, 900));
+      const fin = await prisma.meetingRecording.findFirst({ where: { externalId: audioId }, include: { parts: { orderBy: { part: "asc" } } } });
+      check("al llegar otra parte con la clave puesta se transcribe de inmediato y la grabación queda lista con el texto en orden", a1.status === 200 && fin.status === "DONE" && fin.parts.every((p) => p.data === null) && fin.transcript.includes("Transcripción simulada 1") && fin.transcript.indexOf("simulada 1") < fin.transcript.indexOf("simulada 2"), JSON.stringify([fin.status, fin.transcript]));
+      const viewT = await cPlain.req("GET", `/api/meetings/${extMeeting.json.id}/recordings`);
+      check("los invitados ven la transcripción del audio y la clave está configurada", viewT.json.transcriptionConfigured === true && viewT.json.recordings.some((r) => r.transcript.includes("Transcripción simulada")));
+      check("quien no grabó ni lidera no puede borrar una grabación (403)", (await cNora.req("DELETE", `/api/meetings/${extMeeting.json.id}/recordings/${fin.id}`)).status === 403);
+      check("quien grabó la borra", (await cPlain.req("DELETE", `/api/meetings/${extMeeting.json.id}/recordings/${fin.id}`)).status === 200 && (await prisma.audioPart.count({ where: { recordingId: fin.id } })) === 0);
+    } finally {
+      mockAi.close();
+    }
+  } else {
+    console.log("  (omitido: el servidor de la prueba no tiene OPENAI_BASE_URL apuntando a un OpenAI simulado)");
+  }
+  check("desconectar la extensión revoca su token (después da 401)", (await cAOwner.req("DELETE", "/api/extension/authorize")).status === 200 && (await eOwner.req("GET", "/api/extension/me")).status === 401);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

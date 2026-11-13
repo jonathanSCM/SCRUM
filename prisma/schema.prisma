@@ -566,6 +566,7 @@ model ApiToken {
   allowDelete Boolean   @default(false) // opcional: permite borrar tickets, notas y comentarios
   name        String    @default("Token") // nombre que le pone su dueño (ej. "Claude", "ChatGPT")
   tokenEnc    String? // el token cifrado, para poder volver a copiarlo (los anteriores a este cambio no lo tienen)
+  scope       String    @default("AI") // AI (asistentes) | EXTENSION (extensión de Chrome para Meet: solo sube reuniones)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -612,6 +613,8 @@ model Workspace {
   // Integraciones del equipo. Las claves se guardan cifradas (AES-256-GCM); el "hint" son los últimos 4 caracteres.
   geminiKeyEnc  String?
   geminiKeyHint String?
+  openaiKeyEnc  String? // transcripción de reuniones (OpenAI)
+  openaiKeyHint String?
   slackBotEnc   String?
   slackBotHint  String?
   // Webhook de Slack del equipo (para /noti y avisos generales, independiente del de cada proyecto).
@@ -928,9 +931,10 @@ model AudioPart {
   mimeType    String   @default("audio/webm")
   size        Int
   data        Bytes?
-  status      String   @default("PENDING") // PENDING | DONE | FAILED
+  status      String   @default("PENDING") // PENDING | WORKING | DONE | FAILED
   text        String   @default("")
   attempts    Int      @default(0)
+  workedAt    DateTime? // desde cuándo se está transcribiendo (para recuperar las que se quedaron a medias)
   createdAt   DateTime @default(now())
 
   recordingId String
