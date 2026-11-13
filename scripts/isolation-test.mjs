@@ -1207,7 +1207,14 @@ async function main() {
   const limaTomorrow = (() => { const p = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(Date.now() + 86400000)); return p; })();
   check("la hora se interpreta en la zona de quien la escribe (Lima 10:30 = 15:30 UTC)", cmdRow.title === "revisión con el cliente" && cmdRow.startsAt.toISOString() === `${limaTomorrow}T15:30:00.000Z`, cmdRow.startsAt.toISOString());
   const cmdBad = await cAOwner.req("POST", "/api/chat/command", { body: "/reunion cuando se pueda: algo" });
-  check("si no entiende la fecha avisa igual, pero dice que no entró al calendario", cmdBad.status === 200 && !cmdBad.json.meetingId && cmdBad.json.summary.includes("NO se agregó al calendario"), cmdBad.text.slice(0, 200));
+  check("si no entiende la fecha da error con ejemplos y NO manda nada a medias", cmdBad.status === 400 && /No entendí la fecha|Uso: \/reunion/.test(cmdBad.json.error) && (await prisma.chatMessage.count({ where: { workspaceId: A.ws.id, body: { contains: "cuando se pueda" } } })) === 0, cmdBad.text.slice(0, 200));
+  const cmdNoColon = await cAOwner.req("POST", "/api/chat/command", { body: "/reunion mañana 10:30 revisión sin dos puntos" });
+  check("sin ': ' después de la hora también agenda (antes se cortaba la hora)", cmdNoColon.status === 200 && !!cmdNoColon.json.meetingId && (await prisma.meeting.findUnique({ where: { id: cmdNoColon.json.meetingId } })).title === "revisión sin dos puntos", cmdNoColon.text.slice(0, 200));
+  const cmdTarde = await cAOwner.req("POST", "/api/chat/command", { body: "/reunion pasado mañana a las 3 de la tarde: sesión de la tarde" });
+  const tardeRow = cmdTarde.json?.meetingId ? await prisma.meeting.findUnique({ where: { id: cmdTarde.json.meetingId } }) : null;
+  check("«3 de la tarde» es 15:00 (en la zona de quien escribe)", !!tardeRow && new Intl.DateTimeFormat("en-GB", { timeZone: "America/Lima", hour: "2-digit", minute: "2-digit", hour12: false }).format(tardeRow.startsAt) === "15:00", tardeRow?.startsAt.toISOString());
+  const cmdTz = await cPlain.req("POST", "/api/chat/command", { body: "/ayuda ya no tengo zona", tz: "Europe/Madrid" });
+  void cmdTz;
   const btnMeet = await cAOwner.req("POST", "/api/chat/command", { notice: { to: "reunion", level: "normal", topic: "Demo desde el botón", startsAt: new Date(Date.now() + 26 * 3600_000).toISOString(), durationMin: 30 } });
   check("el botón Avisar → Reunión (con calendario) también agenda", btnMeet.status === 200 && !!btnMeet.json.meetingId && (await prisma.meeting.findUnique({ where: { id: btnMeet.json.meetingId } })).endsAt.getTime() - (await prisma.meeting.findUnique({ where: { id: btnMeet.json.meetingId } })).startsAt.getTime() === 30 * 60000);
   const mtCancel = await cAOwner.req("PATCH", `/api/meetings/${mtId}`, { canceled: true });

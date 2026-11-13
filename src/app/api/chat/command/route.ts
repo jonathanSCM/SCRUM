@@ -10,7 +10,7 @@ import { plainText } from "@/lib/scrum/chat";
 import { refRowsFor } from "@/lib/chatData";
 import { createMeeting, inviteesOf, whenLabel, zonesOf } from "@/lib/meetings";
 import { parseWhen } from "@/lib/scrum/meetingWhen";
-import { DEFAULT_TZ } from "@/lib/scrum/countries";
+import { DEFAULT_TZ, isValidTimeZone } from "@/lib/scrum/countries";
 import { notifyUsers } from "@/lib/notifications";
 import type { NoticeKind } from "@/lib/scrum/notifPolicy";
 import { sendToSlackWebhook } from "@/lib/slack";
@@ -27,9 +27,10 @@ export async function POST(req: Request) {
   const level = z.enum(["normal", "urgente", "ayuda"]).default("normal");
   const parsed = parseBody(
     z.union([
-      z.object({ body: z.string().trim().min(1).max(4000), channelId: z.string().min(1).max(40).optional() }),
+      z.object({ body: z.string().trim().min(1).max(4000), channelId: z.string().min(1).max(40).optional(), tz: z.string().max(60).optional() }),
       z.object({
         channelId: z.string().min(1).max(40).optional(),
+        tz: z.string().max(60).optional(),
         notice: z.discriminatedUnion("to", [
           z.object({ to: z.literal("general"), level, message: z.string().trim().min(1, "Escribe el mensaje").max(1000) }),
           z.object({ to: z.literal("personas"), level, message: z.string().trim().min(1, "Escribe el mensaje").max(1000), userIds: z.array(z.string().min(1).max(40)).min(1, "Elige a quién avisar").max(20) }),
@@ -80,14 +81,13 @@ export async function POST(req: Request) {
     const slackIds = async (ids: string[]) => (await prisma.user.findMany({ where: { id: { in: ids } }, select: { slackUserId: true } })).map((u) => u.slackUserId).filter((x): x is string => !!x);
 
     // Texto con menciones → texto plano (con el nombre de cada tarjeta, proyecto…) para avisos, Slack y teléfono.
-    const refInfo = await refRowsFor(c.kind === "reunion" ? c.topic : c.message, workspaceId);
+    const refInfo = await refRowsFor(c.kind === "reunion" ? c.topic : c.message, workspaceId); // reunión: se usa para el tema
     const plain = (t: string) => plainText(t, (r) => refInfo.resolved.get(`${r.kind.toUpperCase()}:${r.id}`)?.label ?? "");
     const level = c.level;
     const tag = level === "urgente" ? "URGENTE" : level === "ayuda" ? "AYUDA" : "";
     const withTag = (t: string) => (tag ? `${tag} · ${t}` : t);
     // Urgente avisa a todo el canal de Slack con @channel.
     const slackText = (t: string) => (level === "urgente" ? `<!channel> ${t}` : t);
-    let unparsedWhen = false;
     let chatText: string | null = null;
     let title = "";
     let text = "";
@@ -97,7 +97,10 @@ export async function POST(req: Request) {
 
     // Reunión: se registra en el calendario (con la hora de quien la agenda, convertida a UTC) y se anuncia en el chat.
     if (c.kind === "reunion") {
-      const myZone = (await zonesOf([me.id])).get(me.id) ?? DEFAULT_TZ;
+      // La hora se interpreta en la zona de quien escribe: la de su perfil, o la de su navegador si no eligió país.
+      const profileZone = (await prisma.user.findUnique({ where: { id: me.id }, select: { timezone: true } }))?.timezone;
+      const sent = parsed.data.tz && isValidTimeZone(parsed.data.tz) ? parsed.data.tz : null;
+      const myZone = profileZone && isValidTimeZone(profileZone) ? profileZone : sent ?? (await zonesOf([me.id])).get(me.id) ?? DEFAULT_TZ;
       const startsAt = exact?.startsAt ?? parseWhen(c.when, myZone);
       if (startsAt) {
         const meeting = await createMeeting({
@@ -113,7 +116,8 @@ export async function POST(req: Request) {
         if (webhook) await sendToSlackWebhook(webhook, { title: withTag(`Reunión · ${whenLabel(startsAt, myZone)}`), description: slackText(`${c.topic} (convoca ${me.name})`) });
         return NextResponse.json({ ok: true, meetingId: meeting.id, summary: `Reunión agendada en el calendario: ${whenLabel(startsAt, myZone)} · avisé a ${inv.length} ${inv.length === 1 ? "persona" : "personas"}${webhook ? " · enviado a Slack" : ""}` });
       }
-      unparsedWhen = true; // no se entendió la fecha: se avisa como antes, pero sin calendario
+      // No se entendió la fecha: no se manda nada a medias (un aviso sin reunión en el calendario confunde a todos).
+      return NextResponse.json({ error: `No entendí la fecha «${c.when}». Escribe, por ejemplo: /reunion mañana 10:30: revisión del sprint · /reunion viernes 3pm: retro · /reunion 20/11 9:00: planificación. O usa el botón Avisar → Reunión.` }, { status: 400 });
     }
 
     if (c.kind === "persona") {
@@ -141,15 +145,10 @@ export async function POST(req: Request) {
         await sendToSlackWebhook(webhook, { title: withTag(`${me.name} (${ws?.name ?? "equipo"})`), description: slackText(plain(c.message)) });
         return NextResponse.json({ ok: true, summary: "Mensaje enviado al canal de Slack del equipo" });
       }
-      if (c.kind === "general") {
-        title = withTag(`${ws?.name ?? "Equipo"}: aviso de ${me.name}`);
-        text = plain(c.message);
-        chatText = c.message;
-      } else {
-        title = withTag(`Reunión · ${c.when}`);
-        text = `${plain(c.topic)} (convoca ${me.name})`;
-        chatText = `Reunión · ${c.when}: ${c.topic}`;
-      }
+      // (Las reuniones salen antes, por createMeeting: acá solo llegan los avisos generales.)
+      title = withTag(`${ws?.name ?? "Equipo"}: aviso de ${me.name}`);
+      text = plain(c.message);
+      chatText = c.message;
       label = "todo el equipo";
       toSlack = !!webhook;
       if (webhook) await sendToSlackWebhook(webhook, { title, description: slackText(text) });
@@ -163,9 +162,9 @@ export async function POST(req: Request) {
     let postedIn = "";
     if (chatText) {
       const channels = await ensureChannels(workspaceId, me.id);
-      const fallback = channels.find((ch) => ch.kind === (c.kind === "reunion" ? "REUNIONES" : "GENERAL"));
+      const fallback = channels.find((ch) => ch.kind === "GENERAL");
       const asked = parsed.data.channelId ? channels.find((ch) => ch.id === parsed.data.channelId) : undefined;
-      const open = asked && ["GENERAL", "CUSTOM", "PROJECT", "REUNIONES"].includes(asked.kind) && (c.kind !== "reunion" || asked.kind === "REUNIONES") ? asked : undefined;
+      const open = asked && ["GENERAL", "CUSTOM", "PROJECT", "REUNIONES"].includes(asked.kind) ? asked : undefined;
       const target = open ?? fallback;
       const channelId = target?.id;
       postedIn = target?.name ?? "";
@@ -173,10 +172,10 @@ export async function POST(req: Request) {
       await prisma.chatMessage.create({ data: { body: chatText, workspaceId, authorId: me.id, channelId, announce: true, level: level === "normal" ? null : level.toUpperCase(), refs: { create: refInfo.rows } } });
     }
     // Todos estos avisos son instantáneos (no esperan el resumen): persona, general, urgente, ayuda y reunión.
-    const noticeKind: NoticeKind = level === "urgente" ? "URGENT" : level === "ayuda" ? "HELP" : c.kind === "persona" ? "DIRECT" : c.kind === "reunion" ? "REUNION" : "ANNOUNCE";
-    const priority = level === "urgente" ? "urgent" : level === "ayuda" || c.kind === "reunion" ? "high" : "default";
+    const noticeKind: NoticeKind = level === "urgente" ? "URGENT" : level === "ayuda" ? "HELP" : c.kind === "persona" ? "DIRECT" : "ANNOUNCE";
+    const priority = level === "urgente" ? "urgent" : level === "ayuda" ? "high" : "default";
     const notified = await notifyUsers(targets, { kind: noticeKind, title, body: text.slice(0, 160), url: chatUrl, priority, workspaceId });
-    return NextResponse.json({ ok: true, summary: `Aviso a ${label}${notified ? ` · ${notified} ${notified === 1 ? "persona" : "personas"} (bandeja, navegador y teléfono)` : ""}${toSlack ? " · enviado a Slack" : ""}${postedIn ? ` · publicado en ${postedIn}` : ""}${unparsedWhen ? " · NO se agregó al calendario: no entendí la fecha (usa el botón Avisar → Reunión o escribe, por ejemplo, «mañana 10:30»)" : ""}` });
+    return NextResponse.json({ ok: true, summary: `Aviso a ${label}${notified ? ` · ${notified} ${notified === 1 ? "persona" : "personas"} (bandeja, navegador y teléfono)` : ""}${toSlack ? " · enviado a Slack" : ""}${postedIn ? ` · publicado en ${postedIn}` : ""}` });
   } catch (e) {
     return errorResponse(e);
   }

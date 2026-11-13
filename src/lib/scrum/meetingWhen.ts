@@ -16,8 +16,32 @@ const addDays = ({ y, m, d }: Ymd, n: number): Ymd => {
 const dow = ({ y, m, d }: Ymd) => new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 const cmp = (a: Ymd, b: Ymd) => a.y - b.y || a.m - b.m || a.d - b.d;
 
-function parseTime(t: string): { h: number; mi: number; rest: string } | null {
+const PERIOD = "(manana|tarde|noche|madrugada)";
+
+// "de la tarde / de la noche" suman 12 horas ("3 de la tarde" = 15:00); "12 de la mañana" es medianoche (00:00 en madrugada).
+function withPeriod(h: number, period: string | null): number {
+  if (!period) return h;
+  if ((period === "tarde" || period === "noche") && h < 12) return h + 12;
+  if ((period === "manana" || period === "madrugada") && h === 12) return 0;
+  return h;
+}
+
+function parseTime(t: string, period: string | null = null): { h: number; mi: number; rest: string } | null {
   let m: RegExpMatchArray | null;
+  // 10h30, 10 h 30
+  if ((m = t.match(/\b(\d{1,2})\s*h\s*(\d{2})\b/))) {
+    const h = withPeriod(Number(m[1]), period);
+    const mi = Number(m[2]);
+    if (h > 23 || mi > 59) return null;
+    return { h, mi, rest: t.replace(m[0], " ") };
+  }
+  // "3 de la tarde", "10:30 de la noche": la hora va pegada al momento del día (ya se quitó de `t`, llega en `period`)
+  if (period && (m = t.match(/(?:a las |a la |las |la )?\b(\d{1,2})(?::(\d{2}))?\b(?!\s*(?:\/|-|de\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)))/))) {
+    const h = withPeriod(Number(m[1]), period);
+    const mi = m[2] ? Number(m[2]) : 0;
+    if (h > 23 || mi > 59 || Number(m[1]) > 12 && period !== "madrugada") return null;
+    return { h, mi, rest: t.replace(m[0], " ") };
+  }
   // 10:30, 10:30 am, 3:15pm
   if ((m = t.match(/(?:a las |a la |las |la )?\b(\d{1,2}):(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?/))) {
     let h = Number(m[1]);
@@ -54,11 +78,33 @@ function parseTime(t: string): { h: number; mi: number; rest: string } | null {
 }
 
 export function parseWhen(text: string, tz: string, now: Date = new Date()): Date | null {
-  const t0 = norm(text);
+  let t0 = norm(text);
   if (!t0) return null;
-  const time = parseTime(t0);
+  // "en 2 horas", "en 30 minutos", "en 3 dias": desde ahora
+  const rel = t0.match(/^en (\d{1,3}) (minutos?|min|horas?|hs?|dias?)$/);
+  if (rel) {
+    const n = Number(rel[1]);
+    const ms = /^min/.test(rel[2]) ? 60_000 : /^d/.test(rel[2]) ? 86_400_000 : 3_600_000;
+    return new Date(now.getTime() + n * ms);
+  }
+  // "esta tarde / esta noche / esta mañana" = hoy; "de la mañana / de la tarde / por la noche" dicen la parte del día.
+  let period: string | null = null;
+  let today_ = false;
+  const est = t0.match(new RegExp(`\\besta ${PERIOD}\\b`));
+  if (est) {
+    period = est[1];
+    today_ = true;
+    t0 = t0.replace(est[0], " ");
+  }
+  const per = t0.match(new RegExp(`\\b(?:de|por|en) la ${PERIOD}\\b`));
+  if (per) {
+    period = per[1];
+    t0 = t0.replace(per[0], " ");
+  }
+  const time = parseTime(t0, period);
   if (!time) return null;
   let rest = time.rest;
+  const isTodayWord = today_;
   const p = zonedParts(now, tz);
   const today: Ymd = { y: p.year, m: p.month, d: p.day };
   const nowMin = p.hour * 60 + p.minute;
@@ -79,6 +125,7 @@ export function parseWhen(text: string, tz: string, now: Date = new Date()): Dat
   } else if (/\bpasado manana\b/.test(rest)) day = addDays(today, 2);
   else if (/\bmanana\b/.test(rest)) day = addDays(today, 1);
   else if (/\bhoy\b/.test(rest)) day = today;
+  else if (isTodayWord) day = today;
   else {
     const wd = WEEKDAYS.findIndex((w) => new RegExp(`\\b${w}\\b`).test(rest));
     if (wd >= 0) {
