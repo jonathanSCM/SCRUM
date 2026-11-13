@@ -72,6 +72,8 @@ export function toCardDTO(c: CardRow): CardDTO {
 // Tarjetas automáticas: una por proyecto que tenga archivos o enlaces en su pestaña Archivos. No duplican nada: se arman
 // al leer, así que siempre están al día.
 export const AUTO_PREFIX = "project:";
+// En el chat las tarjetas se citan como [[card:<id>]] (solo letras y números): la automática de un proyecto es "auto<idDelProyecto>".
+export const CHAT_AUTO_PREFIX = "auto";
 export async function projectCards(workspaceId: string): Promise<CardDTO[]> {
   const rows = await prisma.projectResource.findMany({
     where: { project: { workspaceId } },

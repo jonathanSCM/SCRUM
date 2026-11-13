@@ -1414,6 +1414,20 @@ async function main() {
   const actB = await (await act(cBOwner)).text();
   check("el dueño de otro equipo no ve a las personas de A", !actB.includes("Pablo Plano"));
 
+  // Archivos de un proyecto (pestaña Archivos) se pueden citar en el chat como cualquier tarjeta de la Biblioteca
+  await prisma.projectResource.create({ data: { kind: "LINK", title: "Brief del cliente", url: "https://example.com/brief", projectId: A.project.id } });
+  const autoId = `auto${A.project.id}`;
+  const ixAuto = await cPlain.req("GET", "/api/chat/index");
+  const autoItem = ixAuto.json.cards?.find((c) => c.id === autoId);
+  check("el índice del chat ofrece la tarjeta de los archivos de un proyecto", !!autoItem && autoItem.label === "Archivos de Proyecto A" && /Archivos del proyecto/.test(autoItem.sub), JSON.stringify(ixAuto.json.cards?.slice(0, 3)));
+  const ixAutoB = await cBOwner.req("GET", "/api/chat/index");
+  check("y no aparece en el índice de otro equipo", !ixAutoB.json.cards?.some((c) => c.id === autoId));
+  const autoMsg = await cPlain.req("POST", "/api/chat/messages", { body: `revisen [[card:${autoId}]]` });
+  const autoRef = (autoMsg.json?.refs ?? []).find((r) => r.id === autoId);
+  check("se cita en el chat y lleva a la tarjeta automática de la Biblioteca", autoMsg.status === 201 && autoRef?.kind === "card" && autoRef.label === "Archivos de Proyecto A" && autoRef.href === `/library?tarjeta=project:${A.project.id}` && !autoRef.missing, JSON.stringify(autoMsg.json?.refs));
+  const autoMsgB = await cBOwner.req("POST", "/api/chat/messages", { body: `ajena [[card:${autoId}]]` });
+  check("otro equipo no puede citarla (no se guarda la referencia)", (await prisma.chatRef.count({ where: { messageId: autoMsgB.json?.id, targetId: autoId } })) === 0);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

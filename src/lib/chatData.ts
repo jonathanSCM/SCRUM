@@ -3,6 +3,7 @@ import { messageVisibleTo } from "@/lib/chatChannels";
 import { prisma } from "@/lib/prisma";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { categoryLabel } from "@/lib/scrum/library";
+import { CHAT_AUTO_PREFIX } from "@/lib/libraryData";
 import { parseRefs, snippetOf, type RefKind } from "@/lib/scrum/chat";
 
 // Lectura y armado de los mensajes del chat general, con las referencias
@@ -52,7 +53,14 @@ export async function resolveRefs(refs: Array<{ kind: string; targetId: string }
     prisma.meeting.findMany({ where: { id: { in: ids("MEETING") }, workspaceId }, select: { id: true, title: true, startsAt: true, status: true } }),
   ]);
 
+  // Tarjetas automáticas de proyecto ("auto<idDelProyecto>"): los archivos de la pestaña Archivos de un proyecto.
+  const autoProjectIds = ids("CARD").filter((id) => id.startsWith(CHAT_AUTO_PREFIX)).map((id) => id.slice(CHAT_AUTO_PREFIX.length));
+  const autoCards = autoProjectIds.length
+    ? await prisma.project.findMany({ where: { id: { in: autoProjectIds }, workspaceId, resources: { some: {} } }, select: { id: true, name: true, _count: { select: { resources: true } } } })
+    : [];
+
   const out = new Map<string, ResolvedRef>();
+  for (const a of autoCards) out.set(`CARD:${CHAT_AUTO_PREFIX}${a.id}`, { kind: "card", id: `${CHAT_AUTO_PREFIX}${a.id}`, label: `Archivos de ${a.name}`, sub: `Archivos del proyecto · ${a._count.resources} ${a._count.resources === 1 ? "archivo" : "archivos"}`, href: `/library?tarjeta=project:${a.id}`, missing: false });
   for (const p of projects) out.set(`PROJECT:${p.id}`, { kind: "project", id: p.id, label: p.name, sub: p.key, href: `/projects/${p.id}/board`, missing: false });
   for (const i of issues) {
     const key = formatIssueKey(i.project.key, i.number);

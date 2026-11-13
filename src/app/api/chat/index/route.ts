@@ -5,6 +5,7 @@ import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { categoryLabel } from "@/lib/scrum/library";
+import { CHAT_AUTO_PREFIX } from "@/lib/libraryData";
 
 // Índice liviano para el autocompletado de # y @ (se pide una vez y se filtra en el navegador).
 export async function GET(req: Request) {
@@ -14,7 +15,19 @@ export async function GET(req: Request) {
     const workspaceId = auth.user.workspaceId!;
 
     // ?project=<id>: solo los sprints y tickets de ese proyecto (segundo nivel del autocompletado).
-    const cardsOf = async () => (await prisma.fileCard.findMany({ where: { workspaceId }, select: { id: true, title: true, category: true }, orderBy: { updatedAt: "desc" }, take: 300 })).map((c) => ({ id: c.id, label: c.title, sub: categoryLabel(c.category) }));
+    // Tarjetas de la Biblioteca: las del equipo y, además, la automática de cada proyecto que tiene archivos en su pestaña Archivos.
+    const cardsOf = async () => {
+      const [rows, perProject] = await Promise.all([
+        prisma.fileCard.findMany({ where: { workspaceId }, select: { id: true, title: true, category: true }, orderBy: { updatedAt: "desc" }, take: 300 }),
+        prisma.projectResource.groupBy({ by: ["projectId"], where: { project: { workspaceId } }, _count: { _all: true }, _max: { createdAt: true } }),
+      ]);
+      const names = new Map((await prisma.project.findMany({ where: { id: { in: perProject.map((p) => p.projectId) } }, select: { id: true, name: true } })).map((p) => [p.id, p.name]));
+      const auto = perProject
+        .filter((p) => names.has(p.projectId))
+        .sort((a, b) => (b._max.createdAt?.getTime() ?? 0) - (a._max.createdAt?.getTime() ?? 0))
+        .map((p) => ({ id: `${CHAT_AUTO_PREFIX}${p.projectId}`, label: `Archivos de ${names.get(p.projectId)}`, sub: `Archivos del proyecto · ${p._count._all}` }));
+      return [...rows.map((c) => ({ id: c.id, label: c.title, sub: categoryLabel(c.category) })), ...auto];
+    };
     const only = new URL(req.url).searchParams.get("project");
     if (only) {
       const project = await prisma.project.findFirst({ where: { id: only, workspaceId }, select: { id: true, name: true, key: true } });
