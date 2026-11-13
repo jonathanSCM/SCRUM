@@ -4,7 +4,7 @@ import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
 import { canViewRecordings } from "@/lib/recordings";
 
-export const MEETING_FILE_MAX_BYTES = 20 * 1024 * 1024;
+const MEETING_FILE_MAX_BYTES = 20 * 1024 * 1024;
 const MAX_FILES = 25;
 
 async function meetingFor(id: string) {

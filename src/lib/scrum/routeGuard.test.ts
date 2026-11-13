@@ -55,3 +55,19 @@ describe("guardia de aislamiento entre equipos", () => {
     });
   }
 });
+
+// Next.js solo admite exportar los métodos HTTP y unas pocas opciones desde un route.ts: cualquier otro export hace fallar
+// la compilación de producción ("is not a valid Route export field"), aunque `tsc` y las pruebas pasen.
+describe("route.ts solo exporta lo que Next.js permite", () => {
+  const ALLOWED = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "dynamic", "dynamicParams", "revalidate", "fetchCache", "runtime", "preferredRegion", "maxDuration"]);
+  for (const file of routes(ROOT)) {
+    const rel = relative(ROOT, file).replace(/\\/g, "/");
+    it(`/api/${rel}`, () => {
+      const src = readFileSync(file, "utf8");
+      const names = [...src.matchAll(/^export\s+(?:async\s+)?(?:function|const|let|var|class)\s+(\w+)/gm)].map((m) => m[1]);
+      const braces = [...src.matchAll(/^export\s*\{([^}]*)\}/gm)].flatMap((m) => m[1].split(",").map((x) => (x.split(/\s+as\s+/).pop() ?? "").trim()).filter(Boolean));
+      const bad = [...names, ...braces].filter((n) => !ALLOWED.has(n));
+      expect(bad, "exports no permitidos en un route.ts (muévelos a src/lib)").toEqual([]);
+    });
+  }
+});
