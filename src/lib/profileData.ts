@@ -38,10 +38,10 @@ export async function getProfile(userId: string, workspaceId: string) {
     prisma.comment.count({ where: { authorId: userId, task: inWs, createdAt: { gte: prevSince, lt: since } } }),
     prisma.note.count({ where: { authorId: userId, ...inWs, createdAt: { gte: since } } }),
     prisma.note.count({ where: { authorId: userId, ...inWs, createdAt: { gte: prevSince, lt: since } } }),
-    prisma.standupEntry.count({ where: { userId, ...inWs, date: { gte: sinceDay } } }),
-    prisma.standupEntry.count({ where: { userId, ...inWs, date: { gte: prevSinceDay, lt: sinceDay } } }),
+    prisma.standupEntry.count({ where: { userId, workspaceId, date: { gte: sinceDay } } }),
+    prisma.standupEntry.count({ where: { userId, workspaceId, date: { gte: prevSinceDay, lt: sinceDay } } }),
     prisma.task.findMany({
-      where: { ...mine, status: { in: ["IN_PROGRESS", "IN_REVIEW"] } },
+      where: { ...mine, status: { in: ["IN_PROGRESS", "BLOCKED", "IN_REVIEW"] } },
       orderBy: { updatedAt: "desc" },
       take: 6,
       select: { number: true, title: true, status: true, projectId: true, project: { select: { key: true } } },

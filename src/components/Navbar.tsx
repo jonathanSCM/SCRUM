@@ -17,6 +17,7 @@ const LINKS = [
   { href: "/home", label: "Inicio" },
   { href: "/projects", label: "Proyectos" },
   { href: "/my-work", label: "Mi trabajo" },
+  { href: "/daily", label: "Daily" },
   { href: "/chat", label: "Chat" },
   { href: "/calendar", label: "Calendario" },
   { href: "/library", label: "Biblioteca" },
@@ -25,7 +26,8 @@ const LINKS = [
 
 export default function Navbar({ userName, userId, isLead, teams, activeId, canCreate, maxOwned, projects }: { userName: string; userId: string; isLead: boolean; teams: TeamOption[]; activeId: string; canCreate: boolean; maxOwned: number; projects: Array<{ id: string; name: string; key: string | null }> }) {
   const pathname = usePathname();
-  const links = LINKS;
+  const isOwner = teams.find((t) => t.id === activeId)?.role === "OWNER";
+  const links = isOwner ? [...LINKS, { href: "/activity", label: "Actividad" }] : LINKS; // la actividad del equipo la ve solo el dueño
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 

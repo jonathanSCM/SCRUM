@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/lib/client";
 import { cn, timeAgo } from "@/lib/ui";
@@ -8,9 +9,6 @@ import {
   PLANNING_TEMPLATE,
   REVIEW_TEMPLATE,
   RETRO_COLUMN_META,
-  localDateString,
-  missingStandups,
-  shiftDate,
   type RetroColumn,
   type ReviewSummary,
 } from "@/lib/scrum/ceremonies";
@@ -38,7 +36,6 @@ type Props = {
 };
 
 const TABS = [
-  { id: "daily", label: "Daily" },
   { id: "planning", label: "Planning" },
   { id: "review", label: "Review" },
   { id: "retro", label: "Retro" },
@@ -47,13 +44,14 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export default function CeremoniesView(props: Props) {
-  const [tab, setTab] = useState<TabId>(TABS.some((t) => t.id === props.initialTab) ? (props.initialTab as TabId) : "daily");
+  const [tab, setTab] = useState<TabId>(TABS.some((t) => t.id === props.initialTab) ? (props.initialTab as TabId) : "planning");
   const router = useRouter();
   const pathname = usePathname();
   const needsSprint = tab === "review" || tab === "retro";
 
   return (
     <div className="space-y-4">
+      <p className="text-xs text-ink-faint">El daily ahora es general del equipo: está en <Link href="/daily" className="font-semibold text-rust hover:underline">Daily</Link>.</p>
       <div className="flex flex-wrap items-center gap-2">
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} className={cn("btn-ghost btn-sm", tab === t.id && "border-rust bg-card-2 text-rust")}>
@@ -74,7 +72,6 @@ export default function CeremoniesView(props: Props) {
         )}
       </div>
 
-      {tab === "daily" && <DailyPanel projectId={props.projectId} currentUserId={props.currentUserId} />}
       {tab === "planning" && <ActasPanel projectId={props.projectId} kind="PLANNING" actas={props.actas} template={PLANNING_TEMPLATE} hint="Antes de empezar: objetivo, capacidad y tickets comprometidos. Revisá la Definition of Ready desde el Backlog." />}
       {tab === "review" && (
         <>
@@ -84,99 +81,6 @@ export default function CeremoniesView(props: Props) {
       )}
       {tab === "retro" && <RetroPanel {...props} />}
       {tab === "contacts" && <ContactsPanel projectId={props.projectId} contacts={props.contacts} />}
-    </div>
-  );
-}
-
-// ---------------- Daily ----------------
-
-type StandupEntry = { id: string; date: string; yesterday: string; today: string; blockers: string; help: string; user: { id: string; name: string } };
-
-function DailyPanel({ projectId, currentUserId }: { projectId: string; currentUserId: string }) {
-  const toast = useToast();
-  const [date, setDate] = useState(localDateString());
-  const [entries, setEntries] = useState<StandupEntry[] | null>(null);
-  const [members, setMembers] = useState<Array<{ id: string; name: string }>>([]);
-  const [form, setForm] = useState({ yesterday: "", today: "", blockers: "", help: "" });
-  const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    const res = await api<{ entries: StandupEntry[]; members: Array<{ id: string; name: string }> }>(`/api/projects/${projectId}/standup?date=${date}`);
-    if (!res.ok) return toast.error(res.error);
-    setEntries(res.data.entries);
-    setMembers(res.data.members);
-    const mine = res.data.entries.find((e) => e.user.id === currentUserId);
-    setForm(mine ? { yesterday: mine.yesterday, today: mine.today, blockers: mine.blockers, help: mine.help } : { yesterday: "", today: "", blockers: "", help: "" });
-  }, [projectId, date, currentUserId, toast]);
-
-  useEffect(() => {
-    setEntries(null);
-    load();
-  }, [load]);
-
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    const res = await api(`/api/projects/${projectId}/standup`, "POST", { date, ...form });
-    setSaving(false);
-    if (!res.ok) return toast.error(res.error);
-    toast.success("Daily guardado");
-    load();
-  }
-
-  const missing = entries ? missingStandups(members, entries.map((x) => x.user.id)) : [];
-  const fields: Array<[keyof typeof form, string]> = [
-    ["yesterday", "¿Qué hice ayer?"],
-    ["today", "¿Qué voy a hacer hoy?"],
-    ["blockers", "¿Algo me bloquea?"],
-    ["help", "¿En qué te puedo ayudar?"],
-  ];
-
-  return (
-    <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
-      <form onSubmit={save} className="space-y-3 self-start border border-line bg-card p-4 rounded-lg">
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn-ghost btn-sm" onClick={() => setDate(shiftDate(date, -1))} aria-label="Día anterior">←</button>
-          <input type="date" className="field-sm min-w-0 flex-1" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
-          <button type="button" className="btn-ghost btn-sm" onClick={() => setDate(shiftDate(date, 1))} aria-label="Día siguiente">→</button>
-        </div>
-        <h2 className="font-display text-base font-extrabold text-ink">Mi daily</h2>
-        {fields.map(([key, label]) => (
-          <div key={key}>
-            <label className="mb-1 block text-xs font-semibold text-ink-soft">{label}</label>
-            <textarea className="field" rows={2} maxLength={2000} value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-          </div>
-        ))}
-        <button className="btn-primary w-full" disabled={saving}>{saving ? "Guardando…" : "Guardar mi daily"}</button>
-      </form>
-
-      <div className="space-y-3">
-        {entries === null ? (
-          <div className="skeleton h-32 w-full" />
-        ) : entries.length === 0 ? (
-          <EmptyState title="Nadie dejó su daily este día" hint="El daily es asíncrono: cada persona lo completa cuando puede. Todo el equipo ve las respuestas acá." />
-        ) : (
-          entries.map((en) => (
-            <article key={en.id} className="border border-line bg-card rounded-lg">
-              <header className="flex items-center gap-2 border-b border-line-strong bg-card-2 px-3 py-2">
-                <Avatar name={en.user.name} userId={en.user.id} size={22} />
-                <b className="text-sm text-ink">{en.user.name}</b>
-              </header>
-              <dl className="grid gap-x-4 gap-y-2 px-3 py-3 text-sm sm:grid-cols-2">
-                {fields.map(([key, label]) =>
-                  en[key] ? (
-                    <div key={key} className={key === "blockers" ? "sm:col-span-2" : ""}>
-                      <dt className={cn("text-xs font-semibold", key === "blockers" ? "text-warn" : "text-ink-faint")}>{label}</dt>
-                      <dd className="whitespace-pre-wrap break-words text-ink-soft">{en[key]}</dd>
-                    </div>
-                  ) : null
-                )}
-              </dl>
-            </article>
-          ))
-        )}
-        {entries && missing.length > 0 && <p className="text-xs text-ink-faint">Todavía no lo dejaron: {missing.join(", ")}.</p>}
-      </div>
     </div>
   );
 }

@@ -133,8 +133,6 @@ async function main() {
     ["POST", `/api/projects/${A.project.id}/notes`, j],
     ["POST", `/api/projects/${A.project.id}/retro`, { sprintId: A.sprint.id, column: "ACTION", body: "x" }],
     ["POST", `/api/projects/${A.project.id}/contacts`, { name: "x" }],
-    ["GET", `/api/projects/${A.project.id}/standup?date=2026-01-01`],
-    ["POST", `/api/projects/${A.project.id}/standup`, { date: "2026-01-01", today: "x" }],
     ["GET", `/api/projects/${A.project.id}/export`],
     ["PATCH", `/api/projects/${A.project.id}/slack`, { slackChannelId: "C0123456789" }],
     ["PATCH", `/api/projects/${A.project.id}/telegram`, { botToken: "", chatId: "" }],
@@ -1371,6 +1369,50 @@ async function main() {
   check("en una reunión con pocos invitados, quien no lo es no ve los archivos", upP.status === 201 && (await cNora.req("GET", `/api/meetings/${pastPriv.json.id}/files`)).json.files.length === 0 && (await cNora.req("GET", `/api/meetings/${pastPriv.json.id}/files`)).json.hidden === 1 && (await fetch(`${BASE}/api/meetings/${pastPriv.json.id}/files/${upP.json.id}`, { headers: { Cookie: cNora.header() } })).status === 404 && (await sendFile(cNora, "intruso.txt", "x", pastPriv.json.id)).status === 404);
   check("sus invitados sí", (await cPlain.req("GET", `/api/meetings/${pastPriv.json.id}/files`)).json.files.length === 1);
   check("al borrar la reunión se borran sus archivos", (await cAOwner.req("DELETE", `/api/meetings/${pmId}`)).status === 200 && (await prisma.meetingFile.count({ where: { meetingId: pmId } })) === 0);
+
+  // ---------- 36) Daily general, estado Bloqueadas y actividad del equipo ----------
+  console.log("36) Daily general del equipo, estado Bloqueadas y actividad (solo dueño)");
+  const dDay = "2026-03-10"; // martes: el día laboral anterior es el lunes 2026-03-09
+  const dPost = await cPlain.req("POST", "/api/daily", { date: dDay, today: "revisar el módulo de pagos", yesterday: "" });
+  const dRow = await prisma.standupEntry.findFirst({ where: { userId: plain.id, date: dDay, workspaceId: A.ws.id } });
+  check("el daily se guarda para todo el equipo (sin proyecto)", dPost.status === 200 && !!dRow && dRow.projectId === null);
+  await cPlain.req("POST", "/api/daily", { date: dDay, today: "otra cosa" });
+  check("guardar de nuevo el mismo día actualiza, no duplica", (await prisma.standupEntry.count({ where: { userId: plain.id, date: dDay, workspaceId: A.ws.id } })) === 1 && (await prisma.standupEntry.findFirst({ where: { userId: plain.id, date: dDay } })).today === "otra cosa");
+  const dSee = await cAOwner.req("GET", `/api/daily?date=${dDay}`);
+  check("todo el equipo ve las respuestas y quién falta", dSee.status === 200 && dSee.json.entries.some((e) => e.user.id === plain.id) && dSee.json.members.length >= 2);
+  const dOther = await cBOwner.req("GET", `/api/daily?date=${dDay}`);
+  check("otro equipo no ve los dailys de A", dOther.status === 200 && dOther.json.entries.length === 0 && !dOther.json.members.some((m) => m.id === plain.id));
+  check("sin sesión no se entra (401)", (await fetch(`${BASE}/api/daily?date=${dDay}`)).status === 401 && (await fetch(`${BASE}/api/daily`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status === 401);
+  check("fecha inválida se rechaza (400)", (await cPlain.req("GET", "/api/daily?date=ayer")).status === 400 && (await cPlain.req("POST", "/api/daily", { date: "2026-13-45" })).status === 400);
+  check("el daily viejo por proyecto ya no existe (404)", (await cPlain.req("GET", `/api/projects/${A.project.id}/standup?date=${dDay}`)).status === 404);
+
+  // Bloqueadas
+  const blkIssue = await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, { title: "Ticket que se bloquea", assigneeUserId: plain.id });
+  const blkPatch = await cAOwner.req("PATCH", `/api/issues/${blkIssue.json.id}`, { status: "BLOCKED" });
+  check("un ticket pasa a Bloqueadas", blkIssue.status === 201 && blkPatch.status === 200 && (await prisma.task.findUnique({ where: { id: blkIssue.json.id } })).status === "BLOCKED");
+  check("un estado que no existe se rechaza (400)", (await cAOwner.req("PATCH", `/api/issues/${blkIssue.json.id}`, { status: "STUCK" })).status === 400);
+  const blkMove = await cAOwner.req("POST", `/api/projects/${A.project.id}/move`, { issueId: blkIssue.json.id, status: "IN_PROGRESS" });
+  const blkMove2 = await cAOwner.req("POST", `/api/projects/${A.project.id}/move`, { issueId: blkIssue.json.id, status: "BLOCKED" });
+  check("también se mueve a Bloqueadas desde el tablero", blkMove.status === 200 && blkMove2.status === 200 && (await prisma.task.findUnique({ where: { id: blkIssue.json.id } })).status === "BLOCKED", `${blkMove.status}/${blkMove2.status}`);
+  // Autocompletado
+  await prisma.historyEntry.create({ data: { projectId: A.project.id, field: "estado_ticket", oldValue: "En revisión", newValue: "Hecho", taskId: blkIssue.json.id, taskTitle: "Ticket que se bloquea", changedById: plain.id, changedByName: "Pablo Plano", changedAt: new Date("2026-03-09T15:00:00Z") } });
+  const dSug = await cPlain.req("GET", `/api/daily?date=${dDay}`);
+  check("el autocompletado propone lo de ayer, lo de hoy y los bloqueos con sus tickets", dSug.json.suggestion.yesterday.includes("Terminé") && dSug.json.suggestion.yesterday.includes("Ticket que se bloquea") && dSug.json.suggestion.blockers.includes("Ticket que se bloquea"), JSON.stringify(dSug.json.suggestion));
+  check("el borrador es solo de quien lo pide", !(await cNora.req("GET", `/api/daily?date=${dDay}`)).json.suggestion.blockers.includes("Ticket que se bloquea"));
+
+  // Actividad del equipo: solo el dueño
+  const act = async (client, qs = "") => fetch(`${BASE}/activity${qs}`, { headers: { Cookie: client.header() }, redirect: "manual" });
+  const actOwner = await act(cAOwner);
+  const actHtml = await actOwner.text();
+  check("el dueño ve la actividad del equipo", actOwner.status === 200 && actHtml.includes("Actividad del equipo") && actHtml.includes("Pablo Plano"), `${actOwner.status}`);
+  // La redirección de una página con loading.tsx llega en el flujo (200) pero SIN el contenido: lo que importa es que no se envíe nada.
+  const noLeak = async (r) => { const t = await r.text(); return !t.includes("Hora pico") && !t.includes("Ana Dueña A") && !t.includes("Ticket que se bloquea") && (r.status >= 300 || t.includes("NEXT_REDIRECT") || t.includes("/home")); };
+  check("un miembro no la ve (no recibe ningún dato; lo manda al inicio)", await noLeak(await act(cPlain)));
+  check("ni un admin (Aldo)", await noLeak(await act(cAMember)));
+  const actWeek = await (await act(cAOwner, "?w=2026-03-09&u=" + plain.id)).text();
+  check("el detalle de una persona muestra su hora exacta de la semana pedida", actWeek.includes("Ticket que se bloquea") && actWeek.includes("A qué horas trabajó"));
+  const actB = await (await act(cBOwner)).text();
+  check("el dueño de otro equipo no ve a las personas de A", !actB.includes("Pablo Plano"));
 
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();

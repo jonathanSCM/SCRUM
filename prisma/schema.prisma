@@ -201,7 +201,7 @@ model Task {
   type String @default("")
 
   issueType   String  @default("TASK") // EPIC | STORY | TASK | BUG
-  status      String  @default("TODO") // TODO | IN_PROGRESS | IN_REVIEW | DONE
+  status      String  @default("TODO") // TODO | IN_PROGRESS | BLOCKED | IN_REVIEW | DONE
   priority    String  @default("MEDIA") // URGENTE | ALTA | MEDIA | BAJA
   storyPoints Int?
   labels      String  @default("[]")
@@ -348,7 +348,8 @@ model ProjectMessage {
   @@index([projectId, createdAt])
 }
 
-// Daily asíncrono: una entrada por persona y día (fecha "YYYY-MM-DD").
+// Daily asíncrono GENERAL del equipo: una entrada por persona y día (fecha "YYYY-MM-DD") dentro del equipo.
+// Las filas viejas (una por proyecto) tienen projectId y workspaceId nulo: prisma/seed.ts las junta en una sola por día.
 model StandupEntry {
   id        String   @id @default(cuid())
   date      String
@@ -359,14 +360,19 @@ model StandupEntry {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String? // legacy: antes el daily era por proyecto
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId, date])
+  @@unique([workspaceId, userId, date])
   @@index([projectId, date])
+  @@index([workspaceId, date])
 }
 
 // Retro de un sprint: qué funcionó, qué mejorar y acuerdos (que pueden pasar a ticket).
@@ -625,6 +631,7 @@ model Workspace {
   members     Membership[]
   projects    Project[]
   statuses    StatusOption[]
+  standups    StandupEntry[]
   chat        ChatMessage[]
   channels    ChatChannel[]
   fileCards   FileCard[]

@@ -83,7 +83,7 @@ export const changesSchema = z.object({
         key: z.string().trim().min(1).max(40),
         title: z.string().trim().min(1).max(300).optional(),
         description: z.string().max(20000).optional(),
-        status: z.enum(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"]).optional(),
+        status: z.enum(["TODO", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "DONE"]).optional(),
         priority: priority.optional(),
         storyPoints: z.number().int().min(0).max(100).nullable().optional(),
         assignee: z.string().trim().max(200).nullable().optional(), // nombre o email; null = sin responsable
@@ -105,7 +105,7 @@ export type ChangesInput = z.infer<typeof changesSchema>;
 type Loose = Record<string, unknown>;
 const isObj = (v: unknown): v is Loose => !!v && typeof v === "object" && !Array.isArray(v);
 const arr = (v: unknown): Loose[] => (Array.isArray(v) ? v.filter(isObj) : []);
-const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
+const STATUSES = ["TODO", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "DONE"];
 const PRIORITIES = ["URGENTE", "ALTA", "MEDIA", "BAJA"];
 
 export type SplitExport = {

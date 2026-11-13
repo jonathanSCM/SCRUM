@@ -23,6 +23,8 @@ export const HISTORY_LABEL: Record<string, string> = {
   sprint_iniciado: "Sprint iniciado",
   sprint_iniciado_sin_ready: "Sprint iniciado sin cumplir la Definition of Ready",
   listo_ticket: "Definition of Ready (ítems cubiertos)",
+  listo_propio_ticket: "Definition of Ready (ítems propios del ticket)",
+  listo_no_aplica_ticket: "Definition of Ready (ítems que no aplican)",
   ready_proyecto: "Definition of Ready del proyecto",
   sprint_completado: "Sprint completado",
   sprint_eliminado: "Sprint eliminado",

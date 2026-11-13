@@ -231,7 +231,7 @@ export default function BoardView({
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setActiveId(null); router.refresh(); }}>
         <div className="space-y-6 overflow-x-auto pb-2">
           {lanes.map((lane) => (
-            <div key={lane.key} className="min-w-[960px]">
+            <div key={lane.key} className="min-w-[1120px]">
               {groupBy !== "none" && (
                 <h3 className="mb-2 flex items-center gap-2 font-display text-sm font-extrabold text-ink">
                   {lane.label}
@@ -240,7 +240,7 @@ export default function BoardView({
                   </span>
                 </h3>
               )}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-5 gap-3">
                 {STATUSES.map((status) => (
                   <Column key={status} id={`${lane.key}${SEP}${status}`} status={status} ids={lists[`${lane.key}${SEP}${status}`] ?? []} byId={byId} onOpen={(i) => openIssue(i.key)} />
                 ))}

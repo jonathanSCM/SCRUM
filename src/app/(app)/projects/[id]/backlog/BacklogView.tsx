@@ -265,7 +265,7 @@ export default function BacklogView({
   const summary = useMemo(() => {
     const out: Record<string, { count: number; points: number; byStatus: Record<IssueStatus, number> }> = {};
     for (const [container, ids] of Object.entries(lists)) {
-      const acc = { count: 0, points: 0, byStatus: { TODO: 0, IN_PROGRESS: 0, IN_REVIEW: 0, DONE: 0 } as Record<IssueStatus, number> };
+      const acc = { count: 0, points: 0, byStatus: { TODO: 0, IN_PROGRESS: 0, BLOCKED: 0, IN_REVIEW: 0, DONE: 0 } as Record<IssueStatus, number> };
       for (const id of ids) {
         const i = byId[id];
         if (!i) continue;

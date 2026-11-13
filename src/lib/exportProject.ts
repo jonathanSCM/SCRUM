@@ -13,7 +13,7 @@ export type ExportOptions = { scope: ExportScope; comments: number; anonymize: b
 
 const INSTRUCTIONS =
   "Este archivo es una copia de un proyecto de SCRUM ProShop para darte contexto. Jerarquía: épica > historia > tarea/bug. " +
-  "'key' identifica cada ticket (por ejemplo SAI-12). 'status': TODO | IN_PROGRESS | IN_REVIEW | DONE. 'priority': URGENTE | ALTA | MEDIA | BAJA. " +
+  "'key' identifica cada ticket (por ejemplo SAI-12). 'status': TODO | IN_PROGRESS | BLOCKED | IN_REVIEW | DONE. 'priority': URGENTE | ALTA | MEDIA | BAJA. " +
   "Las épicas traen sus historias y tareas anidadas; 'stories' y 'tasks' de la raíz son los tickets que no tienen épica. Si te pido tickets nuevos, respóndeme con el formato de importación (project.id, epics > stories > tasks) y NO repitas los que ya existen.";
 
 // Reemplaza nombres de personas por "Persona N" de forma consistente.

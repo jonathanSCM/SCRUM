@@ -390,7 +390,7 @@ export async function updateIssue(
         url: issueUrl(project.id, key),
       });
     } else if (statusMoved) {
-      // Movimientos intermedios (Por hacer, En progreso, En revisión): van en el resumen, una línea por ticket.
+      // Movimientos intermedios (Por hacer, En progreso, Bloqueadas, En revisión): van en el resumen, una línea por ticket.
       await notifyProject(project.id, {
         title: `${key} pasó a ${STATUS_META[updated.status as IssueStatus]?.label ?? updated.status} en ${project.name}`,
         description: `**${actor.name}** movió «${updated.title}» de ${STATUS_META[current.status as IssueStatus]?.label ?? current.status} a ${STATUS_META[updated.status as IssueStatus]?.label ?? updated.status}`,

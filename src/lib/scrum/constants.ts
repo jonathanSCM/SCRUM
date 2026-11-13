@@ -12,12 +12,13 @@ export const ISSUE_TYPE_META: Record<IssueType, { label: string; plural: string;
   BUG: { label: "Bug", plural: "Bugs", color: "var(--c-bug)" },
 };
 
-export const STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"] as const;
+export const STATUSES = ["TODO", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "DONE"] as const;
 export type IssueStatus = (typeof STATUSES)[number];
 
 export const STATUS_META: Record<IssueStatus, { label: string; color: string }> = {
   TODO: { label: "Por hacer", color: "var(--c-todo)" },
   IN_PROGRESS: { label: "En progreso", color: "var(--c-progress)" },
+  BLOCKED: { label: "Bloqueadas", color: "var(--c-blocked)" },
   IN_REVIEW: { label: "En revisión", color: "var(--c-review)" },
   DONE: { label: "Hecho", color: "var(--c-done)" },
 };
