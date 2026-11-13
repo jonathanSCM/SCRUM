@@ -1293,15 +1293,33 @@ async function main() {
       await new Promise((r) => setTimeout(r, 600));
       const doneRec = await prisma.meetingRecording.findFirst({ where: { externalId: audioId }, include: { parts: true } });
       check("con la clave puesta, la cola se transcribe sola", cronTx.transcribed >= 0 && doneRec.parts[0].status === "DONE" && doneRec.parts[0].text.startsWith("Transcripción simulada"), JSON.stringify([cronTx, doneRec.parts[0].status]));
-      check("el audio se BORRA en cuanto se transcribe (queda solo el texto)", doneRec.parts[0].data === null);
+      check("el audio se CONSERVA después de transcribir (se puede escuchar y descargar)", doneRec.parts[0].data !== null);
       check("se usó la clave del equipo, no otra", seen.length >= 1 && seen[0].auth === `Bearer sk-prueba-${"b".repeat(30)}` && seen[0].url.endsWith("/audio/transcriptions"));
       await ePlain.req("POST", "/api/extension/transcript", { meetingUrl: "x", transcript: "", recordingId: audioId, final: true, organizationId: A.ws.id });
       const a1 = await ePlain.req("POST", "/api/extension/audio", new Uint8Array(Buffer.from("audio-falso-parte-1")), hdr(1));
       await new Promise((r) => setTimeout(r, 900));
       const fin = await prisma.meetingRecording.findFirst({ where: { externalId: audioId }, include: { parts: { orderBy: { part: "asc" } } } });
-      check("al llegar otra parte con la clave puesta se transcribe de inmediato y la grabación queda lista con el texto en orden", a1.status === 200 && fin.status === "DONE" && fin.parts.every((p) => p.data === null) && fin.transcript.includes("Transcripción simulada 1") && fin.transcript.indexOf("simulada 1") < fin.transcript.indexOf("simulada 2"), JSON.stringify([fin.status, fin.transcript]));
+      check("al llegar otra parte con la clave puesta se transcribe de inmediato y la grabación queda lista con el texto en orden", a1.status === 200 && fin.status === "DONE" && fin.parts.every((p) => p.data !== null) && fin.transcript.includes("Transcripción simulada 1") && fin.transcript.indexOf("simulada 1") < fin.transcript.indexOf("simulada 2"), JSON.stringify([fin.status, fin.transcript]));
       const viewT = await cPlain.req("GET", `/api/meetings/${extMeeting.json.id}/recordings`);
       check("los invitados ven la transcripción del audio y la clave está configurada", viewT.json.transcriptionConfigured === true && viewT.json.recordings.some((r) => r.transcript.includes("Transcripción simulada")));
+      // Audio: escuchar, descargar, rangos, permisos y borrar solo el audio
+      const audioUrl = (n, q = "") => `/api/meetings/${extMeeting.json.id}/recordings/${fin.id}/audio/${n}${q}`;
+      const listA = await cPlain.req("GET", `/api/meetings/${extMeeting.json.id}/recordings`);
+      check("la grabación lista sus partes de audio", listA.json.recordings.find((r) => r.id === fin.id)?.audio.length === 2);
+      const getA = await fetch(`${BASE}${audioUrl(0)}`, { headers: { Cookie: cPlain.header() } });
+      const bytesA = Buffer.from(await getA.arrayBuffer());
+      check("un invitado escucha el audio (mismos bytes que subió la extensión)", getA.status === 200 && bytesA.toString() === "audio-falso-parte-0" && getA.headers.get("content-type") === "audio/webm" && getA.headers.get("accept-ranges") === "bytes", `${getA.status} ${getA.headers.get("content-type")} ${getA.headers.get("accept-ranges")} ${bytesA.toString().slice(0, 40)}`);
+      const rangeA = await fetch(`${BASE}${audioUrl(0)}`, { headers: { Cookie: cPlain.header(), Range: "bytes=6-10" } });
+      check("el audio acepta rangos (para adelantar y retroceder)", rangeA.status === 206 && (await rangeA.text()) === "falso" && rangeA.headers.get("content-range") === "bytes 6-10/19");
+      const dlA = await fetch(`${BASE}${audioUrl(1, "?download=1")}`, { headers: { Cookie: cPlain.header() } });
+      check("se puede descargar con un nombre claro", dlA.status === 200 && /attachment; filename\*=UTF-8''.*parte-1\.webm/.test(dlA.headers.get("content-disposition") ?? ""), dlA.headers.get("content-disposition"));
+      check("quien no está invitado no recibe el audio (404)", (await cNora.req("GET", audioUrl(0))).status === 404);
+      check("otro equipo tampoco (404)", (await cBOnly.req("GET", audioUrl(0))).status === 404);
+      check("una parte que no existe da 404", (await cPlain.req("GET", audioUrl(99))).status === 404);
+      check("quien no grabó ni lidera no puede borrar el audio (403)", (await cNora.req("DELETE", `/api/meetings/${extMeeting.json.id}/recordings/${fin.id}/audio`)).status === 403);
+      const delA = await cPlain.req("DELETE", `/api/meetings/${extMeeting.json.id}/recordings/${fin.id}/audio`);
+      const afterDel = await cPlain.req("GET", `/api/meetings/${extMeeting.json.id}/recordings`);
+      check("quien grabó borra solo el audio: la transcripción se conserva", delA.status === 200 && delA.json.deleted === 2 && afterDel.json.recordings.find((r) => r.id === fin.id).audio.length === 0 && afterDel.json.recordings.find((r) => r.id === fin.id).transcript.includes("Transcripción simulada") && (await cPlain.req("GET", audioUrl(0))).status === 404);
       check("quien no grabó ni lidera no puede borrar una grabación (403)", (await cNora.req("DELETE", `/api/meetings/${extMeeting.json.id}/recordings/${fin.id}`)).status === 403);
       check("quien grabó la borra", (await cPlain.req("DELETE", `/api/meetings/${extMeeting.json.id}/recordings/${fin.id}`)).status === 200 && (await prisma.audioPart.count({ where: { recordingId: fin.id } })) === 0);
     } finally {
@@ -1311,6 +1329,37 @@ async function main() {
     console.log("  (omitido: el servidor de la prueba no tiene OPENAI_BASE_URL apuntando a un OpenAI simulado)");
   }
   check("desconectar la extensión revoca su token (después da 401)", (await cAOwner.req("DELETE", "/api/extension/authorize")).status === 200 && (await eOwner.req("GET", "/api/extension/me")).status === 401);
+
+  console.log("35) Reuniones pasadas y archivos de la reunión");
+  const noteA = await prisma.notification.count({ where: { userId: plain.id, kind: "REUNION" } });
+  const pastStart = new Date(Date.now() - 3 * 86400_000);
+  const pastM = await cAOwner.req("POST", "/api/meetings", { title: "Reunión de hace tres días", startsAt: pastStart.toISOString(), durationMin: 90, everyone: true, announce: true, description: "Se acordó cerrar el módulo de pagos.\n".repeat(200) });
+  check("se puede registrar una reunión que ya pasó, con notas largas", pastM.status === 201 && pastM.json.description.length > 5000, `${pastM.status} ${pastM.text.slice(0, 120)}`);
+  check("una reunión pasada NO avisa a nadie", (await prisma.notification.count({ where: { userId: plain.id, kind: "REUNION" } })) === noteA);
+  check("ni se anuncia en el chat", (await prisma.chatMessage.count({ where: { body: { contains: `[[meeting:${pastM.json.id}]]` } } })) === 0);
+  const pastList = await cPlain.req("GET", `/api/meetings?from=${new Date(Date.now() - 7 * 86400_000).toISOString()}&to=${new Date().toISOString()}`);
+  check("aparece en el calendario en su fecha pasada", pastList.json.meetings.some((m) => m.id === pastM.json.id));
+  const pmId = pastM.json.id;
+  const sendFile = async (client, name, content, id = pmId) => { const f = new FormData(); f.append("file", new Blob([content], { type: name.endsWith(".pdf") ? "application/pdf" : "text/plain" }), name); const r = await fetch(`${BASE}/api/meetings/${id}/files`, { method: "POST", headers: { Cookie: client.header() }, body: f }); return { status: r.status, json: await r.json().catch(() => null) }; };
+  const up1 = await sendFile(cAOwner, "acta.txt", "Acta de la reunión pasada");
+  check("un líder sube un archivo a la reunión", up1.status === 201 && up1.json.filename === "acta.txt", JSON.stringify(up1));
+  const upN = await sendFile(cNora, "mis-notas.txt", "notas de Nora");
+  check("cualquier miembro invitado también sube archivos", upN.status === 201);
+  const lf = await cPlain.req("GET", `/api/meetings/${pmId}/files`);
+  check("se listan con quién los subió", lf.json.files.length === 2 && lf.json.files.some((f) => f.filename === "acta.txt" && f.uploadedBy?.name === "Ana Dueña A"));
+  const dlF = await fetch(`${BASE}/api/meetings/${pmId}/files/${up1.json.id}`, { headers: { Cookie: cPlain.header() } });
+  check("se descargan con sus mismos bytes y nombre", dlF.status === 200 && (await dlF.text()) === "Acta de la reunión pasada" && /filename\*=UTF-8''acta\.txt/.test(dlF.headers.get("content-disposition") ?? ""));
+  check("otro equipo no los ve (404)", (await cBOnly.req("GET", `/api/meetings/${pmId}/files`)).status === 404 && (await fetch(`${BASE}/api/meetings/${pmId}/files/${up1.json.id}`, { headers: { Cookie: cBOnly.header() } })).status === 404);
+  const bigF = await sendFile(cAOwner, "enorme.bin", new Uint8Array(21 * 1024 * 1024));
+  check("un archivo de más de 20 MB se rechaza (400)", bigF.status === 400);
+  check("quien no lo subió ni agendó ni lidera no lo borra (403)", (await cNora.req("DELETE", `/api/meetings/${pmId}/files/${up1.json.id}`)).status === 403);
+  check("quien lo subió lo borra", (await cNora.req("DELETE", `/api/meetings/${pmId}/files/${upN.json.id}`)).status === 200 && (await prisma.meetingFile.count({ where: { id: upN.json.id } })) === 0);
+  // Reunión pasada solo para algunas personas: los demás no ven sus archivos
+  const pastPriv = await cAOwner.req("POST", "/api/meetings", { title: "Reunión privada pasada", startsAt: pastStart.toISOString(), everyone: false, userIds: [plain.id] });
+  const upP = await sendFile(cAOwner, "reservado.txt", "solo invitados", pastPriv.json.id);
+  check("en una reunión con pocos invitados, quien no lo es no ve los archivos", upP.status === 201 && (await cNora.req("GET", `/api/meetings/${pastPriv.json.id}/files`)).json.files.length === 0 && (await cNora.req("GET", `/api/meetings/${pastPriv.json.id}/files`)).json.hidden === 1 && (await fetch(`${BASE}/api/meetings/${pastPriv.json.id}/files/${upP.json.id}`, { headers: { Cookie: cNora.header() } })).status === 404 && (await sendFile(cNora, "intruso.txt", "x", pastPriv.json.id)).status === 404);
+  check("sus invitados sí", (await cPlain.req("GET", `/api/meetings/${pastPriv.json.id}/files`)).json.files.length === 1);
+  check("al borrar la reunión se borran sus archivos", (await cAOwner.req("DELETE", `/api/meetings/${pmId}`)).status === 200 && (await prisma.meetingFile.count({ where: { meetingId: pmId } })) === 0);
 
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();

@@ -140,7 +140,7 @@ export default function CalendarView({ currentUserId, isLead, people, projects, 
         <span className={cn("block truncate text-sm font-bold text-ink", m.status === "CANCELED" && "line-through")}>{m.title}</span>
         <span className="block truncate text-xs text-ink-soft">{m.createdBy ? `Agendó ${m.createdBy.name}` : "Reunión"}{m.project ? ` · ${m.project.key ?? m.project.name}` : ""}{m.recordings > 0 ? ` · ${m.recordings} grabación${m.recordings === 1 ? "" : "es"}` : ""}</span>
       </span>
-      {m.status === "CANCELED" && <span className="lozenge text-danger">Cancelada</span>}
+      {m.status === "CANCELED" ? <span className="lozenge text-danger">Cancelada</span> : new Date(m.endsAt) < new Date() ? <span className="lozenge text-ink-soft">Realizada</span> : null}
     </button>
   );
 
@@ -202,7 +202,10 @@ export default function CalendarView({ currentUserId, isLead, people, projects, 
             </div>
           </div>
           <section className="mt-4">
-            <h3 className="mb-2 font-display text-base font-extrabold text-ink">{formatDay(dayStartUtc(selected, tz), tz)}{selected === today ? " · hoy" : ""}</h3>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <h3 className="font-display text-base font-extrabold text-ink">{formatDay(dayStartUtc(selected, tz), tz)}{selected === today ? " · hoy" : ""}</h3>
+              <button className="btn-ghost btn-sm ml-auto" onClick={() => setForm({ meeting: null, day: selected })}>{selected < today ? "+ Registrar una reunión de este día" : "+ Agendar en este día"}</button>
+            </div>
             {dayMeetings(selected).length === 0 ? <p className="rounded-lg border border-dashed border-line-strong p-4 text-sm text-ink-faint">No hay reuniones este día.</p> : <div className="space-y-2">{dayMeetings(selected).map(card)}</div>}
           </section>
         </>

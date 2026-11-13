@@ -66,6 +66,7 @@ model User {
   recordings          MeetingRecording[] @relation("RecordingOwner")
   meetingsCreated     Meeting[]         @relation("MeetingCreator")
   meetingAttendances  MeetingAttendee[] @relation("MeetingAttendeeUser")
+  meetingFiles        MeetingFile[]     @relation("MeetingFileUploader")
   fileCardItemsUploaded FileCardItem[]  @relation("FileCardItemUploader")
   apiTokenLogs        ApiTokenLog[]
   chatFiles           ChatFile[]
@@ -881,6 +882,7 @@ model Meeting {
 
   attendees  MeetingAttendee[]
   recordings MeetingRecording[]
+  files      MeetingFile[]
 
   @@index([workspaceId, startsAt])
 }
@@ -942,4 +944,21 @@ model AudioPart {
 
   @@unique([recordingId, part])
   @@index([status])
+}
+
+// Archivo subido a una reunión (acta, presentación, lo que se tocó…). Sirve también para reuniones pasadas que solo se registran.
+model MeetingFile {
+  id         String   @id @default(cuid())
+  filename   String
+  mimeType   String
+  size       Int
+  data       Bytes
+  createdAt  DateTime @default(now())
+
+  meetingId  String
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  uploadedById String?
+  uploadedBy User?    @relation("MeetingFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([meetingId])
 }

@@ -75,7 +75,7 @@ export default function PrivacyPage() {
             <>
               <p>Solo con los proveedores necesarios para operar cada función, y solo los datos que esa función requiere:</p>
               <ul>
-                <li><strong>OpenAI</strong>, para transcribir el audio de las reuniones que graban los usuarios. Se le envía el audio de la reunión; según sus condiciones para uso por API, no lo usa para entrenar sus modelos.</li>
+                <li><strong>OpenAI</strong>, para transcribir el audio de las reuniones que graban los usuarios. Se le envía el audio de la reunión; según sus condiciones para uso por API, no lo usa para entrenar sus modelos. Nosotros guardamos una copia del audio en nuestros servidores (ver «Cuánto tiempo los guardamos»).</li>
                 <li><strong>Google Gemini</strong>, solo si tu equipo activó los resúmenes con IA de los sprints: recibe el texto de los tickets del sprint.</li>
                 <li><strong>Proveedor de alojamiento y base de datos</strong> donde corre el servicio.</li>
                 <li><strong>ntfy, Slack, Discord y Telegram</strong>, solo si tú o tu equipo los conectaron: reciben el texto de los avisos.</li>
@@ -92,7 +92,7 @@ export default function PrivacyPage() {
               <p>Cada equipo está aislado: las personas de otro equipo no ven nada del tuyo. Dentro del equipo:</p>
               <ul>
                 <li>Los <strong>canales privados</strong> y los <strong>mensajes directos</strong> los ven solo sus miembros. Los <strong>borradores privados</strong> de tickets los ve solo quien los creó.</li>
-                <li>Las <strong>transcripciones</strong> de una reunión las ven quienes fueron invitados a ella, quien la agendó, quien la grabó y los líderes del equipo.</li>
+                <li>Las <strong>transcripciones y el audio</strong> de una reunión los ven quienes fueron invitados a ella, quien la agendó, quien la grabó y los líderes del equipo.</li>
                 <li>Los mensajes y archivos <strong>no están cifrados de extremo a extremo</strong>: quien administra la base de datos del servicio podría técnicamente accederlos.</li>
               </ul>
             </>
@@ -103,7 +103,7 @@ export default function PrivacyPage() {
           title: "Cuánto tiempo los guardamos",
           body: (
             <>
-              <p>El contenido de tu equipo se conserva mientras exista tu cuenta o el equipo. El <strong>audio de las reuniones se elimina de nuestros servidores en cuanto termina de transcribirse</strong>; se conservan la transcripción y los subtítulos hasta que un líder del equipo o la persona que los grabó los borre. Al eliminar un proyecto, un canal o una reunión, se elimina su contenido asociado. Las copias de seguridad se renuevan periódicamente.</p>
+              <p>El contenido de tu equipo se conserva mientras exista tu cuenta o el equipo. El <strong>audio de las reuniones se conserva</strong> para que las personas con acceso puedan escucharlo y descargarlo desde la reunión. Tanto el audio como la transcripción y los subtítulos se conservan hasta que la persona que los grabó o un líder del equipo los borre; puedes borrar solo el audio y conservar la transcripción. Si el administrador del servicio configura un plazo de retención, el audio se elimina automáticamente pasado ese plazo. Al eliminar un proyecto, un canal o una reunión, se elimina su contenido asociado. Las copias de seguridad se renuevan periódicamente.</p>
             </>
           ),
         },

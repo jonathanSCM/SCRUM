@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/ui";
@@ -19,6 +19,7 @@ type Rec = {
   captions: string;
   transcript: string;
   parts: { total: number; done: number; failed: number };
+  audio: Array<{ part: number; size: number }>;
   canManage: boolean;
 };
 type Data = { hidden: number; transcriptionConfigured: boolean; recordings: Rec[] };
@@ -43,6 +44,56 @@ function Highlighted({ text, q }: { text: string; q: string }) {
     <>
       {parts.map((p, i) => (q.trim() && p.toLowerCase() === q.trim().toLowerCase() ? <mark key={i} className="rounded bg-amber-300/60 px-0.5 text-ink">{p}</mark> : <span key={i}>{p}</span>))}
     </>
+  );
+}
+
+const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(1)} MB`;
+
+// Reproductor del audio de la grabación: las partes (≈10 min cada una) suenan una tras otra; cada una se puede descargar.
+function AudioPlayer({ meetingId, rec, onDeleted }: { meetingId: string; rec: Rec; onDeleted: () => void }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [idx, setIdx] = useState(0);
+  const ref = useRef<HTMLAudioElement>(null);
+  const parts = rec.audio;
+  const src = (p: number, download = false) => `/api/meetings/${meetingId}/recordings/${rec.id}/audio/${p}${download ? "?download=1" : ""}`;
+  const cur = parts[Math.min(idx, parts.length - 1)];
+  const total = parts.reduce((n, p) => n + p.size, 0);
+
+  async function remove() {
+    if (!(await confirm("¿Borrar el audio de esta grabación? La transcripción y los subtítulos se conservan.", { confirmLabel: "Borrar audio", danger: true }))) return;
+    const res = await api(`/api/meetings/${meetingId}/recordings/${rec.id}/audio`, "DELETE");
+    if (!res.ok) return toast.error(res.error);
+    toast.success("Audio borrado");
+    onDeleted();
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-line bg-card-2/40 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xs font-bold uppercase tracking-wide text-ink-faint">Audio de la reunión</p>
+        <span className="text-[11px] text-ink-faint">{parts.length} {parts.length === 1 ? "parte" : "partes"} · {mb(total)}</span>
+        {rec.canManage && <button className="ml-auto text-xs text-ink-faint hover:text-danger" onClick={remove}>Borrar audio</button>}
+      </div>
+      {/* key: al cambiar de parte se carga el audio nuevo; las partes siguientes suenan solas */}
+      <audio key={cur.part} ref={ref} controls preload="metadata" className="w-full" src={src(cur.part)} autoPlay={idx > 0} onEnded={() => setIdx((i) => (i + 1 < parts.length ? i + 1 : i))}>
+        Tu navegador no puede reproducir este audio.
+      </audio>
+      {parts.length > 1 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {parts.map((p, i) => (
+            <li key={p.part} className="flex items-center overflow-hidden rounded-md border border-line text-xs">
+              <button onClick={() => setIdx(i)} aria-pressed={i === idx} className={cn("px-2 py-1 font-semibold", i === idx ? "bg-rust text-white" : "text-ink-soft hover:text-ink")}>Parte {p.part}</button>
+              <a href={src(p.part, true)} className="border-l border-line px-2 py-1 text-ink-soft hover:text-rust" title={`Descargar la parte ${p.part} (${mb(p.size)})`} aria-label={`Descargar la parte ${p.part}`}>↓</a>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <a href={src(cur.part, true)} className="font-semibold text-rust hover:underline">Descargar {parts.length > 1 ? `la parte ${cur.part}` : "el audio"}</a>
+        {parts.length > 1 && <span className="text-ink-faint">Cada parte es un archivo aparte (.webm); suenan en orden.</span>}
+      </div>
+    </div>
   );
 }
 
@@ -125,6 +176,7 @@ export default function Recordings({ meetingId, onChanged }: { meetingId: string
               {r.error && r.status !== "DONE" && <p className="border-t border-line px-3 py-1.5 text-xs text-danger">{r.error}</p>}
               {isOpen && (
                 <div className="space-y-2 border-t border-line p-3">
+                  {r.audio.length > 0 && <AudioPlayer meetingId={meetingId} rec={r} onDeleted={() => void load()} />}
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex rounded-md border border-line" role="group" aria-label="Qué ver">
                       {([["audio", "Transcripción del audio"], ["captions", "Subtítulos de Meet"]] as const).map(([k, l]) => (
