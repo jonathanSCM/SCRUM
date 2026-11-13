@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
 import { timeAgo, cn } from "@/lib/ui";
 import EmptyState from "@/components/ui/EmptyState";
+import { repeatLabel, type NoticeKind } from "@/lib/scrum/notifPolicy";
 
 type Item = { id: string; kind: string; label: string; title: string; body: string; url: string | null; count: number; priority: string; createdAt: string; readAt: string | null; pending: boolean };
 
@@ -63,7 +64,7 @@ export default function InboxView() {
               <button onClick={() => open(i)} className={cn("flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-card-2", !i.readAt && "bg-chip-tint/40")}>
                 <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", i.readAt ? "bg-transparent" : i.priority === "urgent" ? "bg-danger" : "bg-rust")} aria-hidden />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-ink">{i.title}{i.count > 1 ? <span className="ml-1.5 font-normal text-ink-faint">({i.count} veces)</span> : null}</span>
+                  <span className="block text-sm font-semibold text-ink">{i.title}{i.count > 1 ? <span className="ml-1.5 font-normal text-ink-faint">({repeatLabel(i.kind as NoticeKind, i.count)})</span> : null}</span>
                   {i.body && <span className="block truncate text-xs text-ink-soft">{i.body}</span>}
                   <span className="mt-0.5 block text-[11px] text-ink-faint">
                     {i.label} · {timeAgo(i.createdAt)}

@@ -1,13 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { getBaseUrl } from "@/lib/baseUrl";
 import { sendPush } from "@/lib/push";
-import { ASSIGN_BATCH_MINUTES, KIND_META, digestMessage, normalizePrefs, planDelivery, type NoticeKind, type Prefs } from "@/lib/scrum/notifPolicy";
+import { ASSIGN_BATCH_MINUTES, CHAT_BATCH_KINDS, CHAT_BATCH_MINUTES, KIND_META, digestMessage, foldsIntoRecent, normalizePrefs, planDelivery, type NoticeKind, type Prefs } from "@/lib/scrum/notifPolicy";
 import type { NtfyPriority } from "@/lib/scrum/ntfyFormat";
 
 // Avisos a personas: todo queda en su bandeja; llega al navegador/teléfono al instante, en un resumen o no llega,
 // según el tipo de aviso y sus preferencias (ver notifPolicy.ts). NUNCA lanza.
 
-export type Notice = { kind: NoticeKind; title: string; body?: string; url?: string; priority?: NtfyPriority; groupKey?: string; workspaceId?: string | null };
+export type Notice = { kind: NoticeKind; title: string; body?: string; url?: string; priority?: NtfyPriority; groupKey?: string; workspaceId?: string | null; foldRecent?: boolean };
 
 const PRIORITY_NAME: Record<NtfyPriority, string> = { low: "low", default: "default", high: "high", urgent: "urgent" };
 
@@ -37,8 +37,16 @@ export async function notifyUsers(userIds: Array<string | null | undefined>, not
       if (plan.tier === "silent") {
         await prisma.notification.create({ data: { ...base, deliveredAt: now, pushed: false } });
       } else if (plan.tier === "instant") {
-        await prisma.notification.create({ data: { ...base, deliveredAt: now, pushed: true } });
-        instant.push(userId);
+        // Varios mensajes de chat seguidos: se suman al aviso que ya sonó, sin volver a sonar.
+        const recent = notice.foldRecent && notice.groupKey && CHAT_BATCH_KINDS.includes(notice.kind)
+          ? await prisma.notification.findFirst({ where: { userId, kind: notice.kind, groupKey: notice.groupKey, deliveredAt: { gt: new Date(now.getTime() - CHAT_BATCH_MINUTES * 60_000) } }, orderBy: { deliveredAt: "desc" } })
+          : null;
+        if (recent && foldsIntoRecent(notice.kind, notice.groupKey, recent.deliveredAt, now)) {
+          await prisma.notification.update({ where: { id: recent.id }, data: { count: recent.count + 1, title: base.title, body: base.body, url: base.url, createdAt: now, readAt: null } });
+        } else {
+          await prisma.notification.create({ data: { ...base, deliveredAt: now, pushed: true } });
+          instant.push(userId);
+        }
       } else {
         // Se junta con un pendiente igual (mismo ticket y tipo) y comparte la ventana del primer pendiente.
         const same = notice.groupKey ? await prisma.notification.findFirst({ where: { userId, kind: notice.kind, groupKey: notice.groupKey, deliveredAt: null } }) : null;

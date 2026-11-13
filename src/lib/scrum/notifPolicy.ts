@@ -39,6 +39,23 @@ export const DIGEST_OPTIONS = [0, 15, 30, 60, 120] as const; // 0 = solo en la b
 export const DEFAULT_DIGEST_MINUTES = 30;
 export const ASSIGN_BATCH_MINUTES = 2;
 
+// Chat: varios mensajes seguidos de la misma persona (o en el mismo chat) dentro de esta ventana llegan como UN solo
+// aviso (el primero suena; los demás solo suben el contador de ese aviso en la bandeja).
+export const CHAT_BATCH_MINUTES = 2;
+export const CHAT_BATCH_KINDS: readonly NoticeKind[] = ["MENTION", "DIRECT"];
+
+// ¿Este nuevo aviso se suma al que ya sonó (true) o merece su propio aviso (false)?
+export function foldsIntoRecent(kind: NoticeKind, groupKey: string | null | undefined, recentDeliveredAt: Date | null, now: Date): boolean {
+  if (!groupKey || !recentDeliveredAt || !CHAT_BATCH_KINDS.includes(kind)) return false;
+  const age = now.getTime() - recentDeliveredAt.getTime();
+  return age >= 0 && age < CHAT_BATCH_MINUTES * 60_000;
+}
+
+// "(3 mensajes)" en el chat, "(3 veces)" en lo demás.
+export function repeatLabel(kind: NoticeKind, count: number): string {
+  return CHAT_BATCH_KINDS.includes(kind) ? `${count} mensajes` : `${count} veces`;
+}
+
 export type Prefs = { digestMinutes: number; quietEnabled: boolean; quietStart: string; quietEnd: string; tz: string; muted: string[] };
 export const DEFAULT_PREFS: Prefs = { digestMinutes: DEFAULT_DIGEST_MINUTES, quietEnabled: false, quietStart: "22:00", quietEnd: "07:00", tz: "America/La_Paz", muted: [] };
 
@@ -101,7 +118,7 @@ export function digestMessage(items: PendingItem[]): { title: string; body: stri
   const total = items.reduce((n, i) => n + i.count, 0);
   if (items.length === 1) {
     const only = items[0];
-    return { title: only.count > 1 ? `${only.title} (${only.count} veces)` : only.title, body: "Toca para ver el detalle" };
+    return { title: only.count > 1 ? `${only.title} (${repeatLabel(only.kind, only.count)})` : only.title, body: "Toca para ver el detalle" };
   }
   if (items.every((i) => i.kind === "ASSIGNED")) {
     return { title: `Te asignaron ${total} tickets`, body: items.slice(0, 4).map((i) => i.title).join(" · ") };

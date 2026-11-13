@@ -1490,6 +1490,22 @@ async function main() {
   check("se archiva y se restaura un grupo", gArch.status === 200 && !!gArch.json.archivedAt && (await cPlain.req("PATCH", `/api/groups/${gPriv.json.id}`, { archived: false })).json.archivedAt === null);
   check("se borra con todas sus tareas", (await cPlain.req("DELETE", `/api/groups/${gPriv.json.id}`)).status === 200 && (await prisma.task.count({ where: { id: gPT.json.id } })) === 0);
 
+  // ---------- 38) Avisos del chat agrupados ----------
+  console.log("38) Varios mensajes seguidos llegan como un solo aviso");
+  const cbKey = `chat-${aMember.id}`;
+  const cbSumOf = async () => (await prisma.notification.findMany({ where: { userId: nora.id, kind: "MENTION", groupKey: cbKey } })).reduce((n, r) => n + r.count, 0);
+  const cbRowsOf = async () => prisma.notification.findMany({ where: { userId: nora.id, kind: "MENTION", groupKey: cbKey }, orderBy: { createdAt: "asc" } });
+  const cbBase0 = await cbSumOf();
+  const cbRows0 = (await cbRowsOf()).length;
+  for (let i = 1; i <= 4; i++) await cAMember.req("POST", "/api/chat/messages", { body: `hola [[user:${nora.id}]] mensaje ${i}` });
+  await new Promise((r) => setTimeout(r, 1200));
+  const cbRows4 = await cbRowsOf();
+  check("4 mensajes seguidos de la misma persona son UN solo aviso en la bandeja", (await cbSumOf()) - cbBase0 === 4 && cbRows4.length - cbRows0 <= 1, `filas nuevas ${cbRows4.length - cbRows0}`);
+  const cbLast = cbRows4[cbRows4.length - 1];
+  check("el aviso cuenta los mensajes, muestra el último y vuelve a quedar sin leer", cbLast.count >= 4 && cbLast.body.includes("mensaje 4") && cbLast.readAt === null && cbLast.pushed === true);
+  const cbInbox = await cNora.req("GET", "/api/notifications");
+  check("la bandeja lo muestra una sola vez", (cbInbox.json.items ?? cbInbox.json.notifications ?? []).filter((n) => n.title.includes("Aldo Miembro A te mencionó") && n.body.includes("mensaje")).length <= 1, cbInbox.text.slice(0, 160));
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

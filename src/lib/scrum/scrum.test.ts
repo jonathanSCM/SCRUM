@@ -1199,3 +1199,19 @@ describe("grupos de tareas: quién los ve", () => {
     expect(canSeeProject(priv, "u1")).toBe(false);
   });
 });
+
+describe("avisos del chat agrupados", () => {
+  it("los mensajes seguidos se suman al aviso que ya sonó, solo dentro de la ventana", async () => {
+    const { foldsIntoRecent, repeatLabel, CHAT_BATCH_MINUTES } = await import("./notifPolicy");
+    const now = new Date("2026-03-10T15:00:00Z");
+    const ago = (s: number) => new Date(now.getTime() - s * 1000);
+    expect(foldsIntoRecent("DIRECT", "dm-1", ago(30), now)).toBe(true);
+    expect(foldsIntoRecent("MENTION", "chat-u", ago(CHAT_BATCH_MINUTES * 60 - 1), now)).toBe(true);
+    expect(foldsIntoRecent("MENTION", "chat-u", ago(CHAT_BATCH_MINUTES * 60 + 1), now)).toBe(false);
+    expect(foldsIntoRecent("DIRECT", "dm-1", null, now)).toBe(false);
+    expect(foldsIntoRecent("DIRECT", null, ago(10), now)).toBe(false);
+    expect(foldsIntoRecent("URGENT", "x", ago(10), now)).toBe(false); // lo urgente nunca se agrupa
+    expect(repeatLabel("DIRECT", 4)).toBe("4 mensajes");
+    expect(repeatLabel("COMMENT", 4)).toBe("4 veces");
+  });
+});

@@ -121,12 +121,12 @@ export async function POST(req: Request) {
       const peer = [...memberIds].find((u) => u !== auth.user.id);
       if (peer && !mentioned.includes(peer)) {
         const text = plainText(body, (r) => resolved.get(`${r.kind.toUpperCase()}:${r.id}`)?.label ?? "");
-        void notifyUsers([peer], { kind: "DIRECT", title: `${auth.user.name} te escribió`, body: text.slice(0, 160) || "Archivo adjunto", url: `/chat?canal=${channelId}`, workspaceId, groupKey: `dm-${channelId}` });
+        void notifyUsers([peer], { kind: "DIRECT", title: `${auth.user.name} te escribió`, body: text.slice(0, 160) || "Archivo adjunto", url: `/chat?canal=${channelId}`, workspaceId, groupKey: `dm-${channelId}`, foldRecent: true });
       }
     }
     if (mentioned.length) {
       const text = plainText(body, (r) => resolved.get(`${r.kind.toUpperCase()}:${r.id}`)?.label ?? "");
-      void notifyUsers(mentioned, { kind: "MENTION", title: `${auth.user.name} te mencionó en el chat`, body: text.slice(0, 160) || "Archivo adjunto", url: `/chat?canal=${channelId}`, workspaceId, groupKey: `chat-${auth.user.id}` });
+      void notifyUsers(mentioned, { kind: "MENTION", title: `${auth.user.name} te mencionó en el chat`, body: text.slice(0, 160) || "Archivo adjunto", url: `/chat?canal=${channelId}`, workspaceId, groupKey: `chat-${auth.user.id}`, foldRecent: true });
     }
 
     return NextResponse.json(dto, { status: 201 });
