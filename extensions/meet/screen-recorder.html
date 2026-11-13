@@ -1,12 +1,14 @@
 <!doctype html>
 <html lang="es">
   <head>
+    <script src="theme.js"></script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SCRUM ProShop — Grabar pantalla</title>
     <style>
       :root { --bg:#fff; --bg2:#f7f6fb; --fg:#1b1730; --muted:#6f6a88; --line:#e4e2ee; --accent:#6d28d9; --accent-fg:#fff; --danger:#dc2626; --ok:#059669; }
-      @media (prefers-color-scheme: dark) { :root { --bg:#1b1730; --bg2:#1a1927; --fg:#edebf8; --muted:#8f8aa9; --line:#2c2a40; } }
+      @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f0e17; --bg2:#1a1927; --fg:#edebf8; --muted:#8f8aa9; --line:#2c2a40; --accent:#8b5cf6; --danger:#f87171; } }
+      :root[data-theme="dark"] { --bg:#0f0e17; --bg2:#1a1927; --fg:#edebf8; --muted:#8f8aa9; --line:#2c2a40; --accent:#8b5cf6; --danger:#f87171; }
       * { box-sizing: border-box; }
       body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 13.5px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
       h1 { margin: 0 0 2px; font-size: 16px; }
