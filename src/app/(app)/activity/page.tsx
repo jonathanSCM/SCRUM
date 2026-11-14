@@ -21,7 +21,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
   const tz = [me?.timezone, me?.notifPrefs?.tz].find((z): z is string => !!z && isValidTimeZone(z)) ?? DEFAULT_TZ;
   const thisMonday = mondayOf(new Date(), tz);
   const monday = w && isMonday(w) ? w : thisMonday;
-  const { days, members, summary, timeline } = await getTeamActivity(workspaceId, monday, tz, u);
+  const { days, members, summary, timeline, truncated } = await getTeamActivity(workspaceId, monday, tz, u);
 
   const rows = members.map((m) => ({ m, a: summary.get(m.id)! })).sort((x, y) => y.a.total - x.a.total || x.m.name.localeCompare(y.m.name));
   const teamTotal = rows.reduce((n, r) => n + r.a.total, 0);
@@ -47,13 +47,14 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
       </p>
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <Link href={qs({ w: shiftDay(monday, -7), u })} className="btn-ghost btn-sm" aria-label="Semana anterior">←</Link>
+        <Link prefetch={false} href={qs({ w: shiftDay(monday, -7), u })} className="btn-ghost btn-sm" aria-label="Semana anterior">←</Link>
         <b className="font-display text-base text-ink">{dayName(days[0])} – {dayName(days[6])}</b>
-        <Link href={qs({ w: shiftDay(monday, 7), u })} className="btn-ghost btn-sm" aria-label="Semana siguiente">→</Link>
+        <Link prefetch={false} href={qs({ w: shiftDay(monday, 7), u })} className="btn-ghost btn-sm" aria-label="Semana siguiente">→</Link>
         {monday !== thisMonday && <Link href={qs({ w: thisMonday, u })} className="btn-ghost btn-sm">Esta semana</Link>}
         <span className="ml-auto font-mono text-xs text-ink-faint">{teamTotal} acciones en el equipo</span>
       </div>
 
+      {truncated && <p className="mb-2 rounded-md border border-line bg-card-2 px-3 py-2 text-xs text-ink-soft">Esta semana tiene muchísima actividad: se cuentan las últimas 60.000 acciones, así que los primeros días pueden salir con menos.</p>}
       <div className="overflow-x-auto rounded-lg border border-line bg-card">
         <table className="w-full min-w-[56rem] text-sm">
           <thead>
@@ -73,7 +74,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
             {rows.map(({ m, a }) => (
               <tr key={m.id} className={`border-b border-line last:border-0 ${m.id === u ? "bg-card-2" : ""}`}>
                 <td className="px-3 py-2">
-                  <Link href={qs({ u: m.id === u ? null : m.id })} className="flex items-center gap-2 font-semibold text-ink hover:underline">
+                  <Link prefetch={false} href={qs({ u: m.id === u ? null : m.id })} className="flex items-center gap-2 font-semibold text-ink hover:underline">
                     <Avatar name={m.name} userId={m.id} size={22} />
                     {m.name}
                   </Link>

@@ -115,3 +115,4 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - Un grupo de tareas es una fila de `Project` con `kind = GROUP`: reutiliza tickets, tablero y permisos, y no aparece en la lista de proyectos. Se gestiona en `/groups`.
 - Por defecto lo ve todo el equipo; con `isPrivate`, solo quien lo creó y las personas con acceso (`ProjectMember`). El dueño del equipo tampoco lo ve.
 - «Convertir en proyecto» crea el proyecto, mueve las tareas (renumeradas, con comentarios y adjuntos) y deja el grupo archivado con `convertedToId`.
+- **Actividad del equipo:** se añadió el índice `HistoryEntry(changedAt)` (aditivo) y la página lee como máximo 60.000 acciones por semana.
