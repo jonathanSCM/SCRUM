@@ -56,8 +56,20 @@ export function countryOfZone(tz: string): Country | null {
 // ───────── Fechas y horas en una zona ─────────
 
 // Partes de una fecha tal como se ve en `tz`.
+// Crear un Intl.DateTimeFormat es caro (decenas de microsegundos): se guarda uno por zona (la actividad del equipo
+// convierte decenas de miles de fechas).
+const partsFormatters = new Map<string, Intl.DateTimeFormat>();
+function partsFormatter(tz: string): Intl.DateTimeFormat {
+  let f = partsFormatters.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-CA", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    partsFormatters.set(tz, f);
+  }
+  return f;
+}
+
 export function zonedParts(date: Date, tz: string) {
-  const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(date).map((x) => [x.type, x.value]));
+  const p = Object.fromEntries(partsFormatter(tz).formatToParts(date).map((x) => [x.type, x.value]));
   return { year: Number(p.year), month: Number(p.month), day: Number(p.day), hour: Number(p.hour) % 24, minute: Number(p.minute), second: Number(p.second) };
 }
 

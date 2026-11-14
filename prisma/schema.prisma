@@ -196,6 +196,7 @@ model HistoryEntry {
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, changedAt])
+  @@index([changedAt]) // actividad del equipo: rango de fechas de toda una semana
 }
 
 // Un "ticket" de Jira: Épica, Historia, Tarea o Bug.
