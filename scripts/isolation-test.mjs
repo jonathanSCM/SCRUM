@@ -1506,6 +1506,26 @@ async function main() {
   const cbInbox = await cNora.req("GET", "/api/notifications");
   check("la bandeja lo muestra una sola vez", (cbInbox.json.items ?? cbInbox.json.notifications ?? []).filter((n) => n.title.includes("Aldo Miembro A te mencionó") && n.body.includes("mensaje")).length <= 1, cbInbox.text.slice(0, 160));
 
+  // ---------- 39) Enlaces en las reuniones y extensión desde Chrome Web Store ----------
+  console.log("39) Enlaces en reuniones y enlace a la extensión");
+  const lnM = await cAOwner.req("POST", "/api/meetings", { title: "Reunión con enlaces", startsAt: pastStart.toISOString() });
+  const lnOk = await cAOwner.req("POST", `/api/meetings/${lnM.json.id}/files`, { url: "https://drive.google.com/file/d/abc/view", title: "Acta en Drive" });
+  check("se agrega un enlace a una reunión", lnM.status === 201 && lnOk.status === 201 && lnOk.json.kind === "LINK" && lnOk.json.filename === "Acta en Drive");
+  const lnNoTitle = await cAOwner.req("POST", `/api/meetings/${lnM.json.id}/files`, { url: "https://www.notion.so/pagina" });
+  check("sin nombre usa el sitio del enlace", lnNoTitle.status === 201 && lnNoTitle.json.filename === "notion.so");
+  check("solo se aceptan enlaces http(s) (400)", (await cAOwner.req("POST", `/api/meetings/${lnM.json.id}/files`, { url: "javascript:alert(1)" })).status === 400 && (await cAOwner.req("POST", `/api/meetings/${lnM.json.id}/files`, { url: "ftp://x.y/z" })).status === 400 && (await cAOwner.req("POST", `/api/meetings/${lnM.json.id}/files`, { url: "no es un enlace" })).status === 400);
+  const lnList = await cAOwner.req("GET", `/api/meetings/${lnM.json.id}/files`);
+  check("la lista trae el enlace con su url y tipo", lnList.json.files.some((f) => f.kind === "LINK" && f.url === "https://drive.google.com/file/d/abc/view" && f.filename === "Acta en Drive"));
+  const lnGo = await fetch(`${BASE}/api/meetings/${lnM.json.id}/files/${lnOk.json.id}`, { headers: { Cookie: cAOwner.header() }, redirect: "manual" });
+  check("abrir un enlace guardado redirige a su destino", lnGo.status === 307 && lnGo.headers.get("location") === "https://drive.google.com/file/d/abc/view");
+  check("otro equipo no puede agregar ni ver enlaces (404)", (await cBOnly.req("POST", `/api/meetings/${lnM.json.id}/files`, { url: "https://example.com" })).status === 404 && (await cBOnly.req("GET", `/api/meetings/${lnM.json.id}/files`)).status === 404);
+  check("se borra un enlace", (await cAOwner.req("DELETE", `/api/meetings/${lnM.json.id}/files/${lnNoTitle.json.id}`)).status === 200 && (await prisma.meetingFile.count({ where: { id: lnNoTitle.json.id } })) === 0);
+  const extPage = await (await fetch(`${BASE}/extension-authorize`, { headers: { Cookie: cAOwner.header() } })).text();
+  check("la página de la extensión manda a Chrome Web Store y ya no ofrece el .zip", extPage.includes("chromewebstore.google.com/detail/lamcnkadmkbeieomhjeboiipahcijhmp") && !extPage.includes(".zip"));
+  check("el .zip ya no se descarga (404)", (await fetch(`${BASE}/downloads/scrum-proshop-meet-extension.zip`)).status === 404);
+  const calPage = await (await fetch(`${BASE}/calendar`, { headers: { Cookie: cAOwner.header() } })).text();
+  check("el calendario tiene el botón hacia la extensión", calPage.includes("chromewebstore.google.com/detail/lamcnkadmkbeieomhjeboiipahcijhmp"));
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

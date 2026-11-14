@@ -965,6 +965,8 @@ model AudioPart {
 // Archivo subido a una reunión (acta, presentación, lo que se tocó…). Sirve también para reuniones pasadas que solo se registran.
 model MeetingFile {
   id         String   @id @default(cuid())
+  kind       String   @default("FILE") // FILE | LINK (un enlace no guarda bytes: data vacío)
+  url        String? // solo LINK
   filename   String
   mimeType   String
   size       Int
