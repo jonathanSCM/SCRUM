@@ -15,6 +15,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const meeting = await prisma.meeting.findUnique({ where: { id }, select: { id: true, workspaceId: true, everyone: true, createdById: true } });
     const file = meeting ? await prisma.meetingFile.findFirst({ where: { id: fid, meetingId: id } }) : null;
     if (!meeting || !file || !(await canViewRecordings(auth.user, meeting))) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    if (file.kind === "LINK" && file.url) return NextResponse.redirect(file.url, 307);
     const inline = INLINE.test(file.mimeType) && new URL(req.url).searchParams.get("download") !== "1";
     return new NextResponse(new Uint8Array(file.data) as Uint8Array<ArrayBuffer>, {
       headers: {

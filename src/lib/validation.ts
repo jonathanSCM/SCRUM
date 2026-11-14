@@ -106,6 +106,11 @@ export const createProjectSchema = z.object({
   memberIds: z.array(z.string().min(1).max(40)).max(100).optional(),
 });
 
+export const meetingLinkSchema = z.object({
+  url: z.string().trim().max(2000).refine((u) => /^https?:\/\/[^\s]+$/i.test(u), "Escribe un enlace que empiece por http:// o https://"),
+  title: z.string().trim().max(200).optional(),
+});
+
 export const createGroupSchema = z.object({
   name: z.string().trim().min(1, "Nombre requerido").max(120),
   isPrivate: z.boolean().optional(),

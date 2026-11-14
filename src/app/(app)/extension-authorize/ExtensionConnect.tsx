@@ -1,5 +1,6 @@
 "use client";
 
+import { SITE } from "@/lib/site";
 import { useState } from "react";
 import { api } from "@/lib/client";
 import { useToast } from "@/components/ui/Toaster";
@@ -47,9 +48,7 @@ export default function ExtensionConnect() {
       <section className="rounded-xl border border-line bg-card-2/40 p-5 text-sm text-ink-soft">
         <h2 className="font-display text-base font-extrabold text-ink">Instalar la extensión</h2>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
-          <li><a href="/downloads/scrum-proshop-meet-extension.zip" className="font-semibold text-rust hover:underline">Descarga el .zip</a> y descomprímelo en una carpeta.</li>
-          <li>En Chrome abre <span className="font-mono">chrome://extensions</span> y activa «Modo de desarrollador».</li>
-          <li>Pulsa «Cargar descomprimida» y elige la carpeta.</li>
+          <li><a href={SITE.extensionUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-rust hover:underline">Ábrela en Chrome Web Store</a> y pulsa «Agregar a Chrome».</li>
           <li>Vuelve aquí y pulsa «Conectar la extensión».</li>
         </ol>
       </section>

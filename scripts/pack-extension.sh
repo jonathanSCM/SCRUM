@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Empaqueta la extensión de Meet en public/downloads/scrum-proshop-meet-extension.zip (la que se descarga desde /extension-authorize).
-# Uso: bash scripts/pack-extension.sh   (hay que correrlo y subir el .zip cuando cambie algo en extensions/meet)
+# Empaqueta la extensión de Meet en dist/scrum-proshop-meet-extension.zip para subirla a Chrome Web Store (ya no se descarga desde el sitio).
+# Uso: bash scripts/pack-extension.sh   (cuando cambie algo en extensions/meet: subir `version` en el manifest y subir el .zip a la tienda)
 set -euo pipefail
 cd "$(dirname "$0")/../extensions/meet"
-out="../../public/downloads/scrum-proshop-meet-extension.zip"
+out="../../dist/scrum-proshop-meet-extension.zip"
 mkdir -p "$(dirname "$out")"
 rm -f "$out"
 if command -v zip >/dev/null; then

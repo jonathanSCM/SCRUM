@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
+import { SITE } from "@/lib/site";
 import { cn } from "@/lib/ui";
 import { useTimezone } from "@/components/TimezoneProvider";
 import { useToast } from "@/components/ui/Toaster";
@@ -156,6 +157,7 @@ export default function CalendarView({ currentUserId, isLead, people, projects, 
               <button key={v} onClick={() => changeView(v)} aria-pressed={view === v} className={cn("px-3 py-1 text-xs font-bold", view === v ? "bg-rust text-white" : "text-ink-soft hover:text-ink")}>{l}</button>
             ))}
           </div>
+          <a href={SITE.extensionUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm" title="Instala la extensión para grabar y transcribir tus reuniones de Meet">Extensión de Meet ↗</a>
           <button className="btn-primary btn-sm" onClick={() => setForm({ meeting: null, day: selected })}>+ Nueva reunión</button>
         </div>
       </div>
