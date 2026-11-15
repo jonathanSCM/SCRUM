@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -49,6 +49,8 @@ export default function BoardView({
   plannedSprints,
   group = false,
   readOnly = false,
+  allTasks = false,
+  activeSprint = null,
 }: {
   projectId: string;
   sprint: SprintData;
@@ -58,8 +60,12 @@ export default function BoardView({
   plannedSprints: Array<{ id: string; name: string }>;
   group?: boolean; // grupo de tareas: sin sprint, el tablero muestra todas sus tareas
   readOnly?: boolean; // grupo archivado
+  allTasks?: boolean; // se muestran todas las tareas del proyecto (no solo las del sprint activo)
+  activeSprint?: { id: string; name: string } | null; // si hay sprint activo, se puede alternar entre él y todas las tareas
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const toast = useToast();
   const openIssue = useOpenIssue();
 
@@ -169,7 +175,16 @@ export default function BoardView({
     return { done, total, donePts, totalPts, percent: totalPts > 0 ? pct(donePts, totalPts) : pct(done, total) };
   }, [issues]);
 
-  const left = group ? null : daysRemaining(sprint.endDate ? new Date(sprint.endDate) : null);
+  const noSprint = group || allTasks;
+  function switchScope(v: "sprint" | "todas") {
+    const next = new URLSearchParams(params.toString());
+    if (v === "todas") next.set("vista", "todas");
+    else next.delete("vista");
+    const q = next.toString();
+    router.push(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  }
+
+  const left = noSprint ? null : daysRemaining(sprint.endDate ? new Date(sprint.endDate) : null);
   const activeIssue = activeId ? byId[activeId] : null;
   const openCount = totals.total - totals.done;
 
@@ -179,6 +194,14 @@ export default function BoardView({
       <div className="mb-5 border border-line bg-card p-4 rounded-lg">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <h2 className="font-display text-xl font-extrabold text-ink">{sprint.name}</h2>
+          {!group && activeSprint && (
+            <div className="flex rounded-md border border-line" role="group" aria-label="Qué tareas mostrar">
+              {([["sprint", `Sprint activo`], ["todas", "Todas las tareas"]] as const).map(([v, l]) => (
+                <button key={v} type="button" onClick={() => switchScope(v)} aria-pressed={(v === "todas") === allTasks} title={v === "sprint" ? activeSprint.name : "Todas las tareas del proyecto, de todos los sprints y el backlog"} className={cn("px-3 py-1 text-xs font-bold", (v === "todas") === allTasks ? "bg-rust text-white" : "text-ink-soft hover:text-ink")}>{l}</button>
+              ))}
+            </div>
+          )}
+          {!group && !activeSprint && <span className="lozenge text-ink-soft" title="No hay un sprint activo: el tablero muestra todas las tareas">Sin sprint activo · todas las tareas</span>}
           {left !== null && (
             <span className={cn("lozenge", left < 0 ? "text-danger" : left <= 2 ? "text-warn" : "text-moss-ink")}>
               {left < 0 ? `Vencido hace ${-left} d` : left === 0 ? "Termina hoy" : `${left} d restantes`}
@@ -193,10 +216,10 @@ export default function BoardView({
                 <PlusIcon size={14} /> {group ? "Crear tarea" : "Crear ticket"}
               </button>
             )}
-            {!group && <button className="btn-mint btn-sm" onClick={() => setCompleting(true)}>Completar sprint</button>}
+            {!noSprint && <button className="btn-mint btn-sm" onClick={() => setCompleting(true)}>Completar sprint</button>}
           </div>
         </div>
-        {!group && sprint.goal && <p className="mt-2 text-sm text-ink-soft"><b className="text-ink">Objetivo:</b> {sprint.goal}</p>}
+        {!noSprint && sprint.goal && <p className="mt-2 text-sm text-ink-soft"><b className="text-ink">Objetivo:</b> {sprint.goal}</p>}
         <div className="mt-3">
           <ProgressBar value={totals.percent} />
         </div>
@@ -257,9 +280,9 @@ export default function BoardView({
         <DragOverlay dropAnimation={{ duration: 160 }}>{activeIssue ? <IssueCardView issue={activeIssue} overlay /> : null}</DragOverlay>
       </DndContext>
 
-      {issues.length === 0 && <p className="mt-4 text-center text-sm text-ink-faint">{group ? "Este grupo todavía no tiene tareas. Crea la primera con «Crear tarea»." : "El sprint no tiene tickets. Sumalos desde el backlog."}</p>}
+      {issues.length === 0 && <p className="mt-4 text-center text-sm text-ink-faint">{group ? "Este grupo todavía no tiene tareas. Crea la primera con «Crear tarea»." : allTasks ? "Este proyecto todavía no tiene tareas. Crea la primera con «Crear ticket»." : "El sprint no tiene tickets. Sumalos desde el backlog."}</p>}
 
-      <CreateIssueModal open={creating} onClose={() => setCreating(false)} projectId={projectId} options={options} defaultSprintId={group ? null : sprint.id} currentUserId={currentUserId} />
+      <CreateIssueModal open={creating} onClose={() => setCreating(false)} projectId={projectId} options={options} defaultSprintId={group ? null : activeSprint?.id ?? (allTasks ? null : sprint.id)} currentUserId={currentUserId} />
       {completing && (
         <CompleteSprintModal
           open
