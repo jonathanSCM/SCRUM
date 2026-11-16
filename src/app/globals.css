@@ -354,6 +354,7 @@ body {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   white-space: nowrap;
+  max-width: 100%; /* una etiqueta larga nunca se sale de su tarjeta (el texto va en un <span className="truncate">) */
 }
 
 .kbd {

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { logHistory } from "@/lib/history";
+import { fetchDriveTitle } from "@/lib/driveTitle";
 import { MAX_RESOURCE_BYTES, friendlyTitle, normalizeTags, normalizeUrl } from "@/lib/scrum/resources";
 import { checkBelongsTo, listResources, resourceSelect, toResourceDTO } from "@/lib/resourceData";
 
@@ -52,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     } else {
       const url = normalizeUrl(str("url"));
       if (!url) return NextResponse.json({ error: "Pega un enlace válido (http o https) o elige un archivo" }, { status: 400 });
-      data = { kind: "LINK", title: str("title").slice(0, 200) || friendlyTitle(url), url };
+      data = { kind: "LINK", title: str("title").slice(0, 200) || (await fetchDriveTitle(url)) || friendlyTitle(url), url };
     }
 
     const row = await prisma.projectResource.create({

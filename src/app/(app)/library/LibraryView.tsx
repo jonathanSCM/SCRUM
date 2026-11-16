@@ -5,6 +5,7 @@ import { useToast } from "@/components/ui/Toaster";
 import { useConfirm } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
 import { api } from "@/lib/client";
+import { useDriveTitle } from "@/lib/useDriveTitle";
 import { formatBytes, timeAgo, cn } from "@/lib/ui";
 import { CARD_CATEGORIES, categoryLabel, MAX_CARD_ITEMS } from "@/lib/scrum/library";
 import { MAX_RESOURCE_BYTES } from "@/lib/scrum/resources";
@@ -143,6 +144,7 @@ function CardPanel({ c, mine, onClose, onEdit, onDelete, onChanged, onReload }: 
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
+  const findingTitle = useDriveTitle(linkUrl, linkTitle, setLinkTitle);
   const [preview, setPreview] = useState<CardItemDTO | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -293,7 +295,7 @@ function CardPanel({ c, mine, onClose, onEdit, onDelete, onChanged, onReload }: 
           {linkOpen ? (
             <form onSubmit={addLink} className="space-y-2">
               <input className="field" required placeholder="https://drive.google.com/…" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} autoFocus />
-              <input className="field" placeholder="Nombre (opcional)" maxLength={200} value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)} />
+              <input className="field" placeholder={findingTitle ? "Buscando el nombre del documento…" : "Nombre (si es de Drive, se trae solo)"} maxLength={200} value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)} />
               <div className="flex gap-2">
                 <button className="btn-primary btn-sm" disabled={busy}>Agregar enlace</button>
                 <button type="button" className="btn-ghost btn-sm" onClick={() => setLinkOpen(false)}>Cancelar</button>

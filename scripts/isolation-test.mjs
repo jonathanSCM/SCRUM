@@ -1526,6 +1526,47 @@ async function main() {
   const calPage = await (await fetch(`${BASE}/calendar`, { headers: { Cookie: cAOwner.header() } })).text();
   check("el calendario tiene el botón hacia la extensión", calPage.includes("chromewebstore.google.com/detail/lamcnkadmkbeieomhjeboiipahcijhmp"));
 
+  // ---------- 40) Nombre de los documentos de Drive al pegar el enlace ----------
+  console.log("40) El nombre de un documento de Drive se importa solo");
+  if (!process.env.DRIVE_TITLE_MOCK_PORT) {
+    console.log("  (omitido: el servidor de la prueba no tiene DRIVE_TITLE_BASE_URL apuntando a un Google simulado)");
+  } else {
+    const hits = [];
+    const gmock = http.createServer((req, res) => {
+      hits.push(req.url);
+      if (req.url.startsWith("/file/d/PUBLICFILE123")) { res.setHeader("Content-Type", "text/html"); return res.end('<html><head><meta property="og:title" content="Acta de la reunión &amp; acuerdos - Google Drive"><title>Acta - Google Drive</title></head><body></body></html>'); }
+      if (req.url.startsWith("/document/d/PUBLICDOC1234")) { res.setHeader("Content-Type", "text/html"); return res.end("<html><head><title>Plan de trabajo - Google Docs</title></head></html>"); }
+      if (req.url.startsWith("/document/d/PRIVATEDOC123")) { res.statusCode = 302; res.setHeader("Location", "https://accounts.google.com/ServiceLogin?x=1"); return res.end(); }
+      if (req.url.startsWith("/file/d/GENERICFILE12")) { res.setHeader("Content-Type", "text/html"); return res.end("<html><head><title>Google Drive</title></head></html>"); }
+      res.statusCode = 404; res.end("no");
+    });
+    await new Promise((r) => gmock.listen(Number(process.env.DRIVE_TITLE_MOCK_PORT), r));
+    try {
+      const pub = "https://drive.google.com/file/d/PUBLICFILE123/view?usp=sharing";
+      const lt = (u) => cPlain.req("GET", `/api/link-title?url=${encodeURIComponent(u)}`);
+      check("un archivo de Drive público devuelve su nombre (sin el sufijo de Google)", (await lt(pub)).json.title === "Acta de la reunión & acuerdos");
+      check("un documento de Google Docs también", (await lt("https://docs.google.com/document/d/PUBLICDOC1234/edit")).json.title === "Plan de trabajo");
+      check("uno privado (redirige al inicio de sesión) no devuelve nada", (await lt("https://docs.google.com/document/d/PRIVATEDOC123/edit")).json.title === null);
+      check("una página genérica de Google no se toma como nombre", (await lt("https://drive.google.com/file/d/GENERICFILE12/view")).json.title === null);
+      const before = hits.length;
+      check("un enlace que no es de Google nunca se consulta", (await lt("https://example.com/algo")).json.title === null && (await lt("http://127.0.0.1:9/x")).json.title === null && hits.length === before);
+      check("sin sesión no se usa (401)", (await fetch(`${BASE}/api/link-title?url=${encodeURIComponent(pub)}`)).status === 401);
+      const dCard = await prisma.fileCard.create({ data: { title: "Tarjeta Drive", workspaceId: A.ws.id } });
+      const addL = (url, title) => cPlain.req("POST", `/api/library/cards/${dCard.id}/items`, title ? { url, title } : { url });
+      await addL(pub);
+      await addL(pub, "Mi propio nombre");
+      await addL("https://docs.google.com/document/d/PRIVATEDOC123/edit");
+      const items = await prisma.fileCardItem.findMany({ where: { cardId: dCard.id }, orderBy: { createdAt: "asc" } });
+      check("al agregar a la biblioteca sin nombre se guarda el del documento", items[0]?.title === "Acta de la reunión & acuerdos");
+      check("si la persona escribe un nombre, se respeta", items[1]?.title === "Mi propio nombre");
+      check("si es privado queda el nombre genérico de siempre", items[2]?.title === "Documento de Google");
+      const mLink = await cAOwner.req("POST", `/api/meetings/${lnM.json.id}/files`, { url: pub });
+      check("en una reunión también se usa el nombre del documento", mLink.status === 201 && mLink.json.filename === "Acta de la reunión & acuerdos");
+    } finally {
+      gmock.close();
+    }
+  }
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);
