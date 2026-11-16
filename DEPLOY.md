@@ -102,12 +102,11 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - **Páginas públicas:** `/` (landing), `/privacy` y `/terms`. Datos de contacto: `NEXT_PUBLIC_CONTACT_EMAIL` y `NEXT_PUBLIC_COMPANY_NAME` (opcionales; se leen al compilar).
 - **Borrar el caché de todos los dispositivos:** subir `CACHE_VERSION` y reiniciar (ver arriba).
 
-## Daily general, estado "Bloqueadas" y actividad del equipo
+## Daily general y estado "Bloqueadas"
 
 - **Respaldo antes de desplegar:** cambia el esquema de `StandupEntry` (columnas nuevas, `projectId` ahora opcional). Todo es aditivo.
 - **Daily general:** pasó de ser por proyecto a ser uno por persona y día en el equipo (`/daily`). Al arrancar, `prisma/seed.ts` junta los dailys viejos de varios proyectos en uno solo (cada campo con el nombre del proyecto si había más de uno). No borra nada y es idempotente.
 - **Nuevo estado de ticket `BLOCKED` ("Bloqueadas")** entre En progreso y En revisión. Es un texto en `Task.status`: no hay migración.
-- **Actividad del equipo (`/activity`):** solo la ve el dueño (OWNER). Sale del historial de cambios y de los dailys; no mira el chat.
 
 ## Grupos de tareas (tareas sueltas)
 
@@ -115,6 +114,5 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - Un grupo de tareas es una fila de `Project` con `kind = GROUP`: reutiliza tickets, tablero y permisos, y no aparece en la lista de proyectos. Se gestiona en `/groups`.
 - Por defecto lo ve todo el equipo; con `isPrivate`, solo quien lo creó y las personas con acceso (`ProjectMember`). El dueño del equipo tampoco lo ve.
 - «Convertir en proyecto» crea el proyecto, mueve las tareas (renumeradas, con comentarios y adjuntos) y deja el grupo archivado con `convertedToId`.
-- **Actividad del equipo:** se añadió el índice `HistoryEntry(changedAt)` (aditivo) y la página lee como máximo 60.000 acciones por semana.
 - **Nombre de los documentos de Drive:** al pegar un enlace de Google Drive/Docs/Sheets/Slides en la Biblioteca, en Archivos del proyecto o en una reunión, el servidor lee el nombre de la página pública del documento (solo sitios de Google, 4 s de tope). Si el documento es privado, el nombre se escribe a mano. Sin variables nuevas (`DRIVE_TITLE_BASE_URL` solo se usa en las pruebas).
 - **Poner el nombre real a los enlaces de Drive ya guardados (una sola vez):** desde la terminal del contenedor, `npx tsx prisma/rename-drive-links.ts` muestra qué cambiaría y `npx tsx prisma/rename-drive-links.ts --apply` lo aplica. Solo cambia los que tienen el nombre genérico («Documento de Google»…), nunca los renombrados a mano, y es idempotente.
