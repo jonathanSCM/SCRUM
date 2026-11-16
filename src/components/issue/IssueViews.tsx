@@ -159,12 +159,14 @@ export function IssueRowView({
 export function IssueCardView({
   issue,
   onOpen,
+  onMove,
   dragging,
   overlay,
   style,
 }: {
   issue: IssueCardData;
   onOpen?: () => void;
+  onMove?: () => void; // teléfono: botón «Mover a…» (arrastrar con el dedo no es fiable)
   dragging?: boolean;
   overlay?: boolean;
   style?: CSSProperties;
@@ -215,6 +217,16 @@ export function IssueCardView({
           <Avatar name={issue.assignee?.name} userId={issue.assignee?.id} size={22} />
         </span>
       </div>
+      {onMove && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onMove(); }}
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-md border border-line-strong bg-card-2 px-3 py-2 text-xs font-bold text-ink-soft active:bg-card"
+          aria-label={`Mover ${issue.key} a otra columna`}
+        >
+          Mover a… <span aria-hidden>▾</span>
+        </button>
+      )}
     </div>
   );
 }

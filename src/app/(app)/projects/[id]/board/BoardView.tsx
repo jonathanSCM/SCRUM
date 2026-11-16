@@ -7,7 +7,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   useDroppable,
   useSensor,
@@ -26,6 +27,7 @@ import type { IssueCardData, ProjectOptions, SprintData } from "@/lib/types";
 import { IssueCardView } from "@/components/issue/IssueViews";
 import CreateIssueModal from "@/components/issue/CreateIssueModal";
 import { useOpenIssue } from "@/components/issue/useOpenIssue";
+import MobileBoard from "./MobileBoard";
 import { CompleteSprintModal } from "@/components/sprint/SprintModals";
 import { ProgressBar } from "@/components/ui/Motion";
 import { PlusIcon } from "@/components/ui/Icons";
@@ -113,7 +115,9 @@ export default function BoardView({
   }, [issues, visible, lanes, groupBy]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    // Tableta: mantener pulsada la tarjeta un instante para arrastrarla; un deslizamiento normal sigue desplazando la pantalla.
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -264,13 +268,19 @@ export default function BoardView({
             ))}
           </select>
         )}
-        <select className="field-sm ml-auto" value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)} aria-label="Agrupar por">
+        <select className="field-sm ml-auto hidden md:block" value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)} aria-label="Agrupar por">
           <option value="none">Sin agrupar</option>
           <option value="assignee">Agrupar por encargado</option>
           <option value="epic">Agrupar por épica</option>
         </select>
       </div>
 
+      {/* Teléfono: una columna a la vez y botón «Mover a…» (arrastrar con el dedo choca con el desplazamiento). */}
+      <div className="md:hidden">
+        <MobileBoard projectId={projectId} issues={visible} onOpen={(i) => openIssue(i.key)} readOnly={readOnly} />
+      </div>
+
+      <div className="hidden md:block">
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setActiveId(null); router.refresh(); }}>
         <div className="space-y-6 overflow-x-auto pb-2">
           {lanes.map((lane) => (
@@ -293,6 +303,7 @@ export default function BoardView({
         </div>
         <DragOverlay dropAnimation={{ duration: 160 }}>{activeIssue ? <IssueCardView issue={activeIssue} overlay /> : null}</DragOverlay>
       </DndContext>
+      </div>
 
       {issues.length === 0 && <p className="mt-4 text-center text-sm text-ink-faint">{group ? "Este grupo todavía no tiene tareas. Crea la primera con «Crear tarea»." : allTasks ? "Este proyecto todavía no tiene tareas. Crea la primera con «Crear ticket»." : "El sprint no tiene tickets. Sumalos desde el backlog."}</p>}
 
