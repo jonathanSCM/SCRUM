@@ -72,9 +72,8 @@ export default async function ProjectLayout({ children, params }: { children: Re
           </div>
         )}
         {activeSprint && (
-          <span className="lozenge text-moss-ink">
-            {activeSprint.name}
-            {left !== null ? ` · ${left} d` : ""}
+          <span className="lozenge min-w-0 text-moss-ink" title={activeSprint.name}>
+            <span className="truncate">{activeSprint.name}{left !== null ? ` · ${left} d` : ""}</span>
           </span>
         )}
         {project.deployUrl && (

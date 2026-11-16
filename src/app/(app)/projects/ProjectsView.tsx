@@ -193,9 +193,9 @@ function ProjectCard({ project, overlay }: { project: ProjectCardData; overlay?:
         </p>
       </div>
       {project.activeSprint && (
-        <p className="mt-2 text-xs text-ink-soft">
-          <span className="lozenge text-moss-ink">{project.activeSprint.name}</span>
-          {left !== null ? <span className="ml-2 text-ink-faint">{left < 0 ? "vencido" : `${left} d`}</span> : null}
+        <p className="mt-2 flex min-w-0 items-center gap-2 text-xs text-ink-soft">
+          <span className="lozenge min-w-0 text-moss-ink" title={project.activeSprint.name}><span className="truncate">{project.activeSprint.name}</span></span>
+          {left !== null ? <span className="shrink-0 text-ink-faint">{left < 0 ? "vencido" : `${left} d`}</span> : null}
         </p>
       )}
     </Link>

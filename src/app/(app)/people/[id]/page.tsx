@@ -105,7 +105,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-[11px] font-bold text-moss-ink">{p.key}</span>
                       <span className="min-w-0 flex-1 truncate font-display text-base font-extrabold text-ink">{p.name}</span>
-                      {p.sprint && <span className="lozenge text-moss-ink">{p.sprint}</span>}
+                      {p.sprint && <span className="lozenge min-w-0 max-w-[45%] text-moss-ink" title={p.sprint}><span className="truncate">{p.sprint}</span></span>}
                     </div>
                     <p className="mt-1 font-mono text-[11px] text-ink-faint">
                       {p.open} abiertos · {p.completed} terminados esta semana{p.created ? ` · ${p.created} creados` : ""}
