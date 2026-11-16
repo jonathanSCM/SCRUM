@@ -244,7 +244,7 @@ export default function BoardView({
       </div>
 
       {/* Filtros */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="-mx-4 mb-4 flex items-center gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 [&>*]:shrink-0">
         <button
           onClick={() => setMine((v) => !v)}
           className={cn("border px-2.5 py-1 text-xs font-bold transition-colors rounded-md", mine ? "border-rust bg-rust text-white" : "border-line-strong text-ink-soft hover:text-ink")}

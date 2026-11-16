@@ -218,14 +218,16 @@ export function IssueCardView({
         </span>
       </div>
       {onMove && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onMove(); }}
-          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-md border border-line-strong bg-card-2 px-3 py-2 text-xs font-bold text-ink-soft active:bg-card"
-          aria-label={`Mover ${issue.key} a otra columna`}
-        >
-          Mover a… <span aria-hidden>▾</span>
-        </button>
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onMove(); }}
+            className="rounded-md px-2 py-1 text-[11px] font-bold text-ink-faint active:bg-card-2"
+            aria-label={`Mover ${issue.key} a otra columna`}
+          >
+            ⇄ Mover
+          </button>
+        </div>
       )}
     </div>
   );
