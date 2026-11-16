@@ -99,9 +99,12 @@ export const projectKeySchema = z
   .toUpperCase()
   .regex(/^[A-Z][A-Z0-9]{1,4}$/, "La clave son 2 a 5 letras o números y empieza con una letra");
 
+const projectColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color no válido");
+
 export const createProjectSchema = z.object({
   name: z.string().trim().min(1, "Nombre requerido").max(200),
   key: projectKeySchema.optional(),
+  color: projectColorSchema.nullable().optional(),
   description: z.string().trim().max(5000).optional(),
   memberIds: z.array(z.string().min(1).max(40)).max(100).optional(),
 });
@@ -111,27 +114,11 @@ export const meetingLinkSchema = z.object({
   title: z.string().trim().max(200).optional(),
 });
 
-export const createGroupSchema = z.object({
-  name: z.string().trim().min(1, "Nombre requerido").max(120),
-  isPrivate: z.boolean().optional(),
-  memberIds: z.array(z.string().min(1).max(40)).max(100).optional(),
-});
-
-export const updateGroupSchema = z.object({
-  name: z.string().trim().min(1, "Nombre requerido").max(120).optional(),
-  isPrivate: z.boolean().optional(),
-  archived: z.boolean().optional(),
-});
-
-export const convertGroupSchema = z.object({
-  name: z.string().trim().min(1, "Nombre requerido").max(200).optional(),
-  key: projectKeySchema.optional(),
-});
-
 export const updateProjectSchema = z.object({
   name: z.string().trim().min(1, "Nombre requerido").max(200).optional(),
   statusId: z.string().min(1).optional(),
   leadUserId: z.string().nullable().optional(),
+  color: projectColorSchema.nullable().optional(),
   description: z.string().max(5000).optional(),
   deployUrl: z.string().trim().max(500).nullable().optional(),
   stack: z.array(z.string().trim().min(1).max(60)).max(30).optional(),

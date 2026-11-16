@@ -1,46 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  DndContext,
-  DragOverlay,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
-  closestCorners,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { api } from "@/lib/client";
 import { cn, pct } from "@/lib/ui";
 import { daysRemaining } from "@/lib/scrum/sprintLifecycle";
-import { STATUSES, STATUS_META, type IssueStatus } from "@/lib/scrum/constants";
+import type { IssueStatus } from "@/lib/scrum/constants";
 import type { IssueCardData, ProjectOptions, SprintData } from "@/lib/types";
-import { IssueCardView } from "@/components/issue/IssueViews";
 import CreateIssueModal from "@/components/issue/CreateIssueModal";
 import { useOpenIssue } from "@/components/issue/useOpenIssue";
-import MobileBoard from "./MobileBoard";
+import KanbanBoard, { type GroupBy } from "@/components/board/KanbanBoard";
 import { CompleteSprintModal } from "@/components/sprint/SprintModals";
 import { ProgressBar } from "@/components/ui/Motion";
 import { PlusIcon } from "@/components/ui/Icons";
-import { useToast } from "@/components/ui/Toaster";
-
-type GroupBy = "none" | "assignee" | "epic";
-const SEP = "::";
-
-function laneOf(issue: IssueCardData, groupBy: GroupBy): { key: string; label: string } {
-  if (groupBy === "assignee") return issue.assignee ? { key: issue.assignee.id, label: issue.assignee.name } : { key: "none", label: "Sin asignar" };
-  if (groupBy === "epic") return issue.epic ? { key: issue.epic.id, label: issue.epic.title } : { key: "none", label: "Sin épica" };
-  return { key: "all", label: "" };
-}
 
 export default function BoardView({
   projectId,
@@ -49,8 +22,6 @@ export default function BoardView({
   options,
   currentUserId,
   plannedSprints,
-  group = false,
-  readOnly = false,
   allTasks = false,
   activeSprint = null,
 }: {
@@ -60,21 +31,16 @@ export default function BoardView({
   options: ProjectOptions;
   currentUserId: string;
   plannedSprints: Array<{ id: string; name: string }>;
-  group?: boolean; // grupo de tareas: sin sprint, el tablero muestra todas sus tareas
-  readOnly?: boolean; // grupo archivado
   allTasks?: boolean; // se muestran todas las tareas del proyecto (no solo las del sprint activo)
   activeSprint?: { id: string; name: string } | null; // si hay sprint activo, se puede alternar entre él y todas las tareas
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const toast = useToast();
   const openIssue = useOpenIssue();
 
-  const [byId, setById] = useState<Record<string, IssueCardData>>({});
-  const [lists, setLists] = useState<Record<string, string[]>>({});
-  const [activeId, setActiveId] = useState<string | null>(null);
-  useLiveRefresh(`/api/projects/${projectId}/live`, { paused: !!activeId });
+  const [dragging, setDragging] = useState(false);
+  useLiveRefresh(`/api/projects/${projectId}/live`, { paused: dragging });
   const [mine, setMine] = useState(false);
   const [assignee, setAssignee] = useState("");
   const [epic, setEpic] = useState("");
@@ -93,95 +59,14 @@ export default function BoardView({
     [issues, mine, assignee, epic, currentUserId]
   );
 
-  const lanes = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const i of visible) {
-      const l = laneOf(i, groupBy);
-      map.set(l.key, l.label);
-    }
-    if (groupBy === "none") map.set("all", "");
-    return Array.from(map, ([key, label]) => ({ key, label })).sort((a, b) => (a.key === "none" ? 1 : b.key === "none" ? -1 : a.label.localeCompare(b.label)));
-  }, [visible, groupBy]);
-
-  useEffect(() => {
-    setById(Object.fromEntries(issues.map((i) => [i.id, i])));
-    const next: Record<string, string[]> = {};
-    for (const lane of lanes) for (const s of STATUSES) next[`${lane.key}${SEP}${s}`] = [];
-    for (const i of visible) next[`${laneOf(i, groupBy).key}${SEP}${i.status}`]?.push(i.id);
-    // En "Hecho" lo terminado más reciente va arriba (el resto queda recogido: ver DONE_VISIBLE).
-    const doneAt = new Map(issues.map((i) => [i.id, i.completedAt ?? ""]));
-    for (const key of Object.keys(next)) if (key.endsWith(`${SEP}DONE`)) next[key].sort((a, b) => (doneAt.get(b) ?? "").localeCompare(doneAt.get(a) ?? ""));
-    setLists(next);
-  }, [issues, visible, lanes, groupBy]);
-
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    // Tableta: mantener pulsada la tarjeta un instante para arrastrarla; un deslizamiento normal sigue desplazando la pantalla.
-    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  // Guarda un movimiento del tablero (columna y posición).
+  const moveIssue = useCallback(
+    async (issue: IssueCardData, status: IssueStatus, prevId: string | null, nextId: string | null) => {
+      const res = await api(`/api/projects/${projectId}/move`, "POST", { issueId: issue.id, status, prevId, nextId });
+      return res.ok ? null : res.error;
+    },
+    [projectId]
   );
-
-  function findContainer(id: string): string | null {
-    if (id in lists) return id;
-    for (const [c, ids] of Object.entries(lists)) if (ids.includes(id)) return c;
-    return null;
-  }
-
-  // ¿Ya estaba la tarjeta en esta columna al empezar a arrastrar? (para no mandar un "movimiento" que no lo es)
-  function issueIsIn(id: string, container: string) {
-    const original = byId[id];
-    return !!original && container.endsWith(`${SEP}${original.status}`);
-  }
-
-  function onDragStart(e: DragStartEvent) {
-    setActiveId(String(e.active.id));
-  }
-
-  function onDragOver({ active, over }: DragOverEvent) {
-    if (!over) return;
-    const from = findContainer(String(active.id));
-    const to = findContainer(String(over.id));
-    if (!from || !to || from === to) return;
-    setLists((prev) => {
-      const target = [...prev[to]];
-      const overIndex = target.indexOf(String(over.id));
-      // Soltar en el hueco de "Hecho" lo deja arriba (es lo más reciente); si no, se vería recogido al final.
-      target.splice(overIndex >= 0 ? overIndex : to.endsWith(`${SEP}DONE`) ? 0 : target.length, 0, String(active.id));
-      return { ...prev, [from]: prev[from].filter((id) => id !== active.id), [to]: target };
-    });
-  }
-
-  async function onDragEnd({ active, over }: DragEndEvent) {
-    setActiveId(null);
-    if (!over) return router.refresh();
-    const id = String(active.id);
-    const container = findContainer(id);
-    if (!container) return;
-
-    let list = lists[container];
-    const status = container.split(SEP)[1] as IssueStatus;
-    // En "Hecho" el orden es por fecha de término: reordenar ahí no significa nada.
-    if (status === "DONE" && findContainer(String(over.id)) === container) {
-      if (issueIsIn(id, container)) return router.refresh(); // ya estaba en Hecho: solo se reordenó, no hay nada que guardar
-    }
-    if (findContainer(String(over.id)) === container && status !== "DONE") {
-      const oldIndex = list.indexOf(id);
-      const newIndex = list.indexOf(String(over.id));
-      if (oldIndex !== newIndex && newIndex >= 0) {
-        list = list.slice();
-        list.splice(oldIndex, 1);
-        list.splice(newIndex, 0, id);
-        setLists((prev) => ({ ...prev, [container]: list }));
-      }
-    }
-
-    const index = list.indexOf(id);
-    const prevId = status !== "DONE" && index > 0 ? list[index - 1] : null;
-    const nextId = status !== "DONE" && index < list.length - 1 ? list[index + 1] : null;
-    const res = await api(`/api/projects/${projectId}/move`, "POST", { issueId: id, status, prevId, nextId });
-    if (!res.ok) toast.error(res.error);
-    router.refresh();
-  }
 
   const totals = useMemo(() => {
     let done = 0, total = 0, donePts = 0, totalPts = 0;
@@ -193,7 +78,7 @@ export default function BoardView({
     return { done, total, donePts, totalPts, percent: totalPts > 0 ? pct(donePts, totalPts) : pct(done, total) };
   }, [issues]);
 
-  const noSprint = group || allTasks;
+  const noSprint = allTasks;
   function switchScope(v: "sprint" | "todas") {
     const next = new URLSearchParams(params.toString());
     if (v === "todas") next.set("vista", "todas");
@@ -203,7 +88,6 @@ export default function BoardView({
   }
 
   const left = noSprint ? null : daysRemaining(sprint.endDate ? new Date(sprint.endDate) : null);
-  const activeIssue = activeId ? byId[activeId] : null;
   const openCount = totals.total - totals.done;
 
   return (
@@ -212,14 +96,14 @@ export default function BoardView({
       <div className="mb-5 border border-line bg-card p-4 rounded-lg">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <h2 className="font-display text-xl font-extrabold text-ink">{sprint.name}</h2>
-          {!group && activeSprint && (
+          {activeSprint && (
             <div className="flex rounded-md border border-line" role="group" aria-label="Qué tareas mostrar">
               {([["sprint", `Sprint activo`], ["todas", "Todas las tareas"]] as const).map(([v, l]) => (
                 <button key={v} type="button" onClick={() => switchScope(v)} aria-pressed={(v === "todas") === allTasks} title={v === "sprint" ? activeSprint.name : "Todas las tareas del proyecto, de todos los sprints y el backlog"} className={cn("px-3 py-1 text-xs font-bold", (v === "todas") === allTasks ? "bg-rust text-white" : "text-ink-soft hover:text-ink")}>{l}</button>
               ))}
             </div>
           )}
-          {!group && !activeSprint && <span className="lozenge text-ink-soft" title="No hay un sprint activo: el tablero muestra todas las tareas">Sin sprint activo · todas las tareas</span>}
+          {!activeSprint && <span className="lozenge text-ink-soft" title="No hay un sprint activo: el tablero muestra todas las tareas">Sin sprint activo · todas las tareas</span>}
           {left !== null && (
             <span className={cn("lozenge", left < 0 ? "text-danger" : left <= 2 ? "text-warn" : "text-moss-ink")}>
               {left < 0 ? `Vencido hace ${-left} d` : left === 0 ? "Termina hoy" : `${left} d restantes`}
@@ -229,11 +113,9 @@ export default function BoardView({
             {totals.done}/{totals.total} tickets{totals.totalPts > 0 ? ` · ${totals.donePts}/${totals.totalPts} pts` : ""}
           </span>
           <div className="ml-auto flex gap-2">
-            {!readOnly && (
-              <button className="btn-ghost btn-sm" onClick={() => setCreating(true)}>
-                <PlusIcon size={14} /> {group ? "Crear tarea" : "Crear ticket"}
-              </button>
-            )}
+            <button className="btn-ghost btn-sm" onClick={() => setCreating(true)}>
+              <PlusIcon size={14} /> Crear ticket
+            </button>
             {!noSprint && <button className="btn-mint btn-sm" onClick={() => setCompleting(true)}>Completar sprint</button>}
           </div>
         </div>
@@ -275,39 +157,11 @@ export default function BoardView({
         </select>
       </div>
 
-      {/* Teléfono: una columna a la vez y botón «Mover a…» (arrastrar con el dedo choca con el desplazamiento). */}
-      <div className="md:hidden">
-        <MobileBoard projectId={projectId} issues={visible} onOpen={(i) => openIssue(i.key)} readOnly={readOnly} />
-      </div>
+      <KanbanBoard issues={visible} groupBy={groupBy} onOpen={(i) => openIssue(i.key)} onMove={moveIssue} onDragging={setDragging} />
 
-      <div className="hidden md:block">
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setActiveId(null); router.refresh(); }}>
-        <div className="space-y-6 overflow-x-auto pb-2">
-          {lanes.map((lane) => (
-            <div key={lane.key} className="min-w-[1120px]">
-              {groupBy !== "none" && (
-                <h3 className="mb-2 flex items-center gap-2 font-display text-sm font-extrabold text-ink">
-                  {lane.label}
-                  <span className="font-mono text-xs font-medium text-ink-faint">
-                    {STATUSES.reduce((n, s) => n + (lists[`${lane.key}${SEP}${s}`]?.length ?? 0), 0)}
-                  </span>
-                </h3>
-              )}
-              <div className="grid grid-cols-5 gap-3">
-                {STATUSES.map((status) => (
-                  <Column key={status} id={`${lane.key}${SEP}${status}`} status={status} ids={lists[`${lane.key}${SEP}${status}`] ?? []} byId={byId} onOpen={(i) => openIssue(i.key)} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <DragOverlay dropAnimation={{ duration: 160 }}>{activeIssue ? <IssueCardView issue={activeIssue} overlay /> : null}</DragOverlay>
-      </DndContext>
-      </div>
+      {issues.length === 0 && <p className="mt-4 text-center text-sm text-ink-faint">{allTasks ? "Este proyecto todavía no tiene tareas. Crea la primera con «Crear ticket»." : "El sprint no tiene tickets. Sumalos desde el backlog."}</p>}
 
-      {issues.length === 0 && <p className="mt-4 text-center text-sm text-ink-faint">{group ? "Este grupo todavía no tiene tareas. Crea la primera con «Crear tarea»." : allTasks ? "Este proyecto todavía no tiene tareas. Crea la primera con «Crear ticket»." : "El sprint no tiene tickets. Sumalos desde el backlog."}</p>}
-
-      <CreateIssueModal open={creating} onClose={() => setCreating(false)} projectId={projectId} options={options} defaultSprintId={group ? null : activeSprint?.id ?? (allTasks ? null : sprint.id)} currentUserId={currentUserId} />
+      <CreateIssueModal open={creating} onClose={() => setCreating(false)} projectId={projectId} options={options} defaultSprintId={activeSprint?.id ?? (allTasks ? null : sprint.id)} currentUserId={currentUserId} />
       {completing && (
         <CompleteSprintModal
           open
@@ -319,48 +173,6 @@ export default function BoardView({
           plannedSprints={plannedSprints}
         />
       )}
-    </div>
-  );
-}
-
-// En "Hecho" solo se ven las últimas terminadas; el resto queda recogido tras «Ver todas» para que la columna no crezca sin fin.
-const DONE_VISIBLE = 5;
-
-function Column({ id, status, ids, byId, onOpen }: { id: string; status: IssueStatus; ids: string[]; byId: Record<string, IssueCardData>; onOpen: (i: IssueCardData) => void }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-  const [showAll, setShowAll] = useState(false);
-  const meta = STATUS_META[status];
-  const points = ids.reduce((n, i) => n + (byId[i]?.storyPoints ?? 0), 0);
-  const collapsed = status === "DONE" && !showAll && ids.length > DONE_VISIBLE;
-  const shown = collapsed ? ids.slice(0, DONE_VISIBLE) : ids;
-  return (
-    <div ref={setNodeRef} className={cn("flex min-h-[200px] flex-col border bg-card-2/40 transition-colors rounded-md", isOver ? "border-moss bg-card-2" : "border-line-strong")}>
-      <div className="flex items-center gap-2 border-b border-line-strong px-3 py-2">
-        <span className="h-2.5 w-2.5" style={{ background: meta.color }} />
-        <span className="text-xs font-extrabold uppercase tracking-wide text-ink-soft">{meta.label}</span>
-        <span className="font-mono text-xs text-ink-faint">{ids.length}</span>
-        {points > 0 && <span className="ml-auto font-mono text-[11px] text-ink-faint">{points} pts</span>}
-      </div>
-      <div className="flex flex-1 flex-col gap-2 p-2">
-        <SortableContext items={shown} strategy={verticalListSortingStrategy}>
-          {shown.map((id) => byId[id] && <SortableCard key={id} issue={byId[id]} onOpen={() => onOpen(byId[id])} />)}
-        </SortableContext>
-        {status === "DONE" && ids.length > DONE_VISIBLE && (
-          <button type="button" onClick={() => setShowAll((v) => !v)} className="rounded-md border border-dashed border-line-strong px-2 py-1.5 text-xs font-semibold text-ink-soft hover:text-ink" aria-expanded={showAll}>
-            {showAll ? "Mostrar solo las últimas" : `Ver las ${ids.length - DONE_VISIBLE} anteriores`}
-          </button>
-        )}
-        {ids.length === 0 && <p className="m-auto py-6 text-center text-xs text-ink-faint">Soltá un ticket acá</p>}
-      </div>
-    </div>
-  );
-}
-
-function SortableCard({ issue, onOpen }: { issue: IssueCardData; onOpen: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: issue.id });
-  return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, touchAction: "manipulation" }} {...attributes} {...listeners}>
-      <IssueCardView issue={issue} onOpen={onOpen} dragging={isDragging} />
     </div>
   );
 }

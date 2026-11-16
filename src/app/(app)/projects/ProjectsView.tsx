@@ -11,6 +11,7 @@ import { daysRemaining } from "@/lib/scrum/sprintLifecycle";
 import { suggestProjectKey } from "@/lib/scrum/issueKey";
 import Avatar from "@/components/ui/Avatar";
 import Modal from "@/components/ui/Modal";
+import ColorPicker from "@/components/ui/ColorPicker";
 import EmptyState from "@/components/ui/EmptyState";
 import { DragIcon, PlusIcon } from "@/components/ui/Icons";
 import { useDragScroll } from "@/lib/useDragScroll";
@@ -23,6 +24,7 @@ export type ProjectCardData = {
   key: string;
   name: string;
   statusId: string;
+  color: string | null;
   lead: string | null;
   labels: string[];
   activeSprint: { name: string; endDate: string | null } | null;
@@ -176,6 +178,7 @@ function ProjectCard({ project, overlay }: { project: ProjectCardData; overlay?:
       href={`/projects/${project.id}/board`}
       draggable={false}
       className={cn("lift block border border-line bg-card p-3 rounded-lg", overlay && "rotate-2 border-moss shadow-hard-purple")}
+      style={project.color ? { borderLeftColor: project.color, borderLeftWidth: 5 } : undefined}
     >
       <div className="flex items-center gap-2">
         <span className="font-mono text-[11px] font-bold text-moss-ink">{project.key}</span>
@@ -221,7 +224,7 @@ function ProjectTable({ projects, statuses }: { projects: ProjectCardData[]; sta
           {projects.map((p) => (
             <tr key={p.id} className="border-b border-line-strong last:border-b-0 hover:bg-card-2">
               <td className="px-3 py-2 font-mono text-xs text-moss-ink">{p.key}</td>
-              <td className="px-3 py-2 font-semibold"><Link href={`/projects/${p.id}/board`} className="text-ink hover:underline">{p.name}</Link>{p.labels.map((l) => <span key={l} className="lozenge ml-2 text-ink-soft">{l}</span>)}</td>
+              <td className="px-3 py-2 font-semibold">{p.color && <span aria-hidden className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: p.color }} />}<Link href={`/projects/${p.id}/board`} className="text-ink hover:underline">{p.name}</Link>{p.labels.map((l) => <span key={l} className="lozenge ml-2 text-ink-soft">{l}</span>)}</td>
               <td className="px-3 py-2"><span className="lozenge" style={{ color: `color-mix(in srgb, ${byId.get(p.statusId)?.color ?? "#6f6a88"} 55%, var(--ink))` }}>{byId.get(p.statusId)?.name}</span></td>
               <td className="px-3 py-2 text-ink-soft">{p.lead ?? "—"}</td>
               <td className="px-3 py-2 text-ink-soft">{p.activeSprint?.name ?? "—"}</td>
@@ -243,6 +246,7 @@ function NewProjectModal({ open, onClose, takenKeys, people }: { open: boolean; 
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [color, setColor] = useState("");
 
   const suggested = useMemo(() => (name.trim() ? suggestProjectKey(name, takenKeys) : ""), [name, takenKeys]);
   const effectiveKey = keyTouched ? key : suggested;
@@ -250,7 +254,7 @@ function NewProjectModal({ open, onClose, takenKeys, people }: { open: boolean; 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const res = await api<{ id: string }>("/api/projects", "POST", { name, key: effectiveKey || undefined, description: description || undefined, memberIds: memberIds.length ? memberIds : undefined });
+    const res = await api<{ id: string }>("/api/projects", "POST", { name, key: effectiveKey || undefined, description: description || undefined, color: color || undefined, memberIds: memberIds.length ? memberIds : undefined });
     setSaving(false);
     if (!res.ok) return toast.error(res.error);
     toast.success("Proyecto creado");
@@ -258,6 +262,7 @@ function NewProjectModal({ open, onClose, takenKeys, people }: { open: boolean; 
     setName("");
     setKey("");
     setKeyTouched(false);
+    setColor("");
     setDescription("");
     setMemberIds([]);
     router.push(`/projects/${res.data.id}/backlog`);
@@ -300,6 +305,7 @@ function NewProjectModal({ open, onClose, takenKeys, people }: { open: boolean; 
           <label className="mb-1 block text-xs font-semibold text-ink-soft">Descripción</label>
           <textarea className="field" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
+        <ColorPicker value={color} onChange={setColor} />
         {people.length > 1 && (
           <div>
             <label className="mb-1 block text-xs font-semibold text-ink-soft">Personas del equipo que trabajan en el proyecto (se les avisa)</label>

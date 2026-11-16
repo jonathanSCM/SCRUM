@@ -175,7 +175,7 @@ export function IssueCardView({
   const accent = issue.epic?.color ?? null;
   return (
     <div
-      style={{ ...style, borderTopColor: accent ?? undefined, borderTopWidth: accent ? 5 : undefined }}
+      style={{ ...style, borderTopColor: accent ?? undefined, borderTopWidth: accent ? 5 : undefined, ...(issue.projectColor ? { borderLeftColor: issue.projectColor, borderLeftWidth: 4 } : {}) }}
       onClick={onOpen}
       className={cn(
         "cursor-pointer select-none border border-line bg-card p-3 transition-[box-shadow,transform] duration-100",
@@ -184,6 +184,12 @@ export function IssueCardView({
         overlay && "rotate-2 scale-[1.03] border-moss shadow-hard-purple"
       )}
     >
+      {issue.projectName && (
+        <p className="mb-1.5 flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-ink-soft">
+          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: issue.projectColor ?? "var(--ink-faint)" }} />
+          <span className="truncate">{issue.projectName}</span>
+        </p>
+      )}
       {issue.epic && (
         <div className="mb-1.5">
           <EpicChip epic={issue.epic} />

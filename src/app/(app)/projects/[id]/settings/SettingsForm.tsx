@@ -1,6 +1,7 @@
 "use client";
 
 import ExportPanel from "./ExportPanel";
+import ColorPicker from "@/components/ui/ColorPicker";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
@@ -16,6 +17,7 @@ type Props = {
     key: string;
     name: string;
     description: string;
+    color: string;
     deployUrl: string;
     stack: string[];
     labels: string[];
@@ -47,6 +49,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
   const [deployUrl, setDeployUrl] = useState(project.deployUrl);
   const [stack, setStack] = useState(project.stack.join(", "));
   const [labels, setLabels] = useState(project.labels.join(", "));
+  const [color, setColor] = useState(project.color);
   const [statusId, setStatusId] = useState(project.statusId);
   const [leadUserId, setLeadUserId] = useState(project.leadUserId);
   const [saving, setSaving] = useState(false);
@@ -102,6 +105,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
     const res = await api(`/api/projects/${project.id}`, "PATCH", {
       name,
       description,
+      color: color || null,
       deployUrl: deployUrl.trim() || null,
       stack: stack.split(",").map((s) => s.trim()).filter(Boolean),
       labels: labels.split(",").map((s) => s.trim()).filter(Boolean),
@@ -247,6 +251,7 @@ export default function SettingsForm({ isLead, statuses, users, project }: Props
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
+          <ColorPicker value={color} onChange={setColor} />
           <div>
             <label className="mb-1 block text-xs font-semibold text-ink-soft">URL de despliegue</label>
             <input className="field" type="url" placeholder="https://…" value={deployUrl} onChange={(e) => setDeployUrl(e.target.value)} />

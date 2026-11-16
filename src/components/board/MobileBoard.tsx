@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/client";
 import { cn } from "@/lib/ui";
 import { STATUSES, STATUS_META, type IssueStatus } from "@/lib/scrum/constants";
 import type { IssueCardData } from "@/lib/types";
@@ -22,7 +21,7 @@ type Drag = { id: string; x: number; y: number; dx: number; dy: number; w: numbe
 // Mantén pulsada una tarjeta y se levanta; sin soltarla, llévala al borde izquierdo o derecho y pasa a la
 // página vecina; suéltala en la columna y la posición que quieras. Un toque abre el detalle. En «⇄ Mover» hay una
 // alternativa sin arrastrar.
-export default function MobileBoard({ projectId, issues, onOpen, readOnly = false }: { projectId: string; issues: IssueCardData[]; onOpen: (i: IssueCardData) => void; readOnly?: boolean }) {
+export default function MobileBoard({ issues, onOpen, onMove, readOnly = false }: { issues: IssueCardData[]; onOpen: (i: IssueCardData) => void; onMove: (issue: IssueCardData, status: IssueStatus, prevId: string | null, nextId: string | null) => Promise<string | null>; readOnly?: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const scroller = useRef<HTMLDivElement>(null);
@@ -93,9 +92,9 @@ export default function MobileBoard({ projectId, issues, onOpen, readOnly = fals
   // ---- mover (API) ----
   async function moveIssue(issue: IssueCardData, status: IssueStatus, prevId: string | null, nextId: string | null) {
     setBusy(true);
-    const res = await api(`/api/projects/${projectId}/move`, "POST", { issueId: issue.id, status, prevId: status === "DONE" ? null : prevId, nextId: status === "DONE" ? null : nextId });
+    const error = await onMove(issue, status, status === "DONE" ? null : prevId, status === "DONE" ? null : nextId);
     setBusy(false);
-    if (!res.ok) return toast.error(res.error);
+    if (error) return toast.error(error);
     setOverride((o) => ({ ...o, [issue.id]: status }));
     if (issue.status !== status) toast.success(`${issue.key} → ${STATUS_META[status].label}`);
     router.refresh();
