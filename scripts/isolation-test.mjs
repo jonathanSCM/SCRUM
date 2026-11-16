@@ -1370,8 +1370,8 @@ async function main() {
   check("sus invitados sí", (await cPlain.req("GET", `/api/meetings/${pastPriv.json.id}/files`)).json.files.length === 1);
   check("al borrar la reunión se borran sus archivos", (await cAOwner.req("DELETE", `/api/meetings/${pmId}`)).status === 200 && (await prisma.meetingFile.count({ where: { meetingId: pmId } })) === 0);
 
-  // ---------- 36) Daily general, estado Bloqueadas y actividad del equipo ----------
-  console.log("36) Daily general del equipo, estado Bloqueadas y actividad (solo dueño)");
+  // ---------- 36) Daily general y estado Bloqueadas ----------
+  console.log("36) Daily general del equipo y estado Bloqueadas");
   const dDay = "2026-03-10"; // martes: el día laboral anterior es el lunes 2026-03-09
   const dPost = await cPlain.req("POST", "/api/daily", { date: dDay, today: "revisar el módulo de pagos", yesterday: "" });
   const dRow = await prisma.standupEntry.findFirst({ where: { userId: plain.id, date: dDay, workspaceId: A.ws.id } });
@@ -1400,19 +1400,8 @@ async function main() {
   check("el autocompletado propone lo de ayer, lo de hoy y los bloqueos con sus tickets", dSug.json.suggestion.yesterday.includes("Terminé") && dSug.json.suggestion.yesterday.includes("Ticket que se bloquea") && dSug.json.suggestion.blockers.includes("Ticket que se bloquea"), JSON.stringify(dSug.json.suggestion));
   check("el borrador es solo de quien lo pide", !(await cNora.req("GET", `/api/daily?date=${dDay}`)).json.suggestion.blockers.includes("Ticket que se bloquea"));
 
-  // Actividad del equipo: solo el dueño
-  const act = async (client, qs = "") => fetch(`${BASE}/activity${qs}`, { headers: { Cookie: client.header() }, redirect: "manual" });
-  const actOwner = await act(cAOwner);
-  const actHtml = await actOwner.text();
-  check("el dueño ve la actividad del equipo", actOwner.status === 200 && actHtml.includes("Actividad del equipo") && actHtml.includes("Pablo Plano"), `${actOwner.status}`);
-  // La redirección de una página con loading.tsx llega en el flujo (200) pero SIN el contenido: lo que importa es que no se envíe nada.
-  const noLeak = async (r) => { const t = await r.text(); return !t.includes("Hora pico") && !t.includes("Ana Dueña A") && !t.includes("Ticket que se bloquea") && (r.status >= 300 || t.includes("NEXT_REDIRECT") || t.includes("/home")); };
-  check("un miembro no la ve (no recibe ningún dato; lo manda al inicio)", await noLeak(await act(cPlain)));
-  check("ni un admin (Aldo)", await noLeak(await act(cAMember)));
-  const actWeek = await (await act(cAOwner, "?w=2026-03-09&u=" + plain.id)).text();
-  check("el detalle de una persona muestra su hora exacta de la semana pedida", actWeek.includes("Ticket que se bloquea") && actWeek.includes("A qué horas trabajó"));
-  const actB = await (await act(cBOwner)).text();
-  check("el dueño de otro equipo no ve a las personas de A", !actB.includes("Pablo Plano"));
+  // La vista de actividad del equipo se retiró: la ruta ya no existe
+  check("la antigua página de actividad del equipo ya no existe (404)", (await fetch(`${BASE}/activity`, { headers: { Cookie: cAOwner.header() } })).status === 404);
 
   // Archivos de un proyecto (pestaña Archivos) se pueden citar en el chat como cualquier tarjeta de la Biblioteca
   await prisma.projectResource.create({ data: { kind: "LINK", title: "Brief del cliente", url: "https://example.com/brief", projectId: A.project.id } });
@@ -1468,7 +1457,7 @@ async function main() {
   const pRefOk = await cNora.req("POST", "/api/chat/messages", { body: `mira [[issue:${gPT.json.id}]]` });
   check("pero quien tiene acceso sí puede citarla", pRefOk.status === 201 && (await prisma.chatRef.count({ where: { messageId: pRefOk.json.id } })) === 1);
   check("no se asigna a alguien sin acceso al grupo privado (400)", (await cPlain.req("PATCH", `/api/issues/${gPT.json.id}`, { assigneeUserId: aMember.id })).status === 400 && (await cPlain.req("PATCH", `/api/issues/${gPT.json.id}`, { assigneeUserId: nora.id })).status === 200);
-  check("los grupos privados no cuentan en el daily ni en la actividad del equipo", !(await cPlain.req("GET", `/api/daily?date=${new Date().toISOString().slice(0, 10)}`)).text.includes("Despedir al proveedor X"));
+  check("los grupos privados no cuentan en el daily del equipo", !(await cPlain.req("GET", `/api/daily?date=${new Date().toISOString().slice(0, 10)}`)).text.includes("Despedir al proveedor X"));
   check("se le da acceso a otra persona (solo quien lo creó o un líder)", (await cNora.req("PUT", `/api/groups/${gPriv.json.id}/access`, { userIds: [aMember.id] })).status === 403 && (await cPlain.req("PUT", `/api/groups/${gPriv.json.id}/access`, { userIds: [nora.id, aMember.id] })).status === 200 && (await cAMember.req("GET", `/api/issues/by-key/${gPKey}`)).status === 200);
 
   // Convertir en proyecto

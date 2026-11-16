@@ -56,8 +56,7 @@ export function countryOfZone(tz: string): Country | null {
 // ───────── Fechas y horas en una zona ─────────
 
 // Partes de una fecha tal como se ve en `tz`.
-// Crear un Intl.DateTimeFormat es caro (decenas de microsegundos): se guarda uno por zona (la actividad del equipo
-// convierte decenas de miles de fechas).
+// Crear un Intl.DateTimeFormat es caro (decenas de microsegundos): se guarda uno por zona (conviene al convertir muchas fechas).
 const partsFormatters = new Map<string, Intl.DateTimeFormat>();
 function partsFormatter(tz: string): Intl.DateTimeFormat {
   let f = partsFormatters.get(tz);
