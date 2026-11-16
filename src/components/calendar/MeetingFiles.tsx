@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
+import { useDriveTitle } from "@/lib/useDriveTitle";
 import { cn } from "@/lib/ui";
 import { useToast } from "@/components/ui/Toaster";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -24,6 +25,7 @@ export default function MeetingFiles({ meetingId }: { meetingId: string }) {
   const [adding, setAdding] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
+  const findingTitle = useDriveTitle(linkUrl, linkTitle, setLinkTitle);
 
   const load = useCallback(async () => {
     const res = await api<{ files: FileRow[]; hidden: number }>(`/api/meetings/${meetingId}/files`);
@@ -113,7 +115,7 @@ export default function MeetingFiles({ meetingId }: { meetingId: string }) {
         {adding && (
           <form onSubmit={addLink} className="mt-2 flex flex-wrap items-center gap-2">
             <input className="field-sm min-w-0 flex-[2_1_14rem]" type="text" inputMode="url" placeholder="https://drive.google.com/…" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} aria-label="Enlace" required autoFocus />
-            <input className="field-sm min-w-0 flex-[1_1_9rem]" placeholder="Nombre (opcional)" maxLength={200} value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)} aria-label="Nombre del enlace" />
+            <input className="field-sm min-w-0 flex-[1_1_9rem]" placeholder={findingTitle ? "Buscando el nombre…" : "Nombre (si es de Drive, se trae solo)"} maxLength={200} value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)} aria-label="Nombre del enlace" />
             <button className="btn-primary btn-sm" disabled={busy > 0 || !linkUrl.trim()}>Agregar</button>
           </form>
         )}

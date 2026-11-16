@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse } from "@/lib/api";
+import { fetchDriveTitle } from "@/lib/driveTitle";
 import { canViewRecordings } from "@/lib/recordings";
 import { meetingLinkSchema, parseBody, readJson } from "@/lib/validation";
 
@@ -44,7 +45,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       let host = url;
       try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { return NextResponse.json({ error: "El enlace no es válido" }, { status: 400 }); }
       const link = await prisma.meetingFile.create({
-        data: { meetingId: id, kind: "LINK", url, filename: (parsed.data.title || host).slice(0, 200), mimeType: "text/uri-list", size: 0, data: new Uint8Array(0), uploadedById: auth.user.id },
+        data: { meetingId: id, kind: "LINK", url, filename: (parsed.data.title || (await fetchDriveTitle(url)) || host).slice(0, 200), mimeType: "text/uri-list", size: 0, data: new Uint8Array(0), uploadedById: auth.user.id },
         select: { id: true, kind: true, url: true, filename: true },
       });
       return NextResponse.json(link, { status: 201 });

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { MAX_RESOURCE_BYTES, friendlyTitle, normalizeUrl } from "@/lib/scrum/resources";
+import { fetchDriveTitle } from "@/lib/driveTitle";
 import { checkCardCapacity } from "@/lib/scrum/library";
 import { cardById, cardUsage } from "@/lib/libraryData";
 
@@ -39,7 +40,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (!url) return NextResponse.json({ error: "Pega un enlace válido (http o https)" }, { status: 400 });
       const bad = checkCardCapacity(await cardUsage(id), [{ size: 0 }]);
       if (bad) return NextResponse.json({ error: bad }, { status: 400 });
-      const title = typeof body?.title === "string" && body.title.trim() ? body.title.trim().slice(0, 200) : friendlyTitle(url);
+      const typed = typeof body?.title === "string" ? body.title.trim() : "";
+      const title = typed ? typed.slice(0, 200) : (await fetchDriveTitle(url)) ?? friendlyTitle(url); // sin nombre: el del documento de Drive
       await prisma.fileCardItem.create({ data: { cardId: id, kind: "LINK", title, url, note: typeof body?.note === "string" ? body.note.trim().slice(0, 1000) : "", uploadedById: auth.user.id } });
     }
     await prisma.fileCard.update({ where: { id }, data: { updatedAt: new Date() } });

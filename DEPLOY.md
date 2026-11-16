@@ -116,3 +116,4 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - Por defecto lo ve todo el equipo; con `isPrivate`, solo quien lo creó y las personas con acceso (`ProjectMember`). El dueño del equipo tampoco lo ve.
 - «Convertir en proyecto» crea el proyecto, mueve las tareas (renumeradas, con comentarios y adjuntos) y deja el grupo archivado con `convertedToId`.
 - **Actividad del equipo:** se añadió el índice `HistoryEntry(changedAt)` (aditivo) y la página lee como máximo 60.000 acciones por semana.
+- **Nombre de los documentos de Drive:** al pegar un enlace de Google Drive/Docs/Sheets/Slides en la Biblioteca, en Archivos del proyecto o en una reunión, el servidor lee el nombre de la página pública del documento (solo sitios de Google, 4 s de tope). Si el documento es privado, el nombre se escribe a mano. Sin variables nuevas (`DRIVE_TITLE_BASE_URL` solo se usa en las pruebas).

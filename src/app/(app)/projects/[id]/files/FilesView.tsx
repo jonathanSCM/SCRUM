@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/Toaster";
 import { useConfirm } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
 import { api } from "@/lib/client";
+import { useDriveTitle } from "@/lib/useDriveTitle";
 import { formatBytes, timeAgo, cn } from "@/lib/ui";
 import { MAX_RESOURCE_BYTES } from "@/lib/scrum/resources";
 import type { ResourceDTO } from "@/lib/resourceData";
@@ -140,6 +141,7 @@ function ResourceForm({ mode, projectId, resource, sprints, tickets, knownTags, 
   const [belongs, setBelongs] = useState(resource?.task ? `task:${resource.task.id}` : resource?.sprint ? `sprint:${resource.sprint.id}` : "project");
   const [busy, setBusy] = useState(false);
   const kind = mode === "edit" ? resource!.kind.toLowerCase() : mode;
+  const findingTitle = useDriveTitle(kind === "link" ? url : "", title, setTitle);
 
   const sprintId = belongs.startsWith("sprint:") ? belongs.slice(7) : null;
   const taskId = belongs.startsWith("task:") ? belongs.slice(5) : null;
@@ -198,7 +200,7 @@ function ResourceForm({ mode, projectId, resource, sprints, tickets, knownTags, 
       )}
       <div>
         <label className="mb-1 block text-xs font-semibold text-ink-soft">Nombre {kind === "link" ? "(opcional)" : ""}</label>
-        <input className="field" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === "link" ? "Ej: Brief del cliente" : ""} />
+        <input className="field" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === "link" ? (findingTitle ? "Buscando el nombre del documento…" : "Si es de Drive, se trae solo") : ""} />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>

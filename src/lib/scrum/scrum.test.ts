@@ -1215,3 +1215,31 @@ describe("avisos del chat agrupados", () => {
     expect(repeatLabel("COMMENT", 4)).toBe("4 veces");
   });
 });
+
+describe("nombre de un documento de Drive", () => {
+  it("solo se consultan sitios de Google", async () => {
+    const { isDriveUrl } = await import("./driveTitle");
+    expect(isDriveUrl("https://drive.google.com/file/d/abc123456789/view")).toBe(true);
+    expect(isDriveUrl("https://docs.google.com/document/d/abc123456789/edit")).toBe(true);
+    expect(isDriveUrl("https://evil.example.com/drive.google.com")).toBe(false);
+    expect(isDriveUrl("http://localhost:3000/x")).toBe(false);
+    expect(isDriveUrl("https://drive.google.com.evil.com/x")).toBe(false);
+    expect(isDriveUrl("javascript:alert(1)")).toBe(false);
+  });
+
+  it("limpia el nombre que devuelve la página", async () => {
+    const { cleanDriveTitle, parseDocTitle } = await import("./driveTitle");
+    expect(cleanDriveTitle("Plan de trabajo - Google Docs")).toBe("Plan de trabajo");
+    expect(cleanDriveTitle("Presupuesto 2026 - Hojas de cálculo de Google")).toBe("Presupuesto 2026");
+    expect(cleanDriveTitle("Reunión &amp; acuerdos – Google Drive")).toBe("Reunión & acuerdos");
+    expect(cleanDriveTitle("video-demo.mp4 - Google Drive")).toBe("video-demo.mp4");
+    expect(cleanDriveTitle("Google Drive")).toBeNull();
+    expect(cleanDriveTitle("Sign in - Google Accounts")).toBeNull();
+    expect(cleanDriveTitle("Iniciar sesión")).toBeNull();
+    expect(cleanDriveTitle("")).toBeNull();
+    expect(parseDocTitle('<head><meta property="og:title" content="Acta 12 de nov"><title>Acta 12 de nov - Google Docs</title></head>')).toBe("Acta 12 de nov");
+    expect(parseDocTitle("<html><head><title>Manual de marca - Google Drive</title></head>")).toBe("Manual de marca");
+    expect(parseDocTitle("<head><title>Google Drive</title></head>")).toBeNull();
+    expect(parseDocTitle("<head><title>Sign in</title></head>")).toBeNull();
+  });
+});
