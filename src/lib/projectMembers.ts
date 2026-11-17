@@ -5,7 +5,7 @@ import { notifyUsers } from "@/lib/notifications";
 
 // Reemplaza las personas asignadas a un proyecto. Solo entran personas del mismo equipo.
 // Devuelve a quiénes se agregó de nuevo (a ellas se les avisa por push).
-export async function setProjectMembers(projectId: string, workspaceId: string, userIds: string[], actorName: string, noun: "proyecto" | "grupo" = "proyecto"): Promise<{ members: Array<{ id: string; name: string }>; added: string[] }> {
+export async function setProjectMembers(projectId: string, workspaceId: string, userIds: string[], actorName: string): Promise<{ members: Array<{ id: string; name: string }>; added: string[] }> {
   const people = await membersOf(workspaceId);
   const valid = new Set(people.map((p) => p.id));
   const wanted = [...new Set(userIds)].filter((id) => valid.has(id));
@@ -18,7 +18,7 @@ export async function setProjectMembers(projectId: string, workspaceId: string, 
   ]);
   if (added.length) {
     const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } });
-    void notifyUsers(added, { kind: "TEAM_ADDED", title: `${actorName} te agregó al ${noun} ${project?.name ?? ""}`.trim(), body: noun === "grupo" ? "Ahora tienes acceso a este grupo de tareas." : "Ahora eres parte del equipo de este proyecto.", url: `/projects/${projectId}/board`, groupKey: `project-${projectId}`, workspaceId });
+    void notifyUsers(added, { kind: "TEAM_ADDED", title: `${actorName} te agregó al proyecto ${project?.name ?? ""}`.trim(), body: "Ahora eres parte del equipo de este proyecto.", url: `/projects/${projectId}/board`, groupKey: `project-${projectId}`, workspaceId });
   }
   return { members: people.filter((p) => wanted.includes(p.id)).map(({ id, name }) => ({ id, name })), added };
 }

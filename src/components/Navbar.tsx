@@ -16,7 +16,6 @@ import { PlusIcon } from "@/components/ui/Icons";
 const LINKS = [
   { href: "/home", label: "Inicio" },
   { href: "/projects", label: "Proyectos" },
-  { href: "/groups", label: "Grupos" },
   { href: "/my-work", label: "Mi trabajo" },
   { href: "/daily", label: "Daily" },
   { href: "/chat", label: "Chat" },
@@ -25,7 +24,7 @@ const LINKS = [
   { href: "/people", label: "Equipo" },
 ];
 
-export default function Navbar({ userName, userId, isLead, teams, activeId, canCreate, maxOwned, projects }: { userName: string; userId: string; isLead: boolean; teams: TeamOption[]; activeId: string; canCreate: boolean; maxOwned: number; projects: Array<{ id: string; name: string; key: string | null; kind?: string }> }) {
+export default function Navbar({ userName, userId, isLead, teams, activeId, canCreate, maxOwned, projects }: { userName: string; userId: string; isLead: boolean; teams: TeamOption[]; activeId: string; canCreate: boolean; maxOwned: number; projects: Array<{ id: string; name: string; key: string | null }> }) {
   const pathname = usePathname();
   const links = LINKS;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -47,11 +46,7 @@ export default function Navbar({ userName, userId, isLead, teams, activeId, canC
     };
   }, [menuOpen]);
 
-  // Dentro de un grupo de tareas (/projects/<id>/…) se marca "Grupos", no "Proyectos".
-  const onGroupPage = projects.some((p) => p.kind === "GROUP" && pathname?.startsWith(`/projects/${p.id}`));
   function isActive(href: string) {
-    if (href === "/projects" && onGroupPage) return false;
-    if (href === "/groups" && onGroupPage) return true;
     return pathname === href || pathname?.startsWith(`${href}/`);
   }
 

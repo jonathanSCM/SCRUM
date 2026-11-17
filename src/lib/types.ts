@@ -35,6 +35,10 @@ export type IssueCardData = {
   epicColor: string | null; // color propio si el ticket ES una épica
   commentCount: number;
   attachmentCount: number;
+  // Solo en vistas que mezclan proyectos (Mi trabajo): a qué proyecto pertenece la tarjeta.
+  projectName?: string;
+  projectKey?: string | null;
+  projectColor?: string | null;
 };
 
 export type SprintData = {

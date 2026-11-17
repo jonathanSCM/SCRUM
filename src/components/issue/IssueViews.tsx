@@ -159,12 +159,14 @@ export function IssueRowView({
 export function IssueCardView({
   issue,
   onOpen,
+  onMove,
   dragging,
   overlay,
   style,
 }: {
   issue: IssueCardData;
   onOpen?: () => void;
+  onMove?: () => void; // teléfono: botón «Mover a…» (arrastrar con el dedo no es fiable)
   dragging?: boolean;
   overlay?: boolean;
   style?: CSSProperties;
@@ -173,7 +175,7 @@ export function IssueCardView({
   const accent = issue.epic?.color ?? null;
   return (
     <div
-      style={{ ...style, borderTopColor: accent ?? undefined, borderTopWidth: accent ? 5 : undefined }}
+      style={{ ...style, borderTopColor: accent ?? undefined, borderTopWidth: accent ? 5 : undefined, ...(issue.projectColor ? { borderLeftColor: issue.projectColor, borderLeftWidth: 4 } : {}) }}
       onClick={onOpen}
       className={cn(
         "cursor-pointer select-none border border-line bg-card p-3 transition-[box-shadow,transform] duration-100",
@@ -182,6 +184,12 @@ export function IssueCardView({
         overlay && "rotate-2 scale-[1.03] border-moss shadow-hard-purple"
       )}
     >
+      {issue.projectName && (
+        <p className="mb-1.5 flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-ink-soft">
+          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: issue.projectColor ?? "var(--ink-faint)" }} />
+          <span className="truncate">{issue.projectName}</span>
+        </p>
+      )}
       {issue.epic && (
         <div className="mb-1.5">
           <EpicChip epic={issue.epic} />
@@ -215,6 +223,18 @@ export function IssueCardView({
           <Avatar name={issue.assignee?.name} userId={issue.assignee?.id} size={22} />
         </span>
       </div>
+      {onMove && (
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onMove(); }}
+            className="rounded-md px-2 py-1 text-[11px] font-bold text-ink-faint active:bg-card-2"
+            aria-label={`Mover ${issue.key} a otra columna`}
+          >
+            ⇄ Mover
+          </button>
+        </div>
+      )}
     </div>
   );
 }

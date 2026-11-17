@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     if (!firstStatus) return NextResponse.json({ error: "No hay estados de proyecto configurados" }, { status: 400 });
 
     const project = await prisma.project.create({
-      data: { name, key, description: description ?? "", statusId: firstStatus.id, leadUserId: user.id, workspaceId: user.workspaceId! },
+      data: { name, key, description: description ?? "", color: parsed.data.color ? parsed.data.color.toLowerCase() : null, statusId: firstStatus.id, leadUserId: user.id, workspaceId: user.workspaceId! },
       include: { status: true },
     });
     await logHistory({ projectId: project.id, field: "proyecto_creado", newValue: project.name, actor: user });

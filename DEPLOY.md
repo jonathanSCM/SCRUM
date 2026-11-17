@@ -108,11 +108,23 @@ El panel interno ya no hace falta: se puede apagar en Coolify cuando quieras (no
 - **Daily general:** pasó de ser por proyecto a ser uno por persona y día en el equipo (`/daily`). Al arrancar, `prisma/seed.ts` junta los dailys viejos de varios proyectos en uno solo (cada campo con el nombre del proyecto si había más de uno). No borra nada y es idempotente.
 - **Nuevo estado de ticket `BLOCKED` ("Bloqueadas")** entre En progreso y En revisión. Es un texto en `Task.status`: no hay migración.
 
-## Grupos de tareas (tareas sueltas)
+## Grupos de tareas (retirados)
 
-- **Respaldo antes de desplegar:** `Project` gana columnas (`kind`, `isPrivate`, `ownerId`, `archivedAt`, `convertedToId`), todas con valor por defecto: aditivo.
-- Un grupo de tareas es una fila de `Project` con `kind = GROUP`: reutiliza tickets, tablero y permisos, y no aparece en la lista de proyectos. Se gestiona en `/groups`.
-- Por defecto lo ve todo el equipo; con `isPrivate`, solo quien lo creó y las personas con acceso (`ProjectMember`). El dueño del equipo tampoco lo ve.
-- «Convertir en proyecto» crea el proyecto, mueve las tareas (renumeradas, con comentarios y adjuntos) y deja el grupo archivado con `convertedToId`.
+Los grupos de tareas ya no existen en la aplicación (`/groups`, sus rutas y su interfaz se quitaron). Las columnas de `Project` (`kind`, `isPrivate`, `ownerId`, `archivedAt`, `convertedToId`) siguen en el esquema y los grupos que hubiera en la base de datos quedan **ocultos** (no se borra nada solo).
+
+Para limpiarlos (una sola vez, desde la terminal del contenedor):
+
+- `npx tsx prisma/remove-groups.ts` — muestra los grupos y cuántas tareas tienen (no escribe nada).
+- `npx tsx prisma/remove-groups.ts --apply` — borra los grupos vacíos (por ejemplo los que ya se convirtieron en proyecto).
+- `npx tsx prisma/remove-groups.ts --apply --delete-tasks` — además borra los que tengan tareas, **con sus tareas**. Revisa la lista antes.
+
+## Enlaces de Google Drive
+
 - **Nombre de los documentos de Drive:** al pegar un enlace de Google Drive/Docs/Sheets/Slides en la Biblioteca, en Archivos del proyecto o en una reunión, el servidor lee el nombre de la página pública del documento (solo sitios de Google, 4 s de tope). Si el documento es privado, el nombre se escribe a mano. Sin variables nuevas (`DRIVE_TITLE_BASE_URL` solo se usa en las pruebas).
 - **Poner el nombre real a los enlaces de Drive ya guardados (una sola vez):** desde la terminal del contenedor, `npx tsx prisma/rename-drive-links.ts` muestra qué cambiaría y `npx tsx prisma/rename-drive-links.ts --apply` lo aplica. Solo cambia los que tienen el nombre genérico («Documento de Google»…), nunca los renombrados a mano, y es idempotente.
+
+## Color de proyecto y Mi trabajo
+
+- **Respaldo antes de desplegar:** `Project` gana la columna `color` (texto, vacía = sin color): aditivo.
+- **Color opcional por proyecto:** se elige al crear el proyecto o en Ajustes → Detalles; se ve en las tarjetas y la tabla de Proyectos, en el encabezado del proyecto y en Mi trabajo.
+- **Mi trabajo** usa el mismo tablero Kanban que un proyecto (y una vista de tabla), con filtro por proyecto.

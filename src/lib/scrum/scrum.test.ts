@@ -1173,3 +1173,19 @@ describe("nombre de un documento de Drive", () => {
     expect(parseDocTitle("<head><title>Sign in</title></head>")).toBeNull();
   });
 });
+
+describe("color opcional de un proyecto", () => {
+  it("solo se aceptan colores #RRGGBB y todo lo demás es «sin color»", async () => {
+    const { isProjectColor, normalizeProjectColor, PROJECT_COLORS } = await import("./projectColor");
+    expect(isProjectColor("#7c3aed")).toBe(true);
+    expect(isProjectColor("#7C3AED")).toBe(true);
+    expect(isProjectColor("7c3aed")).toBe(false);
+    expect(isProjectColor("#fff")).toBe(false);
+    expect(isProjectColor("rojo")).toBe(false);
+    expect(isProjectColor(null)).toBe(false);
+    expect(normalizeProjectColor("#7C3AED")).toBe("#7c3aed");
+    expect(normalizeProjectColor("nada")).toBeNull();
+    expect(normalizeProjectColor(undefined)).toBeNull();
+    expect(PROJECT_COLORS.every((c) => isProjectColor(c.value))).toBe(true);
+  });
+});
