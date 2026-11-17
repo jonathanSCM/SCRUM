@@ -18,6 +18,8 @@ RUN sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma
 # exista para que "prisma generate" pueda validar el schema (no se conecta a nada).
 ENV DATABASE_URL="postgresql://user:password@localhost:5432/db"
 RUN npx prisma generate
+# Sin chequeo de tipos aquí (ver next.config.ts): ya se verifica con `npm run typecheck` antes de subir.
+ENV SKIP_TYPECHECK=1 NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # ---- runner: imagen final que corre el servidor ----
