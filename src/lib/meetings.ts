@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { notifyUsers } from "@/lib/notifications";
 import { membersOf } from "@/lib/workspace";
 import { ensureChannels } from "@/lib/chatChannels";
+import { describeRule } from "@/lib/scrum/recurrence";
 import { DEFAULT_TZ, formatDay, formatTime, isValidTimeZone, offsetLabel, zoneName } from "@/lib/scrum/countries";
 
 // Reuniones del equipo (calendario). La hora vive en UTC; cada persona la ve en su zona.
@@ -21,6 +22,10 @@ export type MeetingDTO = {
   createdBy: { id: string; name: string } | null;
   attendees: MeetingPerson[]; // quiénes están invitados (si es "todo el equipo", todo el equipo)
   recordings: number;
+  // Reunión recurrente: la regla (para el formulario) y su descripción ("Cada semana los lunes").
+  series: { id: string; label: string; startDate: string; tz: string; rule: { freq: "DAILY" | "WEEKLY" | "MONTHLY"; interval: number; weekdays: number[]; until: string | null; count: number | null } } | null;
+  occurrenceDate: string | null;
+  seriesException: boolean;
 };
 
 // Zona de cada persona: la de su perfil; si no, la de sus avisos; si no, la de Bolivia.
@@ -35,10 +40,21 @@ export async function zonesOf(userIds: string[]): Promise<Map<string, string>> {
   return out;
 }
 
-const meetingInclude = {
+// La regla de una serie a partir de sus columnas (sin depender del servidor, para usarla también aquí).
+function seriesRuleOf(s: { freq: string; interval: number; weekdays: string; until: string | null; count: number | null }): NonNullable<MeetingDTO["series"]>["rule"] {
+  let weekdays: number[] = [];
+  try {
+    const v = JSON.parse(s.weekdays);
+    if (Array.isArray(v)) weekdays = v.map(Number).filter((n) => Number.isInteger(n));
+  } catch {}
+  return { freq: s.freq as "DAILY" | "WEEKLY" | "MONTHLY", interval: s.interval, weekdays, until: s.until, count: s.count };
+}
+
+export const meetingInclude = {
   project: { select: { id: true, name: true, key: true } },
   createdBy: { select: { id: true, name: true } },
   attendees: { select: { userId: true } },
+  series: { select: { id: true, freq: true, interval: true, weekdays: true, startDate: true, until: true, count: true, tz: true } },
   _count: { select: { recordings: true } },
 } as const;
 
@@ -64,6 +80,9 @@ export async function toMeetingDTOs(rows: Row[], workspaceId: string): Promise<M
     createdBy: r.createdBy,
     attendees: (r.everyone ? team.map((m) => m.id) : [...new Set([...r.attendees.map((a) => a.userId), ...(r.createdBy ? [r.createdBy.id] : [])])]).map(person).filter((p): p is MeetingPerson => !!p),
     recordings: r._count.recordings,
+    series: r.series ? { id: r.series.id, label: describeRule(r.series.startDate, seriesRuleOf(r.series)), startDate: r.series.startDate, tz: r.series.tz, rule: seriesRuleOf(r.series) } : null,
+    occurrenceDate: r.occurrenceDate,
+    seriesException: r.seriesException,
   }));
 }
 
@@ -125,6 +144,34 @@ export type CreateMeetingInput = {
   notify?: boolean;
 };
 
+// Anuncia una reunión recién creada: mensaje en el canal Reuniones del chat y aviso a los invitados con su hora local.
+// Una reunión que ya pasó (se registra solo para guardar lo que se trató) no avisa a nadie. En una reunión recurrente se
+// anuncia UNA vez (la primera fecha) y `label` describe la repetición ("Cada semana los lunes").
+export async function announceMeeting(meeting: { id: string; title: string; startsAt: Date; workspaceId: string; everyone: boolean; createdById: string | null }, input: Pick<CreateMeetingInput, "creator" | "title" | "startsAt" | "post" | "notify">, projectId: string | null, label?: string) {
+  const creatorZone = (await zonesOf([input.creator.id])).get(input.creator.id) ?? DEFAULT_TZ;
+  const past = input.startsAt.getTime() < Date.now() - 10 * 60_000;
+  const post = input.post === false || past ? null : input.post ?? {};
+  if (post) {
+    const channels = await ensureChannels(meeting.workspaceId);
+    const target = (post.channelId ? channels.find((c) => c.id === post.channelId && c.kind === "REUNIONES") : undefined) ?? channels.find((c) => c.kind === "REUNIONES");
+    await prisma.chatMessage.create({
+      data: {
+        workspaceId: meeting.workspaceId,
+        authorId: input.creator.id,
+        channelId: target?.id,
+        announce: true,
+        level: post.level ?? null,
+        body: `${label ? "Reunión recurrente" : "Reunión"} · ${whenLabel(input.startsAt, creatorZone)}${label ? ` (${label.toLowerCase()})` : ""}: ${input.title} [[meeting:${meeting.id}]]`,
+        refs: { create: [{ kind: "MEETING", targetId: meeting.id, projectId }] },
+      },
+    });
+  }
+  if (input.notify !== false && !past) {
+    const invitees = (await inviteesOf(meeting)).filter((id) => id !== input.creator.id);
+    await notifyMeeting(meeting, invitees, { heading: label ? "Nueva reunión recurrente" : "Nueva reunión", body: `agenda ${input.creator.name}${label ? ` · ${label}` : ""}`, priority: post?.level === "URGENTE" ? "urgent" : "high" });
+  }
+}
+
 // Crea la reunión, la anuncia en el chat (canal Reuniones) y avisa a los invitados con su hora local.
 export async function createMeeting(input: CreateMeetingInput) {
   const duration = Math.min(Math.max(input.durationMin ?? 60, 5), 12 * 60);
@@ -147,29 +194,7 @@ export async function createMeeting(input: CreateMeetingInput) {
     },
   });
 
-  const creatorZone = (await zonesOf([input.creator.id])).get(input.creator.id) ?? DEFAULT_TZ;
-  // Una reunión que ya pasó (se registra para guardar lo que se trató y sus archivos) no avisa a nadie ni se anuncia en el chat.
-  const past = input.startsAt.getTime() < Date.now() - 10 * 60_000;
-  const post = input.post === false || past ? null : input.post ?? {};
-  if (post) {
-    const channels = await ensureChannels(input.workspaceId);
-    const target = (post.channelId ? channels.find((c) => c.id === post.channelId && c.kind === "REUNIONES") : undefined) ?? channels.find((c) => c.kind === "REUNIONES");
-    await prisma.chatMessage.create({
-      data: {
-        workspaceId: input.workspaceId,
-        authorId: input.creator.id,
-        channelId: target?.id,
-        announce: true,
-        level: post.level ?? null,
-        body: `Reunión · ${whenLabel(input.startsAt, creatorZone)}: ${input.title} [[meeting:${meeting.id}]]`,
-        refs: { create: [{ kind: "MEETING", targetId: meeting.id, projectId: project?.id ?? null }] },
-      },
-    });
-  }
-  if (input.notify !== false && !past) {
-    const invitees = (await inviteesOf(meeting)).filter((id) => id !== input.creator.id);
-    await notifyMeeting(meeting, invitees, { heading: "Nueva reunión", body: `agenda ${input.creator.name}`, priority: post?.level === "URGENTE" ? "urgent" : "high" });
-  }
+  await announceMeeting(meeting, input, project?.id ?? null);
   return meeting;
 }
 

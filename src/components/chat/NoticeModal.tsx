@@ -1,5 +1,6 @@
 "use client";
 
+import MeetLinkField from "@/components/calendar/MeetLinkField";
 import { useEffect, useState } from "react";
 import Modal from "@/components/ui/Modal";
 import Avatar from "@/components/ui/Avatar";
@@ -132,10 +133,7 @@ export default function NoticeModal({ open, onClose, isLead, currentUserId, chan
               </div>
             </div>
             <p className="text-[11px] text-ink-faint">{startsAt ? `${formatDay(startsAt, tz)} · hora de ${zoneName(tz)} (${offsetLabel(startsAt, tz)}). Cada persona la verá en su hora.` : "Elige fecha y hora."} Puedes cambiar tu país en tu perfil.</p>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-ink-soft" htmlFor="aviso-meet">Enlace de Meet (opcional)</label>
-              <input id="aviso-meet" className="field w-full" maxLength={300} placeholder="https://meet.google.com/…" value={meetUrl} onChange={(e) => setMeetUrl(e.target.value)} />
-            </div>
+            <MeetLinkField id="aviso-meet" value={meetUrl} onChange={setMeetUrl} />
           </div>
         ) : (
           <div className="space-y-1">

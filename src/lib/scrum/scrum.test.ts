@@ -1189,3 +1189,86 @@ describe("color opcional de un proyecto", () => {
     expect(PROJECT_COLORS.every((c) => isProjectColor(c.value))).toBe(true);
   });
 });
+
+describe("reuniones recurrentes: la regla y sus fechas", () => {
+  it("cada semana en varios días, con fin por fecha o por número de veces", async () => {
+    const { occurrenceDates } = await import("./recurrence");
+    // 2026-11-16 es lunes
+    const rule = { freq: "WEEKLY" as const, interval: 1, weekdays: [1, 3], until: null, count: null };
+    expect(occurrenceDates("2026-11-16", rule, { to: "2026-11-30" })).toEqual(["2026-11-16", "2026-11-18", "2026-11-23", "2026-11-25", "2026-11-30"]);
+    expect(occurrenceDates("2026-11-16", { ...rule, until: "2026-11-24" }, { to: "2026-12-31" })).toEqual(["2026-11-16", "2026-11-18", "2026-11-23"]);
+    expect(occurrenceDates("2026-11-16", { ...rule, count: 3 }, { to: "2026-12-31" })).toEqual(["2026-11-16", "2026-11-18", "2026-11-23"]);
+    // si empieza en miércoles, el lunes de esa misma semana no cuenta
+    expect(occurrenceDates("2026-11-18", rule, { to: "2026-11-24" })).toEqual(["2026-11-18", "2026-11-23"]);
+  });
+
+  it("cada dos semanas, cada N días y de lunes a viernes", async () => {
+    const { occurrenceDates } = await import("./recurrence");
+    expect(occurrenceDates("2026-11-16", { freq: "WEEKLY", interval: 2, weekdays: [1], until: null, count: null }, { to: "2026-12-31" })).toEqual(["2026-11-16", "2026-11-30", "2026-12-14", "2026-12-28"]);
+    expect(occurrenceDates("2026-11-16", { freq: "DAILY", interval: 3, weekdays: [], until: null, count: null }, { to: "2026-11-25" })).toEqual(["2026-11-16", "2026-11-19", "2026-11-22", "2026-11-25"]);
+    const lv = occurrenceDates("2026-11-16", { freq: "WEEKLY", interval: 1, weekdays: [1, 2, 3, 4, 5], until: null, count: null }, { to: "2026-11-23" });
+    expect(lv).toEqual(["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-23"]);
+  });
+
+  it("cada mes: el mismo día, o el último si el mes es más corto", async () => {
+    const { occurrenceDates } = await import("./recurrence");
+    const rule = { freq: "MONTHLY" as const, interval: 1, weekdays: [], until: null, count: null };
+    expect(occurrenceDates("2026-01-31", rule, { to: "2026-04-30" })).toEqual(["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30"]);
+    expect(occurrenceDates("2028-01-31", rule, { to: "2028-02-29" })).toEqual(["2028-01-31", "2028-02-29"]); // bisiesto
+    expect(occurrenceDates("2026-11-15", { ...rule, interval: 2 }, { to: "2027-03-31" })).toEqual(["2026-11-15", "2027-01-15", "2027-03-15"]);
+  });
+
+  it("las fechas quitadas una a una siguen contando para el total; `from` recorta el principio", async () => {
+    const { occurrenceDates } = await import("./recurrence");
+    const rule = { freq: "DAILY" as const, interval: 1, weekdays: [], until: null, count: 4 };
+    expect(occurrenceDates("2026-11-16", rule, { to: "2026-12-31", skip: ["2026-11-17"] })).toEqual(["2026-11-16", "2026-11-18", "2026-11-19"]);
+    expect(occurrenceDates("2026-11-16", { ...rule, count: null }, { to: "2026-11-20", from: "2026-11-19" })).toEqual(["2026-11-19", "2026-11-20"]);
+  });
+
+  it("valida la regla que llega de fuera", async () => {
+    const { normalizeRule } = await import("./recurrence");
+    expect(normalizeRule({ freq: "WEEKLY", interval: 1, weekdays: [], until: null, count: null }, "2026-11-18")).toEqual({ rule: { freq: "WEEKLY", interval: 1, weekdays: [3], until: null, count: null } });
+    expect("error" in normalizeRule({ freq: "YEARLY" }, "2026-11-18")).toBe(true);
+    expect("error" in normalizeRule({ freq: "DAILY", interval: 0 }, "2026-11-18")).toBe(true);
+    expect("error" in normalizeRule({ freq: "DAILY", interval: 99 }, "2026-11-18")).toBe(true);
+    expect("error" in normalizeRule({ freq: "DAILY", until: "2026-11-01" }, "2026-11-18")).toBe(true);
+    expect("error" in normalizeRule({ freq: "DAILY", until: "2030-01-01" }, "2026-11-18")).toBe(true);
+    expect("error" in normalizeRule({ freq: "DAILY", count: 1 }, "2026-11-18")).toBe(true);
+    expect("error" in normalizeRule({ freq: "DAILY", until: "2026-13-40" }, "2026-11-18")).toBe(true);
+    const both = normalizeRule({ freq: "DAILY", until: "2026-12-01", count: 5 }, "2026-11-18");
+    expect("rule" in both && both.rule.count).toBeNull(); // la fecha de término manda
+  });
+
+  it("lo describe en español", async () => {
+    const { describeRule } = await import("./recurrence");
+    expect(describeRule("2026-11-16", { freq: "DAILY", interval: 1, weekdays: [], until: null, count: null })).toBe("Todos los días");
+    expect(describeRule("2026-11-16", { freq: "WEEKLY", interval: 1, weekdays: [1, 2, 3, 4, 5], until: null, count: null })).toBe("De lunes a viernes");
+    expect(describeRule("2026-11-16", { freq: "WEEKLY", interval: 1, weekdays: [1, 3], until: null, count: null })).toBe("Cada semana los lunes y miércoles");
+    expect(describeRule("2026-11-16", { freq: "WEEKLY", interval: 2, weekdays: [5], until: "2026-12-31", count: null })).toBe("Cada 2 semanas los viernes, hasta el 31 de diciembre de 2026");
+    expect(describeRule("2026-11-15", { freq: "MONTHLY", interval: 1, weekdays: [], until: null, count: 6 })).toBe("Cada mes el día 15, 6 veces");
+  });
+
+  it("la hora se mantiene en la zona aunque cambie el horario de verano", async () => {
+    const { zonedToUtc } = await import("./countries");
+    // Nueva York cambia de horario el 8 de marzo de 2026: las 10:00 locales son 15:00Z antes y 14:00Z después
+    expect(zonedToUtc(2026, 3, 6, 10, 0, "America/New_York").toISOString()).toBe("2026-03-06T15:00:00.000Z");
+    expect(zonedToUtc(2026, 3, 9, 10, 0, "America/New_York").toISOString()).toBe("2026-03-09T14:00:00.000Z");
+    // Lima no tiene horario de verano
+    expect(zonedToUtc(2026, 3, 6, 10, 0, "America/Lima").toISOString()).toBe("2026-03-06T15:00:00.000Z");
+    expect(zonedToUtc(2026, 3, 9, 10, 0, "America/Lima").toISOString()).toBe("2026-03-09T15:00:00.000Z");
+  });
+
+  it("el borrador del formulario va y viene a la regla", async () => {
+    const { draftToRule, ruleToDraft, EMPTY_DRAFT } = await import("./recurrence");
+    expect(draftToRule(EMPTY_DRAFT, "2026-11-16")).toBeNull();
+    const r = draftToRule({ ...EMPTY_DRAFT, kind: "weekdays" }, "2026-11-16");
+    expect(r && "rule" in r && r.rule.weekdays).toEqual([1, 2, 3, 4, 5]);
+    const w = draftToRule({ ...EMPTY_DRAFT, kind: "weekly", weekdays: [2, 4], interval: 2, end: "count", count: 8 }, "2026-11-17"); // un martes
+    expect(w && "rule" in w && ruleToDraft(w.rule)).toMatchObject({ kind: "weekly", interval: 2, weekdays: [2, 4], end: "count", count: 8 });
+    // la primera fecha siempre es de la serie: si empieza un lunes, el lunes se agrega a los días elegidos
+    const mondayStart = draftToRule({ ...EMPTY_DRAFT, kind: "weekly", weekdays: [2, 4] }, "2026-11-16");
+    expect(mondayStart && "rule" in mondayStart && mondayStart.rule.weekdays).toEqual([1, 2, 4]);
+    const bad = draftToRule({ ...EMPTY_DRAFT, kind: "daily", end: "until", until: "" }, "2026-11-16");
+    expect(bad && "rule" in bad).toBe(true); // sin fecha escrita equivale a "nunca"
+  });
+});

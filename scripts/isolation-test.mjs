@@ -1514,6 +1514,95 @@ async function main() {
   const mvOk = await cAOwner.req("POST", `/api/projects/${colP.json.id}/move`, { issueId: (await prisma.task.findFirst({ where: { number: 777, projectId: colP.json.id } })).id, status: "IN_PROGRESS" });
   check("una tarjeta de Mi trabajo se mueve en su propio proyecto", mvOk.status === 200 && (await prisma.task.findFirst({ where: { number: 777, projectId: colP.json.id } })).status === "IN_PROGRESS");
 
+  // ---------- 42) Reuniones recurrentes ----------
+  console.log("42) Reuniones recurrentes: series, alcance de los cambios y avisos");
+  const LIMA = "America/Lima";
+  const nextDow = (isoDow, hourUtc = 15, minDays = 2) => { const d = new Date(); d.setUTCHours(hourUtc, 0, 0, 0); d.setUTCDate(d.getUTCDate() + minDays); while (((d.getUTCDay() + 6) % 7) + 1 !== isoDow) d.setUTCDate(d.getUTCDate() + 1); return d; };
+  const dayOf = (d) => d.toISOString().slice(0, 10);
+  const mon = nextDow(1);
+  const rep = { freq: "WEEKLY", interval: 1, weekdays: [1, 3] };
+  const notifsBefore = await prisma.notification.count({ where: { userId: plain.id, title: { contains: "Nueva reunión recurrente" } } });
+  const sCreate = await cAOwner.req("POST", "/api/meetings", { title: "Daily del equipo", startsAt: mon.toISOString(), durationMin: 30, everyone: true, repeat: rep, tz: LIMA });
+  const sId = sCreate.json?.series?.id;
+  const sMeetings = sId ? await prisma.meeting.findMany({ where: { seriesId: sId }, orderBy: { startsAt: "asc" } }) : [];
+  check("se crea una reunión recurrente (lunes y miércoles) con su descripción", sCreate.status === 201 && sCreate.json.series?.label === "Cada semana los lunes y miércoles" && sCreate.json.occurrenceDate === dayOf(mon), JSON.stringify(sCreate.json).slice(0, 200));
+  check("se crean por adelantado las reuniones de las próximas ~13 semanas, todas a las 10:00 de Lima", sMeetings.length >= 24 && sMeetings.length <= 28 && sMeetings.every((m) => m.startsAt.toISOString().slice(11, 16) === "15:00" && m.endsAt.getTime() - m.startsAt.getTime() === 30 * 60_000 && m.everyone), `${sMeetings.length}`);
+  check("las fechas caen solo en lunes y miércoles", sMeetings.every((m) => [1, 3].includes(((m.startsAt.getUTCDay() + 6) % 7) + 1)));
+  await new Promise((r) => setTimeout(r, 800));
+  const announces = await prisma.chatMessage.count({ where: { workspaceId: A.ws.id, body: { contains: "Reunión recurrente" } } });
+  const notifsAfter = await prisma.notification.count({ where: { userId: plain.id, title: { contains: "Nueva reunión recurrente" } } });
+  check("se anuncia UNA vez en el chat y se avisa UNA vez a cada invitado (no una por fecha)", announces === 1 && notifsAfter - notifsBefore === 1, `chat ${announces}, avisos ${notifsAfter - notifsBefore}`);
+  check("una persona no líder no puede invitar a todo el equipo en una serie (403)", (await cPlain.req("POST", "/api/meetings", { title: "x", startsAt: mon.toISOString(), everyone: true, repeat: rep, tz: LIMA })).status === 403);
+  check("regla inválida, sin zona o en el pasado se rechaza (400)", (await cAOwner.req("POST", "/api/meetings", { title: "x", startsAt: mon.toISOString(), everyone: true, repeat: { freq: "YEARLY" }, tz: LIMA })).status === 400 && (await cAOwner.req("POST", "/api/meetings", { title: "x", startsAt: mon.toISOString(), everyone: true, repeat: rep })).status === 400 && (await cAOwner.req("POST", "/api/meetings", { title: "x", startsAt: new Date(Date.now() - 86400000).toISOString(), everyone: true, repeat: rep, tz: LIMA })).status === 400);
+  const cnt = await cAOwner.req("POST", "/api/meetings", { title: "Taller de 3 sesiones", startsAt: nextDow(2).toISOString(), everyone: true, announce: false, repeat: { freq: "DAILY", interval: 1, count: 3 }, tz: LIMA });
+  check("una serie con número de veces tiene exactamente esas reuniones", cnt.status === 201 && (await prisma.meeting.count({ where: { seriesId: cnt.json.series.id } })) === 3 && cnt.json.series.label.endsWith("3 veces"));
+  const unt = await cAOwner.req("POST", "/api/meetings", { title: "Hasta una fecha", startsAt: nextDow(2).toISOString(), everyone: true, announce: false, repeat: { freq: "DAILY", interval: 2, until: dayOf(new Date(nextDow(2).getTime() + 6 * 86400000)) }, tz: LIMA });
+  check("una serie con fecha de término no pasa de ella", unt.status === 201 && (await prisma.meeting.count({ where: { seriesId: unt.json.series.id } })) === 4);
+
+  // Solo esta
+  const occ = (n) => sMeetings[n];
+  const one = await cAOwner.req("PATCH", `/api/meetings/${occ(2).id}`, { title: "Daily (solo hoy: demo)", scope: "one" });
+  const oneRow = await prisma.meeting.findUnique({ where: { id: occ(2).id } });
+  check("cambiar «solo esta» deja las demás igual y la marca como cambiada aparte", one.status === 200 && oneRow.title === "Daily (solo hoy: demo)" && oneRow.seriesException === true && (await prisma.meeting.count({ where: { seriesId: sId, title: "Daily del equipo" } })) === sMeetings.length - 1);
+  check("no se cambia la repetición con «solo esta» (400)", (await cAOwner.req("PATCH", `/api/meetings/${occ(3).id}`, { scope: "one", repeat: { freq: "DAILY" }, tz: LIMA })).status === 400);
+  check("quien no la agendó ni lidera no cambia la serie (403) y otro equipo no la ve (404)", (await cNora.req("PATCH", `/api/meetings/${occ(3).id}`, { title: "robo", scope: "all", tz: LIMA })).status === 403 && (await cBOnly.req("PATCH", `/api/meetings/${occ(3).id}`, { title: "robo", scope: "all", tz: LIMA })).status === 404);
+
+  // Toda la serie (hora y título)
+  const t11 = new Date(occ(4).startsAt.getTime() + 3600_000); // 11:00 de Lima
+  const all = await cAOwner.req("PATCH", `/api/meetings/${occ(4).id}`, { title: "Daily de producto", startsAt: t11.toISOString(), scope: "all", tz: LIMA });
+  const afterAll = await prisma.meeting.findMany({ where: { seriesId: sId }, orderBy: { startsAt: "asc" } });
+  check("cambiar «toda la serie» actualiza título y hora de todas las que no se cambiaron aparte", all.status === 200 && afterAll.filter((m) => !m.seriesException).every((m) => m.title === "Daily de producto" && m.startsAt.toISOString().slice(11, 16) === "16:00"), JSON.stringify(afterAll.slice(0, 3).map((m) => [m.title, m.startsAt.toISOString().slice(11, 16)])));
+  const keptOwn = await prisma.meeting.findUnique({ where: { id: occ(2).id } });
+  check("…y respeta la que se había cambiado sola", keptOwn.title === "Daily (solo hoy: demo)" && keptOwn.startsAt.toISOString().slice(11, 16) === "15:00");
+  check("se avisa UNA vez del cambio de la serie", (await prisma.notification.count({ where: { userId: plain.id, title: { contains: "Reunión recurrente actualizada" } } })) === 1);
+
+  // Esta y las siguientes (cambia la regla: solo lunes)
+  const pivot = afterAll.find((m, i) => i >= 6 && !m.seriesException && ((m.startsAt.getUTCDay() + 6) % 7) + 1 === 1) ?? afterAll[6];
+  const fol = await cAOwner.req("PATCH", `/api/meetings/${pivot.id}`, { scope: "following", repeat: { freq: "WEEKLY", interval: 1, weekdays: [1] }, tz: LIMA });
+  const oldSeries = await prisma.meetingSeries.findUnique({ where: { id: sId } });
+  const newSeries = fol.json?.series?.id && fol.json.series.id !== sId ? await prisma.meetingSeries.findUnique({ where: { id: fol.json.series.id } }) : null;
+  const beforePivot = await prisma.meeting.findMany({ where: { seriesId: sId } });
+  const inNew = newSeries ? await prisma.meeting.findMany({ where: { seriesId: newSeries.id } }) : [];
+  check("«esta y las siguientes» parte la serie en dos: la vieja termina el día anterior", fol.status === 200 && !!newSeries && oldSeries.until === dayOf(new Date(new Date(`${pivot.occurrenceDate}T00:00:00Z`).getTime() - 86400000)) && beforePivot.every((m) => m.occurrenceDate < pivot.occurrenceDate), `${fol.status} ${fol.text?.slice(0, 150)}`);
+  check("…y la nueva sigue solo los lunes, desde la reunión elegida (la misma, con su id)", inNew.length > 8 && inNew.every((m) => ((m.startsAt.getUTCDay() + 6) % 7) + 1 === 1) && inNew.some((m) => m.id === pivot.id) && fol.json.series.label === "Cada semana los lunes");
+
+  // Cancelar, borrar
+  const futureOld = beforePivot.filter((m) => !m.seriesException).slice(-2);
+  const cancelF = await cAOwner.req("PATCH", `/api/meetings/${futureOld[0].id}`, { canceled: true, scope: "following", tz: LIMA });
+  const canceledRows = await prisma.meeting.findMany({ where: { seriesId: sId, status: "CANCELED" } });
+  check("cancelar «esta y las siguientes» las deja canceladas en el calendario y se avisa una vez", cancelF.status === 200 && canceledRows.length >= 2 && (await prisma.notification.count({ where: { userId: plain.id, title: { contains: "Reunión recurrente cancelada" } } })) === 1);
+  const delOne = inNew.find((m) => m.id !== pivot.id && m.startsAt.getTime() > Date.now() + 86400000 * 20);
+  await cAOwner.req("DELETE", `/api/meetings/${delOne.id}?scope=one`);
+  const skipNow = JSON.parse((await prisma.meetingSeries.findUnique({ where: { id: newSeries.id } })).skipDates);
+  await fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: { Authorization: "Bearer testcron" } });
+  check("borrar «solo esta» la saca de la serie y el servidor no la vuelve a crear", !(await prisma.meeting.findUnique({ where: { id: delOne.id } })) && skipNow.includes(delOne.occurrenceDate) && !(await prisma.meeting.findFirst({ where: { seriesId: newSeries.id, occurrenceDate: delOne.occurrenceDate } })));
+
+  // Completar el horizonte con el temporizador
+  await prisma.meeting.deleteMany({ where: { seriesId: newSeries.id, startsAt: { gt: new Date(Date.now() + 40 * 86400000) } } });
+  await prisma.meetingSeries.update({ where: { id: newSeries.id }, data: { generatedThrough: dayOf(new Date(Date.now() + 40 * 86400000)) } });
+  const topped = await fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: { Authorization: "Bearer testcron" } }).then((r) => r.json());
+  check("el servidor agrega las próximas fechas a medida que pasa el tiempo", topped.seriesCreated > 0 && (await prisma.meeting.count({ where: { seriesId: newSeries.id, startsAt: { gt: new Date(Date.now() + 60 * 86400000) } } })) > 0, JSON.stringify(topped));
+
+  // Recordatorio por fecha
+  const soon = await prisma.meeting.findFirst({ where: { seriesId: newSeries.id, startsAt: { gt: new Date(Date.now() + 3 * 86400000), lt: new Date(Date.now() + 80 * 86400000) }, id: { notIn: [delOne.id, pivot.id] } }, orderBy: { startsAt: "asc" } });
+  await prisma.meeting.update({ where: { id: soon.id }, data: { startsAt: new Date(Date.now() + 10 * 60_000), endsAt: new Date(Date.now() + 40 * 60_000), reminderSentAt: null } });
+  const remBefore = await prisma.notification.count({ where: { userId: plain.id, title: { contains: "Empieza en 15 min" } } });
+  await fetch(`${BASE}/api/cron/notifications`, { method: "POST", headers: { Authorization: "Bearer testcron" } });
+  const remAfter = await prisma.notification.count({ where: { userId: plain.id, title: { contains: "Empieza en 15 min" } } });
+  check("cada fecha de la serie tiene su propio recordatorio de 15 minutos (solo la que se acerca)", remAfter - remBefore === 1, `${remAfter - remBefore}`);
+
+  // Grabaciones: borrar la serie no pierde lo que tiene grabaciones
+  await prisma.meetingRecording.create({ data: { externalId: `rec-serie-${stamp}`, workspaceId: A.ws.id, meetingId: soon.id, recordedById: aOwner.id, title: "grabada" } });
+  await cAOwner.req("DELETE", `/api/meetings/${soon.id}?scope=all`);
+  const keptRec = await prisma.meeting.findUnique({ where: { id: soon.id } });
+  check("borrar toda la serie quita lo que viene pero conserva lo que tiene grabaciones (queda suelta)", !!keptRec && keptRec.seriesId === null && (await prisma.meeting.count({ where: { seriesId: newSeries.id } })) === 0 && !(await prisma.meetingSeries.findUnique({ where: { id: newSeries.id } })));
+
+  // Agregar repetición a una reunión que ya existe
+  const single = await cAOwner.req("POST", "/api/meetings", { title: "Reunión suelta", startsAt: nextDow(4).toISOString(), everyone: true, announce: false });
+  const made = await cAOwner.req("PATCH", `/api/meetings/${single.json.id}`, { repeat: { freq: "WEEKLY", interval: 2, weekdays: [4] }, tz: LIMA });
+  check("a una reunión suelta se le puede agregar repetición al editarla (cada 2 semanas)", made.status === 200 && made.json.series?.label === "Cada 2 semanas los jueves" && (await prisma.meeting.count({ where: { seriesId: made.json.series.id } })) >= 6 && made.json.id === single.json.id);
+  check("el calendario y el detalle siguen abriendo con series (200)", (await fetch(`${BASE}/calendar`, { headers: { Cookie: cAOwner.header() } })).status === 200 && (await cAOwner.req("GET", `/api/meetings/${single.json.id}`)).json.series?.label === "Cada 2 semanas los jueves");
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

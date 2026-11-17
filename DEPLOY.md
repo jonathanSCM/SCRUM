@@ -128,3 +128,9 @@ Para limpiarlos (una sola vez, desde la terminal del contenedor):
 - **Respaldo antes de desplegar:** `Project` gana la columna `color` (texto, vacía = sin color): aditivo.
 - **Color opcional por proyecto:** se elige al crear el proyecto o en Ajustes → Detalles; se ve en las tarjetas y la tabla de Proyectos, en el encabezado del proyecto y en Mi trabajo.
 - **Mi trabajo** usa el mismo tablero Kanban que un proyecto (y una vista de tabla), con filtro por proyecto.
+
+## Reuniones recurrentes y «Crear en Meet»
+
+- **Respaldo antes de desplegar:** tabla nueva `MeetingSeries` y tres columnas en `Meeting` (`seriesId`, `occurrenceDate`, `seriesException`). Todo aditivo.
+- **Reuniones recurrentes:** en el formulario de reunión, «Repetir» (todos los días, de lunes a viernes, cada semana con sus días, cada mes; cada N; termina nunca / el día / tras N veces). Cada fecha es una reunión normal (grabaciones, archivos, notas y recordatorio de 15 min por fecha). Se crean ~13 semanas por adelantado y el temporizador del servidor (cada hora) y `POST /api/cron/notifications` agregan las siguientes. Cambiar, cancelar o borrar pregunta «solo esta / esta y las siguientes / toda la serie». La hora se guarda como hora local de la zona de quien la creó (no se corre con el horario de verano). Se anuncia una sola vez en el chat y se avisa una sola vez a los invitados.
+- **Enlace de Meet:** botones «Crear en Meet» (abre `meet.new` en otra pestaña) y «Pegar» en el formulario de reunión y en Avisar → Reunión. Crear el enlace automáticamente sin pasos manuales necesita conectar una cuenta de Google (pendiente).

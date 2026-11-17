@@ -11,6 +11,7 @@ import { formatDay, formatTime, offsetLabel, offsetMinutes, zoneName } from "@/l
 import type { MeetingDTO } from "@/lib/meetings";
 import Recordings from "./Recordings";
 import MeetingFiles from "./MeetingFiles";
+import ScopeDialog, { type Scope } from "./ScopeDialog";
 
 // Detalle de una reunión: quién la agendó, la hora en tu zona y en la de cada invitado, el enlace y las grabaciones.
 export default function MeetingDetail({ id, currentUserId, isLead, onClose, onEdit, onChanged }: { id: string; currentUserId: string; isLead: boolean; onClose: () => void; onEdit: (m: MeetingDTO) => void; onChanged: () => void }) {
@@ -19,6 +20,8 @@ export default function MeetingDetail({ id, currentUserId, isLead, onClose, onEd
   const confirm = useConfirm();
   const [m, setM] = useState<MeetingDTO | null>(null);
   const [missing, setMissing] = useState(false);
+  const [asking, setAsking] = useState<"cancel" | "delete" | null>(null); // reunión recurrente: ¿a cuáles?
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const res = await api<MeetingDTO>(`/api/meetings/${id}`);
@@ -38,20 +41,37 @@ export default function MeetingDetail({ id, currentUserId, isLead, onClose, onEd
   }, [m]);
 
   const canEdit = !!m && (m.createdBy?.id === currentUserId || isLead);
-  async function setCanceled(canceled: boolean) {
+  async function setCanceled(canceled: boolean, scope: Scope = "one") {
     if (!m) return;
-    if (canceled && !(await confirm(`¿Cancelar «${m.title}»? Se avisa a los invitados.`, { confirmLabel: "Cancelar reunión", danger: true }))) return;
-    const res = await api<MeetingDTO>(`/api/meetings/${m.id}`, "PATCH", { canceled });
+    setBusy(true);
+    const res = await api<MeetingDTO>(`/api/meetings/${m.id}`, "PATCH", { canceled, scope, tz });
+    setBusy(false);
+    setAsking(null);
     if (!res.ok) return toast.error(res.error);
     setM(res.data);
     onChanged();
   }
-  async function remove() {
-    if (!m || !(await confirm(`¿Borrar «${m.title}» del calendario? También se borran sus grabaciones y transcripciones.`, { confirmLabel: "Borrar", danger: true }))) return;
-    const res = await api(`/api/meetings/${m.id}`, "DELETE");
+  async function cancelMeeting() {
+    if (!m) return;
+    if (m.series) return setAsking("cancel");
+    if (!(await confirm(`¿Cancelar «${m.title}»? Se avisa a los invitados.`, { confirmLabel: "Cancelar reunión", danger: true }))) return;
+    await setCanceled(true);
+  }
+  async function removeMeeting(scope: Scope = "one") {
+    if (!m) return;
+    setBusy(true);
+    const res = await api(`/api/meetings/${m.id}?scope=${scope}`, "DELETE");
+    setBusy(false);
+    setAsking(null);
     if (!res.ok) return toast.error(res.error);
     onChanged();
     onClose();
+  }
+  async function remove() {
+    if (!m) return;
+    if (m.series) return setAsking("delete");
+    if (!(await confirm(`¿Borrar «${m.title}» del calendario? También se borran sus grabaciones y transcripciones.`, { confirmLabel: "Borrar", danger: true }))) return;
+    await removeMeeting();
   }
 
   return (
@@ -72,6 +92,7 @@ export default function MeetingDetail({ id, currentUserId, isLead, onClose, onEd
             <p className="text-sm text-ink-soft">
               <b className="text-ink">{formatTime(m.startsAt, tz)}</b> a <b className="text-ink">{formatTime(m.endsAt, tz)}</b> · hora de {zoneName(tz)} ({offsetLabel(m.startsAt, tz)})
             </p>
+            {m.series && <p className="mt-1 text-xs font-semibold text-ink-soft" title={m.seriesException ? "Esta reunión se cambió por separado de la serie" : undefined}>⟳ {m.series.label}{m.seriesException ? " · cambiada por separado" : ""}</p>}
             {m.createdBy && <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-faint"><Avatar name={m.createdBy.name} userId={m.createdBy.id} size={18} /> Agendada por <b className="text-ink-soft">{m.createdBy.name}</b></p>}
           </div>
 
@@ -107,11 +128,21 @@ export default function MeetingDetail({ id, currentUserId, isLead, onClose, onEd
           {canEdit && (
             <div className="flex flex-wrap gap-2 border-t border-line pt-3">
               <button className="btn-ghost btn-sm" onClick={() => onEdit(m)}>Editar</button>
-              {m.status === "CANCELED" ? <button className="btn-ghost btn-sm" onClick={() => setCanceled(false)}>Reactivar</button> : <button className="btn-ghost btn-sm text-danger" onClick={() => setCanceled(true)}>Cancelar reunión</button>}
+              {m.status === "CANCELED" ? <button className="btn-ghost btn-sm" onClick={() => setCanceled(false, "one")}>Reactivar</button> : <button className="btn-ghost btn-sm text-danger" onClick={cancelMeeting}>Cancelar reunión</button>}
               <button className="ml-auto text-xs text-ink-faint hover:text-danger" onClick={remove}>Borrar</button>
             </div>
           )}
         </div>
+      )}
+      {asking && m && (
+        <ScopeDialog
+          title={asking === "cancel" ? `Cancelar «${m.title}»` : `Borrar «${m.title}»`}
+          confirmLabel={asking === "cancel" ? "Cancelar reunión" : "Borrar"}
+          danger
+          busy={busy}
+          onClose={() => setAsking(null)}
+          onConfirm={(scope) => (asking === "cancel" ? setCanceled(true, scope) : removeMeeting(scope))}
+        />
       )}
     </Modal>
   );

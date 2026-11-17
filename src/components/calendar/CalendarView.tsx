@@ -127,7 +127,7 @@ export default function CalendarView({ currentUserId, isLead, people, projects, 
   const chip = (m: MeetingDTO) => (
     <button key={m.id} onClick={() => setDetail(m.id)} title={`${formatTime(m.startsAt, tz)} · ${m.title}`} className={cn("flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] font-semibold transition-colors", m.status === "CANCELED" ? "bg-card-2 text-ink-faint line-through" : new Date(m.endsAt) < new Date() ? "bg-card-2 text-ink-soft hover:bg-chip-tint" : "bg-chip-tint text-rust hover:brightness-95")}>
       <span className="font-mono text-[10px] opacity-80">{formatTime(m.startsAt, tz)}</span>
-      <span className="truncate">{m.title}</span>
+      <span className="truncate">{m.series ? "⟳ " : ""}{m.title}</span>
     </button>
   );
 
@@ -138,7 +138,7 @@ export default function CalendarView({ currentUserId, isLead, people, projects, 
         <span className="block font-mono text-[10px] text-ink-faint">{formatTime(m.endsAt, tz)}</span>
       </span>
       <span className="min-w-0 flex-1">
-        <span className={cn("block truncate text-sm font-bold text-ink", m.status === "CANCELED" && "line-through")}>{m.title}</span>
+        <span className={cn("block truncate text-sm font-bold text-ink", m.status === "CANCELED" && "line-through")}>{m.series ? "⟳ " : ""}{m.title}</span>
         <span className="block truncate text-xs text-ink-soft">{m.createdBy ? `Agendó ${m.createdBy.name}` : "Reunión"}{m.project ? ` · ${m.project.key ?? m.project.name}` : ""}{m.recordings > 0 ? ` · ${m.recordings} grabación${m.recordings === 1 ? "" : "es"}` : ""}</span>
       </span>
       {m.status === "CANCELED" ? <span className="lozenge text-danger">Cancelada</span> : new Date(m.endsAt) < new Date() ? <span className="lozenge text-ink-soft">Realizada</span> : null}
@@ -227,7 +227,7 @@ export default function CalendarView({ currentUserId, isLead, people, projects, 
                   {dayMeetings(k).map((m) => (
                     <button key={m.id} onClick={() => setDetail(m.id)} className={cn("w-full rounded-lg border-l-4 bg-card-2 p-2 text-left hover:brightness-95", m.status === "CANCELED" ? "border-line opacity-60" : "border-rust")}>
                       <span className="block font-mono text-[11px] font-bold text-ink-soft">{formatTime(m.startsAt, tz)}–{formatTime(m.endsAt, tz)}</span>
-                      <span className={cn("block text-xs font-bold text-ink", m.status === "CANCELED" && "line-through")}>{m.title}</span>
+                      <span className={cn("block text-xs font-bold text-ink", m.status === "CANCELED" && "line-through")}>{m.series ? "⟳ " : ""}{m.title}</span>
                     </button>
                   ))}
                   {dayMeetings(k).length === 0 && <p className="px-1 py-3 text-center text-[11px] text-ink-faint">—</p>}

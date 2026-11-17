@@ -1,6 +1,7 @@
 import { flushNotifications } from "@/lib/notifications";
 import { flushProjectFeeds } from "@/lib/notify";
 import { flushMeetingReminders } from "@/lib/meetings";
+import { topUpSeries } from "@/lib/meetingSeries";
 import { processPendingTranscriptions, purgeOldAudio } from "@/lib/transcribe";
 
 // Cada minuto envía los resúmenes de avisos que ya cumplieron su ventana (personas y canales de proyecto).
@@ -15,7 +16,10 @@ if (process.env.DISABLE_NOTIF_TIMER !== "1" && !g.__notifTimer) {
       await flushProjectFeeds(now);
       await flushMeetingReminders(now);
       await processPendingTranscriptions();
-      if (now.getMinutes() === 0) await purgeOldAudio(now);
+      if (now.getMinutes() === 0) {
+        await purgeOldAudio(now);
+        await topUpSeries(now); // las reuniones recurrentes siguen creándose por adelantado
+      }
     } catch (err) {
       console.error("[avisos] temporizador:", err);
     }

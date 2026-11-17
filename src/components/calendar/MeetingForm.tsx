@@ -9,6 +9,10 @@ import { useToast } from "@/components/ui/Toaster";
 import { useTimezone } from "@/components/TimezoneProvider";
 import { dayKey, formatDay, formatTime, offsetLabel, zoneName, zonedToUtc } from "@/lib/scrum/countries";
 import type { MeetingDTO } from "@/lib/meetings";
+import { EMPTY_DRAFT, draftToRule, ruleToDraft, type RepeatDraft } from "@/lib/scrum/recurrence";
+import MeetLinkField from "./MeetLinkField";
+import RepeatControls from "./RepeatControls";
+import type { Scope } from "./ScopeDialog";
 
 type Person = { id: string; name: string };
 type Project = { id: string; name: string; key: string | null };
@@ -28,6 +32,11 @@ export default function MeetingForm({ meeting, day, isLead, currentUserId, peopl
   const [everyone, setEveryone] = useState(meeting ? meeting.everyone : isLead);
   const [picked, setPicked] = useState<Set<string>>(new Set(meeting && !meeting.everyone ? meeting.attendees.map((a) => a.id).filter((id) => id !== currentUserId) : []));
   const [announce, setAnnounce] = useState(true);
+  // Reunión recurrente: la repetición (al agendar o al editar) y, si ya es de una serie, a cuáles reuniones aplica el cambio.
+  const original = meeting?.series ? ruleToDraft(meeting.series.rule) : EMPTY_DRAFT;
+  const [repeat, setRepeat] = useState<RepeatDraft>(original);
+  const [scope, setScope] = useState<Scope>("one");
+  const inSeries = !!meeting?.series;
   const [busy, setBusy] = useState(false);
   useEffect(() => setEveryone((e) => (isLead ? e : false)), [isLead]);
 
@@ -37,16 +46,25 @@ export default function MeetingForm({ meeting, day, isLead, currentUserId, peopl
     return m && t ? zonedToUtc(Number(m[1]), Number(m[2]), Number(m[3]), Number(t[1]), Number(t[2]), tz) : null;
   })();
   const toggle = (id: string) => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const ready = !!title.trim() && !!startsAt && (everyone || picked.size > 0);
   // Una reunión que ya pasó se registra sin avisar a nadie (para guardar lo que se trató y sus archivos).
   const past = !!startsAt && startsAt.getTime() < Date.now() - 10 * 60_000;
+  const repeatResult = draftToRule(repeat, date);
+  const repeatError = repeatResult && "error" in repeatResult ? repeatResult.error : null;
+  const repeatEditable = !inSeries || scope !== "one";
+  const repeatChanged = JSON.stringify(repeat) !== JSON.stringify(original);
+  const ready = !!title.trim() && !!startsAt && (everyone || picked.size > 0) && !(repeatEditable && repeatError);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!ready) return;
     setBusy(true);
-    const body = { title, startsAt: startsAt!.toISOString(), durationMin: duration, meetUrl: meetUrl.trim(), description, projectId: projectId || null, everyone, userIds: [...picked] };
-    const res = meeting ? await api<MeetingDTO>(`/api/meetings/${meeting.id}`, "PATCH", body) : await api<MeetingDTO>("/api/meetings", "POST", { ...body, announce: announce && !past });
+    const base = { title, startsAt: startsAt!.toISOString(), durationMin: duration, meetUrl: meetUrl.trim(), description, projectId: projectId || null, everyone, userIds: [...picked] };
+    // La regla solo se manda si hay repetición (reunión nueva o que todavía no era recurrente) o si se cambió en una serie.
+    const rule = repeatResult && "rule" in repeatResult ? repeatResult.rule : null;
+    const wantsRepeat = !past && repeatEditable && rule && (!inSeries || repeatChanged);
+    const res = meeting
+      ? await api<MeetingDTO>(`/api/meetings/${meeting.id}`, "PATCH", { ...base, ...(inSeries ? { scope } : {}), ...(wantsRepeat ? { repeat: rule } : {}), tz })
+      : await api<MeetingDTO>("/api/meetings", "POST", { ...base, announce: announce && !past, ...(wantsRepeat ? { repeat: rule, tz } : {}) });
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     onSaved(res.data);
@@ -55,6 +73,16 @@ export default function MeetingForm({ meeting, day, isLead, currentUserId, peopl
   return (
     <Modal open onClose={onClose} title={meeting ? "Editar reunión" : "Nueva reunión"} width="max-w-lg">
       <form onSubmit={submit} className="space-y-4">
+        {inSeries && (
+          <div className="space-y-1.5 rounded-lg border border-line bg-card-2/50 p-3">
+            <p className="text-xs font-semibold text-ink-soft">⟳ {meeting!.series!.label}. ¿A cuáles reuniones aplican los cambios?</p>
+            <div className="grid gap-1.5 sm:grid-cols-3" role="radiogroup" aria-label="A cuáles reuniones">
+              {([["one", "Solo esta"], ["following", "Esta y las siguientes"], ["all", "Toda la serie"]] as const).map(([v, l]) => (
+                <button key={v} type="button" role="radio" aria-checked={scope === v} onClick={() => setScope(v)} className={cn("rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-colors", scope === v ? "border-rust bg-chip-tint text-ink" : "border-line text-ink-soft hover:border-line-strong")}>{l}</button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="space-y-1">
           <label className="text-xs font-semibold text-ink-soft" htmlFor="reu-titulo">Tema</label>
           <input id="reu-titulo" className="field w-full" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="ej. Planificación del sprint" data-autofocus />
@@ -62,7 +90,7 @@ export default function MeetingForm({ meeting, day, isLead, currentUserId, peopl
         <div className="grid grid-cols-3 gap-2">
           <div className="col-span-3 space-y-1 sm:col-span-1">
             <label className="text-xs font-semibold text-ink-soft" htmlFor="reu-fecha">Fecha</label>
-            <input id="reu-fecha" type="date" className="field w-full" value={date} onChange={(e) => setDate(e.target.value)} />
+            <input id="reu-fecha" type="date" className="field w-full" value={date} onChange={(e) => setDate(e.target.value)} disabled={inSeries && scope === "all"} title={inSeries && scope === "all" ? "Al cambiar toda la serie solo se cambia la hora; para mover fechas elige «Esta y las siguientes»" : undefined} />
           </div>
           <div className="space-y-1">
             <label className="text-xs font-semibold text-ink-soft" htmlFor="reu-hora">Hora</label>
@@ -77,10 +105,8 @@ export default function MeetingForm({ meeting, day, isLead, currentUserId, peopl
           </div>
         </div>
         <p className="-mt-2 text-[11px] text-ink-faint">{startsAt ? `${formatDay(startsAt, tz)} · hora de ${zoneName(tz)} (${offsetLabel(startsAt, tz)}). Cada persona la verá en su hora.` : "Elige fecha y hora."}</p>
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-ink-soft" htmlFor="reu-meet">Enlace de Meet (opcional)</label>
-          <input id="reu-meet" className="field w-full" maxLength={300} value={meetUrl} onChange={(e) => setMeetUrl(e.target.value)} placeholder="https://meet.google.com/…" />
-        </div>
+        <MeetLinkField id="reu-meet" value={meetUrl} onChange={setMeetUrl} />
+        {!past && (repeatEditable ? <RepeatControls draft={repeat} onChange={setRepeat} startDate={date} /> : <p className="rounded-lg border border-dashed border-line-strong p-2.5 text-xs text-ink-faint">La repetición se cambia con «Esta y las siguientes» o «Toda la serie».</p>)}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <label className="text-xs font-semibold text-ink-soft" htmlFor="reu-proy">Proyecto (opcional)</label>
@@ -125,7 +151,7 @@ export default function MeetingForm({ meeting, day, isLead, currentUserId, peopl
         )}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost btn-sm" onClick={onClose}>Cancelar</button>
-          <button className="btn-primary btn-sm" disabled={!ready || busy}>{busy ? "Guardando…" : meeting ? "Guardar cambios" : past ? "Guardar reunión" : "Agendar y avisar"}</button>
+          <button className="btn-primary btn-sm" disabled={!ready || busy}>{busy ? "Guardando…" : meeting ? "Guardar cambios" : past ? "Guardar reunión" : repeat.kind !== "none" ? "Agendar serie y avisar" : "Agendar y avisar"}</button>
         </div>
       </form>
     </Modal>
