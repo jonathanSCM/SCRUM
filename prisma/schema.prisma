@@ -65,6 +65,7 @@ model User {
   draftIssues         DraftIssue[]      @relation("DraftIssueOwner")
   recordings          MeetingRecording[] @relation("RecordingOwner")
   meetingsCreated     Meeting[]         @relation("MeetingCreator")
+  meetingSeries       MeetingSeries[]   @relation("MeetingSeriesCreator")
   meetingAttendances  MeetingAttendee[] @relation("MeetingAttendeeUser")
   meetingFiles        MeetingFile[]     @relation("MeetingFileUploader")
   fileCardItemsUploaded FileCardItem[]  @relation("FileCardItemUploader")
@@ -151,6 +152,7 @@ model Project {
   tasks       Task[]
   drafts      DraftIssue[]
   meetings    Meeting[]
+  meetingSeries MeetingSeries[]
   sprints     Sprint[]
   documents   Document[]
   attachments Attachment[]
@@ -646,6 +648,7 @@ model Workspace {
   fileCards   FileCard[]
   invitations Invitation[]
   meetings    Meeting[]
+  meetingSeries MeetingSeries[]
   recordings  MeetingRecording[]
 }
 
@@ -896,11 +899,54 @@ model Meeting {
   createdById String?
   createdBy   User?     @relation("MeetingCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
+  // Reunión recurrente: cada fecha de la serie es una reunión normal (grabaciones, archivos y avisos funcionan igual).
+  seriesId        String?
+  series          MeetingSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  occurrenceDate  String? // fecha "YYYY-MM-DD" (en la zona de la serie) que le tocaba en la serie
+  seriesException Boolean @default(false) // se cambió o canceló solo esta: las ediciones de toda la serie no la tocan
+
   attendees  MeetingAttendee[]
   recordings MeetingRecording[]
   files      MeetingFile[]
 
   @@index([workspaceId, startsAt])
+  @@index([seriesId])
+}
+
+// La regla de una reunión recurrente. Las reuniones de cada fecha se van creando por adelantado (unas 13 semanas)
+// y el servidor agrega más a medida que pasa el tiempo.
+model MeetingSeries {
+  id          String   @id @default(cuid())
+  freq        String // DAILY | WEEKLY | MONTHLY
+  interval    Int      @default(1)
+  weekdays    String   @default("[]") // JSON, 1 = lunes … 7 = domingo (solo WEEKLY)
+  startDate   String // primera fecha "YYYY-MM-DD" en la zona de la serie
+  startTime   String // "HH:mm" en la zona de la serie
+  tz          String
+  durationMin Int      @default(60)
+  until       String? // última fecha posible
+  count       Int? // total de reuniones
+  skipDates   String   @default("[]") // JSON: fechas quitadas una a una
+  title       String
+  description String   @default("")
+  meetUrl     String?
+  everyone    Boolean  @default(true)
+  userIds     String   @default("[]") // JSON: invitados si no es todo el equipo
+  generatedThrough String? // hasta qué fecha ya se crearon las reuniones
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdById String?
+  createdBy   User?     @relation("MeetingSeriesCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  meetings Meeting[]
+
+  @@index([workspaceId])
+  @@index([generatedThrough])
 }
 
 model MeetingAttendee {
