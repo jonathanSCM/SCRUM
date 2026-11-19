@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { DndContext, DragOverlay, PointerSensor, pointerWithin, rectIntersection, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, PointerSensor, closestCenter, pointerWithin, rectIntersection, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type DragOverEvent } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { api } from "@/lib/client";
 import { cn, pct } from "@/lib/ui";
 import { daysRemaining } from "@/lib/scrum/sprintLifecycle";
@@ -15,7 +17,7 @@ import ColorPicker from "@/components/ui/ColorPicker";
 import EmptyState from "@/components/ui/EmptyState";
 import { DragIcon, PlusIcon } from "@/components/ui/Icons";
 import { useDragScroll } from "@/lib/useDragScroll";
-import { ProgressBar, staggerChild, staggerParent } from "@/components/ui/Motion";
+import { ProgressBar } from "@/components/ui/Motion";
 import { useToast } from "@/components/ui/Toaster";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 
@@ -68,19 +70,102 @@ export default function ProjectsView({ projects, statuses, people }: { projects:
   const allLabels = useMemo(() => [...new Set(items.flatMap((p) => p.labels))].sort((a, b) => a.localeCompare(b)), [items]);
   const dragged = dragId ? items.find((p) => p.id === dragId) : null;
 
-  async function onDragEnd(e: DragEndEvent) {
-    setDragId(null);
-    const statusId = e.over ? String(e.over.id) : null;
-    const id = String(e.active.id);
-    const project = items.find((p) => p.id === id);
-    if (!statusId || !project || project.statusId === statusId) return;
-    setItems((prev) => prev.map((p) => (p.id === id ? { ...p, statusId } : p)));
-    const res = await api(`/api/projects/${id}`, "PATCH", { statusId });
-    if (!res.ok) {
-      toast.error(res.error);
-      setItems(projects);
+  // Orden de cada fase (ids de arriba abajo). Se arma con el orden que llega del servidor (el que puso el equipo).
+  const [lists, setLists] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    const next: Record<string, string[]> = {};
+    for (const st of statuses) next[st.id] = filtered.filter((p) => p.statusId === st.id).map((p) => p.id);
+    setLists(next);
+  }, [filtered, statuses]);
+  const findContainer = (id: string) => (id in lists ? id : Object.keys(lists).find((k) => lists[k].includes(id)) ?? null);
+
+  // ¿Sobre qué tarjeta está el puntero? Si está dentro de una fase pero fuera de las tarjetas (cabecera, huecos, final),
+  // la tarjeta más cercana de esa fase; si no, la fase más próxima.
+  const collide: CollisionDetection = (args) => {
+    const hit = pointerWithin(args);
+    const cards = hit.filter((h) => !(String(h.id) in lists));
+    if (cards.length) return cards;
+    const col = hit.find((h) => String(h.id) in lists);
+    if (col) {
+      const ids = lists[String(col.id)];
+      const near = ids.length ? closestCenter({ ...args, droppableContainers: args.droppableContainers.filter((c) => ids.includes(String(c.id))) }) : [];
+      return near.length ? near : hit;
     }
+    return rectIntersection(args);
+  };
+
+  // Mientras se arrastra, la tarjeta ya se ve en su nueva posición (y en la nueva fase).
+  function onDragOver({ active, over }: DragOverEvent) {
+    if (!over) return;
+    const from = findContainer(String(active.id));
+    const to = findContainer(String(over.id));
+    if (!from || !to || from === to) return;
+    setLists((prev) => {
+      const target = [...prev[to]];
+      const overIndex = target.indexOf(String(over.id));
+      // Si el puntero está en la mitad de abajo de la tarjeta, se coloca después de ella.
+      const rect = active.rect.current.translated;
+      const below = !!rect && rect.top + rect.height / 2 > over.rect.top + over.rect.height / 2;
+      target.splice(overIndex >= 0 ? overIndex + (below ? 1 : 0) : target.length, 0, String(active.id));
+      return { ...prev, [from]: prev[from].filter((id) => id !== active.id), [to]: target };
+    });
+  }
+
+  // Guarda la fase (si cambió) y el lugar entre sus vecinos.
+  async function persist(id: string, statusId: string, order: string[]) {
+    const project = items.find((p) => p.id === id);
+    if (!project) return;
+    const index = order.indexOf(id);
+    const prevId = index > 0 ? order[index - 1] : null;
+    const nextId = index >= 0 && index < order.length - 1 ? order[index + 1] : null;
+    if (project.statusId !== statusId) {
+      setItems((prev) => prev.map((p) => (p.id === id ? { ...p, statusId } : p)));
+      const res = await api(`/api/projects/${id}`, "PATCH", { statusId });
+      if (!res.ok) {
+        toast.error(res.error);
+        setItems(projects);
+        return router.refresh();
+      }
+    }
+    const res = await api("/api/projects/reorder", "POST", { projectId: id, prevId, nextId });
+    if (!res.ok) toast.error(res.error);
     router.refresh();
+  }
+
+  async function onDragEnd({ active, over }: DragEndEvent) {
+    setDragId(null);
+    const id = String(active.id);
+    const container = findContainer(id);
+    if (!over || !container) return router.refresh();
+    let order = lists[container];
+    const overContainer = findContainer(String(over.id));
+    if (overContainer === container) {
+      const oldIndex = order.indexOf(id);
+      const newIndex = order.indexOf(String(over.id));
+      if (oldIndex !== newIndex && newIndex >= 0) {
+        order = order.slice();
+        order.splice(oldIndex, 1);
+        order.splice(newIndex, 0, id);
+        setLists((prev) => ({ ...prev, [container]: order }));
+      }
+    }
+    const project = items.find((p) => p.id === id);
+    const unchanged = project?.statusId === container && (projects.filter((p) => p.statusId === container).map((p) => p.id).join() === order.join());
+    if (unchanged) return;
+    await persist(id, container, order);
+  }
+
+  // Botones ▲ ▼: suben o bajan un lugar dentro de la fase (también sirven en el teléfono).
+  async function nudge(id: string, dir: -1 | 1) {
+    const container = findContainer(id);
+    if (!container) return;
+    const order = lists[container].slice();
+    const i = order.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    [order[i], order[j]] = [order[j], order[i]];
+    setLists((prev) => ({ ...prev, [container]: order }));
+    await persist(id, container, order);
   }
 
   return (
@@ -112,10 +197,10 @@ export default function ProjectsView({ projects, statuses, people }: { projects:
       {items.length === 0 ? (
         <EmptyState title="Todavía no hay proyectos" hint="Creá el primero: va a tener su propia clave (por ejemplo PRO-1), backlog y sprints." action={<button className="btn-primary btn-sm" onClick={() => setCreating(true)}>Crear proyecto</button>} />
       ) : view === "board" ? (
-        <DndContext sensors={sensors} collisionDetection={(args) => { const hit = pointerWithin(args); return hit.length ? hit : rectIntersection(args); }} onDragStart={(e) => setDragId(String(e.active.id))} onDragEnd={onDragEnd} onDragCancel={() => setDragId(null)}>
+        <DndContext sensors={sensors} collisionDetection={collide} onDragStart={(e) => setDragId(String(e.active.id))} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setDragId(null); router.refresh(); }}>
           <div ref={panRef} className="flex min-h-[60vh] cursor-grab gap-3 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {statuses.map((s) => (
-              <StatusColumn key={s.id} status={s} projects={filtered.filter((p) => p.statusId === s.id)} />
+              <StatusColumn key={s.id} status={s} projects={(lists[s.id] ?? []).map((id) => items.find((p) => p.id === id)).filter((p): p is ProjectCardData => !!p)} onNudge={nudge} />
             ))}
           </div>
           <DragOverlay dropAnimation={{ duration: 160 }}>{dragged ? <ProjectCard project={dragged} overlay /> : null}</DragOverlay>
@@ -129,7 +214,7 @@ export default function ProjectsView({ projects, statuses, people }: { projects:
   );
 }
 
-function StatusColumn({ status, projects }: { status: Status; projects: ProjectCardData[] }) {
+function StatusColumn({ status, projects, onNudge }: { status: Status; projects: ProjectCardData[]; onNudge: (id: string, dir: -1 | 1) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: status.id });
   return (
     <div ref={setNodeRef} className={cn("min-h-[220px] w-72 shrink-0 border bg-card-2/40 transition-colors rounded-md", isOver ? "border-moss bg-card-2" : "border-line-strong")}>
@@ -138,35 +223,41 @@ function StatusColumn({ status, projects }: { status: Status; projects: ProjectC
         <span className="text-xs font-extrabold uppercase tracking-wide text-ink-soft">{status.name}</span>
         <span className="font-mono text-xs text-ink-faint">{projects.length}</span>
       </div>
-      <motion.div variants={staggerParent} initial="hidden" animate="show" className="space-y-2 p-2">
-        {projects.map((p) => (
-          <DraggableCard key={p.id} project={p} />
-        ))}
-        {projects.length === 0 && <p className="py-6 text-center text-xs text-ink-faint">Soltá un proyecto acá</p>}
-      </motion.div>
+      <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-2 p-2">
+          {projects.map((p, i) => (
+            <SortableCard key={p.id} project={p} first={i === 0} last={i === projects.length - 1} onNudge={onNudge} />
+          ))}
+          {projects.length === 0 && <p className="py-6 text-center text-xs text-ink-faint">Soltá un proyecto acá</p>}
+        </div>
+      </SortableContext>
     </div>
   );
 }
 
-function DraggableCard({ project }: { project: ProjectCardData }) {
-  // Solo el cuadradito arrastra el proyecto a otra fase; el resto de la tarjeta abre el proyecto.
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({ id: project.id });
+function SortableCard({ project, first, last, onNudge }: { project: ProjectCardData; first: boolean; last: boolean; onNudge: (id: string, dir: -1 | 1) => void }) {
+  // El cuadradito arrastra el proyecto (a otro lugar de la fase o a otra fase); ▲ ▼ lo suben o bajan un lugar; el resto de la tarjeta abre el proyecto.
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging, transform, transition } = useSortable({ id: project.id });
+  const btn = "flex h-6 w-6 items-center justify-center rounded-md border border-line-strong bg-paper text-[10px] text-ink-faint transition-colors hover:border-rust hover:text-rust disabled:cursor-default disabled:opacity-30 disabled:hover:border-line-strong disabled:hover:text-ink-faint";
   return (
-    <motion.div variants={staggerChild} ref={setNodeRef} className={cn("relative", isDragging && "opacity-30")}>
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={cn("relative", isDragging && "opacity-30")}>
       <ProjectCard project={project} />
-      <button
-        ref={setActivatorNodeRef}
-        type="button"
-        data-no-pan
-        {...attributes}
-        {...listeners}
-        title="Arrastrar para cambiar de fase"
-        aria-label={`Mover ${project.name} a otra fase`}
-        className="absolute right-2 top-2 flex h-6 w-6 cursor-grab touch-none items-center justify-center rounded-md border border-line-strong bg-paper text-ink-faint transition-colors hover:border-rust hover:text-rust active:cursor-grabbing"
-      >
-        <DragIcon size={14} />
-      </button>
-    </motion.div>
+      <div className="absolute right-2 top-2 flex gap-1" data-no-pan>
+        <button type="button" className={btn} disabled={first} onClick={() => onNudge(project.id, -1)} title="Subir un lugar" aria-label={`Subir ${project.name}`}>▲</button>
+        <button type="button" className={btn} disabled={last} onClick={() => onNudge(project.id, 1)} title="Bajar un lugar" aria-label={`Bajar ${project.name}`}>▼</button>
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          {...attributes}
+          {...listeners}
+          title="Arrastrar para ordenar o cambiar de fase"
+          aria-label={`Mover ${project.name}`}
+          className="flex h-6 w-6 cursor-grab touch-none items-center justify-center rounded-md border border-line-strong bg-paper text-ink-faint transition-colors hover:border-rust hover:text-rust active:cursor-grabbing"
+        >
+          <DragIcon size={14} />
+        </button>
+      </div>
+    </div>
   );
 }
 

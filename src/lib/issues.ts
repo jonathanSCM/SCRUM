@@ -284,7 +284,16 @@ export async function updateIssue(
       if (ok !== ids.length) throw new IssueError("Una subtarea está asignada a alguien que no es del equipo");
     }
     const before = parseChecklist(current.checklist);
-    const same = JSON.stringify(before) === JSON.stringify(patch.checklist);
+    // Una subtarea que ya es un ticket sigue a ese ticket: se marca sola cuando el ticket está Hecho, y si el ticket ya no
+    // existe (o es de otro proyecto) vuelve a ser una subtarea normal.
+    const linkedIds = [...new Set(patch.checklist.map((c) => c.ticket).filter((x): x is string => !!x))];
+    const linked = linkedIds.length ? new Map((await prisma.task.findMany({ where: { id: { in: linkedIds }, projectId: project.id }, select: { id: true, status: true } })).map((t) => [t.id, t.status])) : new Map<string, string>();
+    patch.checklist = patch.checklist.map((c) => {
+      if (!c.ticket) return { ...c, ticket: undefined };
+      const st = linked.get(c.ticket);
+      return st === undefined ? { ...c, ticket: undefined } : { ...c, done: st === "DONE" };
+    });
+    const same = JSON.stringify(before) === JSON.stringify(parseChecklist(JSON.stringify(patch.checklist)));
     if (!same) {
       data.checklist = JSON.stringify(patch.checklist);
       if (patch.checklist.length !== before.length) track("checklist_ticket", `${before.length}`, `${patch.checklist.length}`);
@@ -374,6 +383,8 @@ export async function updateIssue(
   for (const change of changes) {
     await logHistory({ projectId: project.id, taskId: updated.id, taskTitle: updated.title, ...change, actor });
   }
+  // Si este ticket nació de una subtarea de otro, esa subtarea se marca o desmarca sola con su estado.
+  if (updated.originId && updated.status !== current.status) await syncOriginChecklist(updated.originId, updated.id, updated.status === "DONE");
 
   if (!options.silent) {
     // A quién le importa este movimiento: responsable, reportó, involucrados y los responsables de su historia y épica.
@@ -513,4 +524,53 @@ async function movementAudience(t: { id: string; assigneeUserId: string | null; 
     prisma.taskInvolved.findMany({ where: { taskId: t.id }, select: { userId: true } }),
   ]);
   return movementRecipients({ assignee: t.assigneeUserId, reporter: t.reporterId, involved: involved.map((i) => i.userId), owners: owners.flatMap((o) => [o.assigneeUserId, o.reporterId]), lead: leadId, actor: actorId });
+}
+
+// ---- Subtarea convertida en ticket ----
+
+// Marca (o desmarca) la subtarea del ticket de origen que apunta a este ticket.
+export async function syncOriginChecklist(originId: string, ticketId: string, done: boolean): Promise<void> {
+  const origin = await prisma.task.findUnique({ where: { id: originId }, select: { checklist: true } });
+  if (!origin) return;
+  const items = parseChecklist(origin.checklist);
+  if (!items.some((i) => i.ticket === ticketId && i.done !== done)) return;
+  await prisma.task.update({ where: { id: originId }, data: { checklist: JSON.stringify(items.map((i) => (i.ticket === ticketId ? { ...i, done } : i))) } });
+}
+
+// Convierte una subtarea (paso de la lista de un ticket) en un ticket propio, que sigue relacionado con el de origen:
+//  - el ticket nuevo apunta al de origen (`originId`) y lo muestra en su ficha;
+//  - la subtarea queda en la lista del origen, ligada al ticket nuevo, y se marca sola cuando el nuevo está Hecho.
+// El ticket nuevo hereda de la subtarea su texto, responsable, fecha límite y si ya estaba hecha, y del origen su sprint,
+// su prioridad y su lugar en la épica/historia.
+export async function convertChecklistItem(originId: string, itemId: string, actor: Actor): Promise<{ issue: IssueWithRefs; key: string }> {
+  const origin = await prisma.task.findUnique({ where: { id: originId }, include: { project: { select: { id: true, key: true, workspaceId: true } } } });
+  if (!origin || !origin.project.key) throw new IssueError("Ticket no encontrado", 404);
+  const items = parseChecklist(origin.checklist);
+  const item = items.find((i) => i.id === itemId);
+  if (!item) throw new IssueError("Esa subtarea no existe (guarda el ticket y vuelve a intentarlo)", 404);
+  if (item.ticket && (await prisma.task.count({ where: { id: item.ticket } })) > 0) throw new IssueError("Esa subtarea ya es un ticket", 400);
+
+  const assigneeOk = item.assignee && origin.project.workspaceId ? (await prisma.membership.count({ where: { userId: item.assignee, workspaceId: origin.project.workspaceId } })) > 0 : false;
+  const isEpic = origin.issueType === "EPIC";
+  const isStory = origin.issueType === "STORY";
+  const created = await createIssue(
+    origin.projectId,
+    {
+      title: item.text,
+      issueType: "TASK",
+      status: item.done ? "DONE" : "TODO",
+      priority: origin.priority as Priority,
+      assigneeUserId: assigneeOk ? item.assignee ?? null : null,
+      dueDate: item.due ?? null,
+      sprintId: isEpic ? null : origin.sprintId,
+      epicId: isEpic ? origin.id : origin.epicId,
+      parentId: isStory ? origin.id : origin.parentId,
+    },
+    actor
+  );
+  await prisma.task.update({ where: { id: created.id }, data: { originId: origin.id } });
+  await prisma.task.update({ where: { id: origin.id }, data: { checklist: JSON.stringify(items.map((i) => (i.id === itemId ? { ...i, ticket: created.id, done: created.status === "DONE" } : i))) } });
+  const key = formatIssueKey(origin.project.key, created.number);
+  await logHistory({ projectId: origin.projectId, taskId: origin.id, taskTitle: origin.title, field: "subtarea_a_ticket", newValue: `${item.text} → ${key}`, actor });
+  return { issue: created, key };
 }

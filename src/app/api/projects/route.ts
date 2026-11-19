@@ -26,10 +26,11 @@ export async function POST(req: Request) {
     }
 
     const firstStatus = await prisma.statusOption.findFirst({ where: { workspaceId: user.workspaceId! }, orderBy: { order: "asc" } });
+    const last = await prisma.project.aggregate({ where: { workspaceId: user.workspaceId!, kind: "PROJECT" }, _max: { rank: true } }); // un proyecto nuevo va al final de su fase
     if (!firstStatus) return NextResponse.json({ error: "No hay estados de proyecto configurados" }, { status: 400 });
 
     const project = await prisma.project.create({
-      data: { name, key, description: description ?? "", color: parsed.data.color ? parsed.data.color.toLowerCase() : null, statusId: firstStatus.id, leadUserId: user.id, workspaceId: user.workspaceId! },
+      data: { name, key, description: description ?? "", color: parsed.data.color ? parsed.data.color.toLowerCase() : null, rank: (last._max.rank ?? 0) + 1024, statusId: firstStatus.id, leadUserId: user.id, workspaceId: user.workspaceId! },
       include: { status: true },
     });
     await logHistory({ projectId: project.id, field: "proyecto_creado", newValue: project.name, actor: user });
