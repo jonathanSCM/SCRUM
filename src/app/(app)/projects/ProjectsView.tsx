@@ -28,6 +28,7 @@ export type ProjectCardData = {
   statusId: string;
   color: string | null;
   lead: string | null;
+  createdAt: string;
   labels: string[];
   activeSprint: { name: string; endDate: string | null } | null;
   done: number;
@@ -296,34 +297,136 @@ function ProjectCard({ project, overlay }: { project: ProjectCardData; overlay?:
   );
 }
 
+type SortKey = "createdAt" | "key" | "name" | "status" | "lead" | "sprint" | "progress";
+
 function ProjectTable({ projects, statuses }: { projects: ProjectCardData[]; statuses: Status[] }) {
   const byId = new Map(statuses.map((s) => [s.id, s]));
+  const statusIndex = new Map(statuses.map((s, i) => [s.id, i]));
+  // Por defecto, lo más reciente arriba.
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "createdAt", dir: "desc" });
+  const [f, setF] = useState({ key: "", name: "", status: "", lead: "", sprint: "", progress: "" });
+  const [showFilters, setShowFilters] = useState(false);
+  const leads = useMemo(() => [...new Set(projects.map((p) => p.lead).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b)), [projects]);
+  const sprints = useMemo(() => [...new Set(projects.map((p) => p.activeSprint?.name).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b)), [projects]);
+  const ratio = (p: ProjectCardData) => (p.total ? p.done / p.total : 0);
+
+  const rows = useMemo(() => {
+    const has = (v: string, q: string) => v.toLowerCase().includes(q.trim().toLowerCase());
+    const list = projects.filter((p) => {
+      if (f.key && !has(p.key, f.key)) return false;
+      if (f.name && !has(p.name, f.name)) return false;
+      if (f.status && p.statusId !== f.status) return false;
+      if (f.lead && (f.lead === "__none" ? p.lead : p.lead !== f.lead)) return false;
+      if (f.sprint && (f.sprint === "__none" ? p.activeSprint : p.activeSprint?.name !== f.sprint)) return false;
+      if (f.progress === "empty" && ratio(p) !== 0) return false;
+      if (f.progress === "going" && !(ratio(p) > 0 && ratio(p) < 1)) return false;
+      if (f.progress === "done" && !(p.total > 0 && ratio(p) === 1)) return false;
+      return true;
+    });
+    const val = (p: ProjectCardData): string | number => {
+      switch (sort.key) {
+        case "createdAt": return p.createdAt;
+        case "key": return p.key.toLowerCase();
+        case "name": return p.name.toLowerCase();
+        case "status": return statusIndex.get(p.statusId) ?? 999;
+        case "lead": return (p.lead ?? "").toLowerCase();
+        case "sprint": return (p.activeSprint?.name ?? "").toLowerCase();
+        case "progress": return ratio(p);
+      }
+    };
+    const sign = sort.dir === "asc" ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const x = val(a), y = val(b);
+      const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "es", { numeric: true });
+      return c * sign || b.createdAt.localeCompare(a.createdAt);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, f, sort]);
+
+  function toggle(key: SortKey) {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "createdAt" || key === "progress" ? "desc" : "asc" }));
+  }
+  const Th = ({ k, label, right }: { k: SortKey; label: string; right?: boolean }) => (
+    <th className={cn("px-3 py-2", right && "text-right")} aria-sort={sort.key === k ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
+      <button type="button" onClick={() => toggle(k)} className={cn("inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink", sort.key === k && "text-ink")}>
+        {label}
+        <span aria-hidden className="text-[0.65rem]">{sort.key === k ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}</span>
+      </button>
+    </th>
+  );
+  const active = Object.values(f).some(Boolean);
+
   return (
-    <div className="overflow-x-auto border border-line bg-card rounded-lg">
-      <table className="w-full min-w-[640px] text-left text-sm">
-        <thead className="border-b border-line bg-card-2 text-xs uppercase tracking-wide text-ink-faint">
-          <tr>
-            <th className="px-3 py-2">Clave</th>
-            <th className="px-3 py-2">Proyecto</th>
-            <th className="px-3 py-2">Estado</th>
-            <th className="px-3 py-2">Encargado</th>
-            <th className="px-3 py-2">Sprint</th>
-            <th className="px-3 py-2 text-right">Progreso</th>
-          </tr>
-        </thead>
-        <tbody>
-          {projects.map((p) => (
-            <tr key={p.id} className="border-b border-line-strong last:border-b-0 hover:bg-card-2">
-              <td className="px-3 py-2 font-mono text-xs text-moss-ink">{p.key}</td>
-              <td className="px-3 py-2 font-semibold">{p.color && <span aria-hidden className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: p.color }} />}<Link href={`/projects/${p.id}/board`} className="text-ink hover:underline">{p.name}</Link>{p.labels.map((l) => <span key={l} className="lozenge ml-2 text-ink-soft">{l}</span>)}</td>
-              <td className="px-3 py-2"><span className="lozenge" style={{ color: `color-mix(in srgb, ${byId.get(p.statusId)?.color ?? "#6f6a88"} 55%, var(--ink))` }}>{byId.get(p.statusId)?.name}</span></td>
-              <td className="px-3 py-2 text-ink-soft">{p.lead ?? "—"}</td>
-              <td className="px-3 py-2 text-ink-soft">{p.activeSprint?.name ?? "—"}</td>
-              <td className="px-3 py-2 text-right font-mono text-xs">{p.done}/{p.total} · {pct(p.done, p.total)}%</td>
+    <div>
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+        <button type="button" className="btn-ghost btn-sm" aria-pressed={showFilters} onClick={() => setShowFilters((v) => !v)}>
+          Filtros{active ? " •" : ""}
+        </button>
+        <button type="button" className="btn-ghost btn-sm" onClick={() => setSort({ key: "createdAt", dir: "desc" })}>Más recientes primero</button>
+        {active && <button type="button" className="btn-ghost btn-sm" onClick={() => setF({ key: "", name: "", status: "", lead: "", sprint: "", progress: "" })}>Limpiar filtros</button>}
+        <span className="ml-auto">{rows.length} de {projects.length}</span>
+      </div>
+      <div className="overflow-x-auto border border-line bg-card rounded-lg">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className="border-b border-line bg-card-2 text-xs text-ink-faint">
+            <tr>
+              <Th k="key" label="Clave" />
+              <Th k="name" label="Proyecto" />
+              <Th k="status" label="Estado" />
+              <Th k="lead" label="Encargado" />
+              <Th k="sprint" label="Sprint" />
+              <Th k="progress" label="Progreso" right />
             </tr>
-          ))}
-        </tbody>
-      </table>
+            {showFilters && (
+              <tr className="border-t border-line">
+                <th className="px-3 py-1.5"><input className="field-sm w-20" placeholder="Clave" aria-label="Filtrar por clave" value={f.key} onChange={(e) => setF({ ...f, key: e.target.value })} /></th>
+                <th className="px-3 py-1.5"><input className="field-sm w-full min-w-[8rem]" placeholder="Nombre" aria-label="Filtrar por proyecto" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></th>
+                <th className="px-3 py-1.5">
+                  <select className="field-sm" aria-label="Filtrar por estado" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
+                    <option value="">Todos</option>
+                    {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </th>
+                <th className="px-3 py-1.5">
+                  <select className="field-sm" aria-label="Filtrar por encargado" value={f.lead} onChange={(e) => setF({ ...f, lead: e.target.value })}>
+                    <option value="">Todos</option>
+                    <option value="__none">Sin encargado</option>
+                    {leads.map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </th>
+                <th className="px-3 py-1.5">
+                  <select className="field-sm" aria-label="Filtrar por sprint" value={f.sprint} onChange={(e) => setF({ ...f, sprint: e.target.value })}>
+                    <option value="">Todos</option>
+                    <option value="__none">Sin sprint activo</option>
+                    {sprints.map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </th>
+                <th className="px-3 py-1.5 text-right">
+                  <select className="field-sm" aria-label="Filtrar por progreso" value={f.progress} onChange={(e) => setF({ ...f, progress: e.target.value })}>
+                    <option value="">Todos</option>
+                    <option value="empty">Sin avance (0%)</option>
+                    <option value="going">En curso</option>
+                    <option value="done">Completo (100%)</option>
+                  </select>
+                </th>
+              </tr>
+            )}
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.id} className="border-b border-line-strong last:border-b-0 hover:bg-card-2">
+                <td className="px-3 py-2 font-mono text-xs text-moss-ink">{p.key}</td>
+                <td className="px-3 py-2 font-semibold">{p.color && <span aria-hidden className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: p.color }} />}<Link href={`/projects/${p.id}/board`} className="text-ink hover:underline">{p.name}</Link>{p.labels.map((l) => <span key={l} className="lozenge ml-2 text-ink-soft">{l}</span>)}</td>
+                <td className="px-3 py-2"><span className="lozenge" style={{ color: `color-mix(in srgb, ${byId.get(p.statusId)?.color ?? "#6f6a88"} 55%, var(--ink))` }}>{byId.get(p.statusId)?.name}</span></td>
+                <td className="px-3 py-2 text-ink-soft">{p.lead ?? "—"}</td>
+                <td className="px-3 py-2 text-ink-soft">{p.activeSprint?.name ?? "—"}</td>
+                <td className="px-3 py-2 text-right font-mono text-xs">{p.done}/{p.total} · {pct(p.done, p.total)}%</td>
+              </tr>
+            ))}
+            {rows.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-ink-faint">Ningún proyecto coincide con los filtros.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

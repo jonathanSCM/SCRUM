@@ -33,6 +33,7 @@ export default async function ProjectsPage() {
     statusId: p.statusId,
     color: p.color,
     lead: p.lead?.name ?? null,
+    createdAt: p.createdAt.toISOString(),
     activeSprint: p.sprints[0] ? { name: p.sprints[0].name, endDate: p.sprints[0].endDate?.toISOString() ?? null } : null,
     labels: parseLabels(p.labels),
     done: counts.get(p.id)?.done ?? 0,
