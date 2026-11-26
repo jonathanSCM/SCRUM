@@ -1272,3 +1272,18 @@ describe("reuniones recurrentes: la regla y sus fechas", () => {
     expect(bad && "rule" in bad).toBe(true); // sin fecha escrita equivale a "nunca"
   });
 });
+
+describe("subtareas convertidas en tickets", () => {
+  it("la subtarea conserva el ticket al que se convirtió y descarta valores raros", async () => {
+    const { parseChecklist } = await import("./checklist");
+    const raw = JSON.stringify([
+      { id: "a", text: "Con ticket", done: false, ticket: "cm123abc" },
+      { id: "b", text: "Normal", done: true },
+      { id: "c", text: "Ticket raro", done: false, ticket: 5 },
+    ]);
+    const items = parseChecklist(raw);
+    expect(items[0].ticket).toBe("cm123abc");
+    expect(items[1].ticket).toBeUndefined();
+    expect(items[2].ticket).toBeUndefined();
+  });
+});

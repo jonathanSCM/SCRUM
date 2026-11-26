@@ -74,6 +74,8 @@ type Payload = {
   history: HistoryRow[];
   children: Child[];
   involved: UserRef[];
+  checklistTickets: Record<string, { key: string; title: string; status: IssueStatus }>; // subtareas que ya son tickets
+  origin: { key: string; title: string } | null; // si este ticket nació de una subtarea de otro
   options: { members: UserRef[]; sprints: SprintOption[]; epics: EpicOption[]; stories: Array<{ id: string; number: number | null; title: string }>; readyItems: string[] };
 };
 
@@ -243,6 +245,14 @@ function DrawerBody({
         <div className="min-w-0 space-y-6 p-5 md:overflow-y-auto md:p-6">
           <EditableTitle value={issue.title} onSave={(title) => patch({ title })} />
 
+          {data.origin && (
+            <p className="-mt-3 text-xs text-ink-soft">
+              ↳ Viene de una subtarea de{" "}
+              <button type="button" className="font-mono font-semibold text-rust hover:underline" onClick={() => openIssue(data.origin!.key)} title={data.origin.title}>{data.origin.key}</button>
+              <span className="text-ink-faint"> · {data.origin.title}</span>
+            </p>
+          )}
+
           <DescriptionEditor value={issue.description} onSave={(description) => patch({ description })} />
 
           {(isEpic || isStory) && (
@@ -288,7 +298,22 @@ function DrawerBody({
             <ReadyChecklist template={data.options.readyItems} extra={issue.readyExtra} off={issue.readyOff} done={issue.readyDone} onChange={patch} settingsHref={`/projects/${issue.projectId}/settings`} />
           )}
 
-          {!isEpic && <Checklist items={issue.checklist} people={data.options.members} onChange={(checklist) => patch({ checklist })} />}
+          {!isEpic && (
+            <Checklist
+              items={issue.checklist}
+              people={data.options.members}
+              linked={data.checklistTickets ?? {}}
+              onChange={(checklist) => patch({ checklist })}
+              onOpen={(k) => openIssue(k)}
+              onConvert={async (itemId) => {
+                const res = await api<{ key: string }>(`/api/issues/${issue.id}/checklist/${itemId}/convert`, "POST");
+                if (!res.ok) return toast.error(res.error);
+                toast.success(`Se creó ${res.data.key} desde la subtarea (sigue relacionada)`);
+                void load();
+                router.refresh();
+              }}
+            />
+          )}
 
           <Attachments issueId={issue.id} items={data.attachments} onChange={load} />
 
@@ -687,7 +712,7 @@ function ReadyChecklist({ template, extra, off, done, onChange, settingsHref }: 
 
 // Subtareas: minitareas dentro de una tarea grande (por ejemplo, en "Rehacer la landing": mejorar el diseño, hacer las animaciones…).
 // Cada una tiene su casilla, y opcionalmente responsable y fecha límite; el avance se ve en la barra y en la tarjeta.
-function Checklist({ items, people, onChange }: { items: ChecklistItem[]; people: UserRef[]; onChange: (items: ChecklistItem[]) => void }) {
+function Checklist({ items, people, linked, onChange, onOpen, onConvert }: { items: ChecklistItem[]; people: UserRef[]; linked: Record<string, { key: string; title: string; status: IssueStatus }>; onChange: (items: ChecklistItem[]) => void; onOpen: (key: string) => void; onConvert: (itemId: string) => void | Promise<void> }) {
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -717,7 +742,12 @@ function Checklist({ items, people, onChange }: { items: ChecklistItem[]; people
         {items.map((it) => (
           <li key={it.id} className="group rounded-md border border-line px-2.5 py-2 text-sm">
             <div className="flex items-start gap-2">
-              <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-moss" checked={it.done} onChange={() => update(it.id, { done: !it.done })} aria-label={`Marcar «${it.text}»`} />
+              {linked[it.id] ? (
+                // Ya es un ticket: su casilla sigue al estado del ticket (se marca sola cuando está Hecho).
+                <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-moss" checked={linked[it.id].status === "DONE"} disabled title="Se marca sola cuando el ticket está Hecho" aria-label={`«${it.text}» es el ticket ${linked[it.id].key}`} readOnly />
+              ) : (
+                <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-moss" checked={it.done} onChange={() => update(it.id, { done: !it.done })} aria-label={`Marcar «${it.text}»`} />
+              )}
               {editing === it.id ? (
                 <input
                   autoFocus
@@ -739,6 +769,14 @@ function Checklist({ items, people, onChange }: { items: ChecklistItem[]; people
                 <button type="button" className={cn("min-w-0 flex-1 break-words text-left", it.done ? "text-ink-faint line-through" : "text-ink")} onClick={() => { setEditing(it.id); setEditText(it.text); }} title="Clic para editar">
                   {it.text}
                 </button>
+              )}
+              {linked[it.id] ? (
+                <button type="button" className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-line-strong px-1.5 py-0.5 text-[11px] font-semibold text-ink-soft hover:border-rust hover:text-rust" onClick={() => onOpen(linked[it.id].key)} title={`Abrir ${linked[it.id].key}: ${linked[it.id].title}`}>
+                  <span className="font-mono">{linked[it.id].key}</span>
+                  <span style={{ color: STATUS_META[linked[it.id].status]?.color }}>{STATUS_META[linked[it.id].status]?.label ?? linked[it.id].status}</span>
+                </button>
+              ) : (
+                <button className="shrink-0 text-xs text-ink-faint hover:text-rust sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100" onClick={() => void onConvert(it.id)} title="Crear un ticket con esta subtarea; sigue relacionada con este ticket" aria-label={`Convertir «${it.text}» en ticket`}>→ ticket</button>
               )}
               <button className="shrink-0 text-xs text-ink-faint hover:text-danger sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100" onClick={() => onChange(items.filter((x) => x.id !== it.id))} aria-label={`Quitar ${it.text}`}>quitar</button>
             </div>

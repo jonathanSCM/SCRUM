@@ -14,6 +14,7 @@ export const HISTORY_LABEL: Record<string, string> = {
   epica_ticket: "Épica",
   historia_ticket: "Historia",
   checklist_ticket: "Checklist (ítems)",
+  subtarea_a_ticket: "Subtarea convertida en ticket",
   etiquetas_ticket: "Etiquetas",
   fecha_limite_ticket: "Fecha límite",
   comentario: "Comentario",

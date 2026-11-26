@@ -1603,6 +1603,68 @@ async function main() {
   check("a una reunión suelta se le puede agregar repetición al editarla (cada 2 semanas)", made.status === 200 && made.json.series?.label === "Cada 2 semanas los jueves" && (await prisma.meeting.count({ where: { seriesId: made.json.series.id } })) >= 6 && made.json.id === single.json.id);
   check("el calendario y el detalle siguen abriendo con series (200)", (await fetch(`${BASE}/calendar`, { headers: { Cookie: cAOwner.header() } })).status === 200 && (await cAOwner.req("GET", `/api/meetings/${single.json.id}`)).json.series?.label === "Cada 2 semanas los jueves");
 
+  // ---------- 43) Orden manual de proyectos y subtareas convertidas en tickets ----------
+  console.log("43) Orden manual de proyectos y subtareas convertidas en tickets");
+  const mkProj43 = async (name) => (await cAOwner.req("POST", "/api/projects", { name })).json;
+  const pZ = await mkProj43("Zeta orden"), pA = await mkProj43("Alfa orden"), pM = await mkProj43("Medio orden");
+  const ordOf = async () => (await prisma.project.findMany({ where: { id: { in: [pZ.id, pA.id, pM.id] } }, orderBy: [{ rank: "asc" }, { name: "asc" }], select: { name: true } })).map((p) => p.name.split(" ")[0]).join(",");
+  check("un proyecto nuevo se coloca al final (en el orden en que se crean)", (await ordOf()) === "Zeta,Alfa,Medio");
+  await prisma.project.updateMany({ where: { id: { in: [pZ.id, pA.id, pM.id] } }, data: { rank: 0 } }); // como los proyectos de antes: nunca ordenados, salen por nombre
+  check("sin orden manual salen por nombre", (await ordOf()) === "Alfa,Medio,Zeta");
+  const rdOrd1 = await cAOwner.req("POST", "/api/projects/reorder", { projectId: pZ.id, prevId: null, nextId: pA.id });
+  check("se sube un proyecto por encima de otro (queda Zeta, Alfa, Medio)", rdOrd1.status === 200 && (await ordOf()) === "Zeta,Alfa,Medio");
+  const rdOrd2 = await cAOwner.req("POST", "/api/projects/reorder", { projectId: pM.id, prevId: pZ.id, nextId: pA.id });
+  check("y se coloca entre dos (queda Zeta, Medio, Alfa)", rdOrd2.status === 200 && (await ordOf()) === "Zeta,Medio,Alfa");
+  const rdOrd3 = await cAOwner.req("POST", "/api/projects/reorder", { projectId: pZ.id, prevId: pA.id, nextId: null });
+  check("o al final (queda Medio, Alfa, Zeta)", rdOrd3.status === 200 && (await ordOf()) === "Medio,Alfa,Zeta");
+  const projHtmlOrd = await (await fetch(`${BASE}/projects`, { headers: { Cookie: cAOwner.header() } })).text();
+  const posOrd = (n) => projHtmlOrd.indexOf(`${n} orden`);
+  check("el tablero de Proyectos respeta ese orden", posOrd("Medio") > 0 && posOrd("Medio") < posOrd("Alfa") && posOrd("Alfa") < posOrd("Zeta"));
+  const pNewOrd = await mkProj43("Nuevo orden");
+  check("un proyecto nuevo va después de los ya ordenados", (await prisma.project.findUnique({ where: { id: pNewOrd.id } })).rank > (await prisma.project.findUnique({ where: { id: pZ.id } })).rank);
+  const otherStatusOrd = await prisma.statusOption.findFirst({ where: { workspaceId: A.ws.id, id: { not: (await prisma.project.findUnique({ where: { id: pZ.id } })).statusId } } });
+  if (otherStatusOrd) {
+    await prisma.project.update({ where: { id: pA.id }, data: { statusId: otherStatusOrd.id } });
+    check("los vecinos tienen que ser de la misma fase (400)", (await cAOwner.req("POST", "/api/projects/reorder", { projectId: pZ.id, prevId: pA.id, nextId: null })).status === 400);
+    await prisma.project.update({ where: { id: pA.id }, data: { statusId: (await prisma.project.findUnique({ where: { id: pZ.id } })).statusId } });
+  }
+  check("otro equipo no puede reordenar (404) ni usar vecinos ajenos (400)", (await cBOnly.req("POST", "/api/projects/reorder", { projectId: pZ.id })).status === 404 && (await cAOwner.req("POST", "/api/projects/reorder", { projectId: pZ.id, prevId: B.project.id })).status === 400);
+  check("cualquier miembro del equipo puede ordenar", (await cPlain.req("POST", "/api/projects/reorder", { projectId: pM.id, prevId: null, nextId: pZ.id })).status === 200);
+
+  // Subtareas -> tickets
+  const mkIssue43 = async (body) => (await cAOwner.req("POST", `/api/projects/${A.project.id}/issues`, body)).json;
+  const tParent43 = await mkIssue43({ title: "Rehacer la landing", sprintId: A.sprint.id, priority: "ALTA" });
+  const stepA43 = { id: "paso1abc", text: "Mejorar el diseño", done: false, assignee: plain.id, due: "2026-12-01" };
+  const stepB43 = { id: "paso2abc", text: "Revisar textos", done: true };
+  await cAOwner.req("PATCH", `/api/issues/${tParent43.id}`, { checklist: [stepA43, stepB43] });
+  const cvIt = await cPlain.req("POST", `/api/issues/${tParent43.id}/checklist/${stepA43.id}/convert`);
+  const chTicket = cvIt.json?.issue?.id ? await prisma.task.findUnique({ where: { id: cvIt.json.issue.id } }) : null;
+  const parentRow43 = await prisma.task.findUnique({ where: { id: tParent43.id } });
+  const parentList43 = JSON.parse(parentRow43.checklist);
+  check("una subtarea se convierte en ticket (cualquier miembro puede)", cvIt.status === 201 && !!cvIt.json.key && chTicket?.title === "Mejorar el diseño", JSON.stringify(cvIt.json).slice(0, 160));
+  check("el ticket hereda responsable, fecha límite, sprint y prioridad, y queda relacionado con el de origen", chTicket?.assigneeUserId === plain.id && chTicket.dueDate?.toISOString().slice(0, 10) === "2026-12-01" && chTicket.sprintId === A.sprint.id && chTicket.priority === "ALTA" && chTicket.originId === tParent43.id && chTicket.status === "TODO" && chTicket.issueType === "TASK");
+  check("la subtarea queda en la lista, ligada al ticket nuevo", parentList43.find((i) => i.id === stepA43.id)?.ticket === chTicket.id && parentList43.length === 2);
+  check("no se convierte dos veces (400); una subtarea que no existe da 404; otro equipo 404", (await cPlain.req("POST", `/api/issues/${tParent43.id}/checklist/${stepA43.id}/convert`)).status === 400 && (await cPlain.req("POST", `/api/issues/${tParent43.id}/checklist/nada/convert`)).status === 404 && (await cBOnly.req("POST", `/api/issues/${tParent43.id}/checklist/${stepB43.id}/convert`)).status === 404);
+  const keyOf43 = async (id) => { const t = await prisma.task.findUnique({ where: { id }, include: { project: { select: { key: true } } } }); return `${t.project.key}-${t.number}`; };
+  const bkParent43 = await cAOwner.req("GET", `/api/issues/by-key/${await keyOf43(tParent43.id)}`);
+  const bkChild43 = await cAOwner.req("GET", `/api/issues/by-key/${await keyOf43(chTicket.id)}`);
+  check("la ficha del origen muestra el ticket de la subtarea y la del ticket muestra de cuál viene", bkParent43.json.checklistTickets?.[stepA43.id]?.key === cvIt.json.key && bkChild43.json.origin?.key === (await keyOf43(tParent43.id)) && bkChild43.json.origin?.title === "Rehacer la landing");
+  await cAOwner.req("PATCH", `/api/issues/${chTicket.id}`, { status: "DONE" });
+  check("al terminar el ticket, la subtarea del origen se marca sola", JSON.parse((await prisma.task.findUnique({ where: { id: tParent43.id } })).checklist).find((i) => i.id === stepA43.id)?.done === true);
+  await cAOwner.req("PATCH", `/api/issues/${chTicket.id}`, { status: "IN_PROGRESS" });
+  check("y se desmarca si el ticket se reabre", JSON.parse((await prisma.task.findUnique({ where: { id: tParent43.id } })).checklist).find((i) => i.id === stepA43.id)?.done === false);
+  await cAOwner.req("PATCH", `/api/issues/${tParent43.id}`, { checklist: JSON.parse((await prisma.task.findUnique({ where: { id: tParent43.id } })).checklist).map((i) => (i.id === stepA43.id ? { ...i, done: true } : i)) });
+  check("no se puede marcar a mano una subtarea que es un ticket sin terminar (el ticket manda)", JSON.parse((await prisma.task.findUnique({ where: { id: tParent43.id } })).checklist).find((i) => i.id === stepA43.id)?.done === false);
+  const cvIt2 = await cPlain.req("POST", `/api/issues/${tParent43.id}/checklist/${stepB43.id}/convert`);
+  check("una subtarea ya hecha se convierte en un ticket Hecho", cvIt2.status === 201 && (await prisma.task.findUnique({ where: { id: cvIt2.json.issue.id } })).status === "DONE");
+  await cAOwner.req("DELETE", `/api/issues/${chTicket.id}`);
+  const bkAfter43 = await cAOwner.req("GET", `/api/issues/by-key/${await keyOf43(tParent43.id)}`);
+  check("si el ticket se borra, la subtarea vuelve a ser una subtarea normal", !bkAfter43.json.checklistTickets?.[stepA43.id] && !bkAfter43.json.issue.checklist.find((i) => i.id === stepA43.id)?.ticket);
+  const stTicket = await mkIssue43({ title: "Historia de prueba", issueType: "STORY" });
+  await cAOwner.req("PATCH", `/api/issues/${stTicket.id}`, { checklist: [{ id: "hist1abc", text: "Una parte de la historia", done: false }] });
+  const cvStory = await cAOwner.req("POST", `/api/issues/${stTicket.id}/checklist/hist1abc/convert`);
+  check("desde una historia, el ticket nuevo cuelga de ella", cvStory.status === 201 && (await prisma.task.findUnique({ where: { id: cvStory.json.issue.id } })).parentId === stTicket.id);
+
   console.log(`\n${checks} comprobaciones, ${failures} fallas`);
   await prisma.$disconnect();
   process.exit(failures ? 1 : 0);

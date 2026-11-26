@@ -5,6 +5,7 @@ import { assignableMembers } from "@/lib/projectMembers";
 import { apiUser } from "@/lib/session";
 import { errorResponse, notFound } from "@/lib/api";
 import { findIssueByKey } from "@/lib/issues";
+import { formatIssueKey } from "@/lib/scrum/issueKey";
 import { parseChecklist } from "@/lib/scrum/checklist";
 import { parseStringList } from "@/lib/scrum/ready";
 import { parseLabels } from "@/lib/scrum/labels";
@@ -62,9 +63,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
           })
         : [];
 
+    // Subtareas que ya son tickets (con su estado) y, si este ticket nació de una subtarea, de cuál.
+    const checklist = parseChecklist(issue.checklist);
+    const ticketIds = [...new Set(checklist.map((c) => c.ticket).filter((x): x is string => !!x))];
+    const [linkedRows, originRow] = await Promise.all([
+      ticketIds.length ? prisma.task.findMany({ where: { id: { in: ticketIds }, projectId: issue.projectId }, select: { id: true, number: true, title: true, status: true } }) : Promise.resolve([]),
+      issue.originId ? prisma.task.findUnique({ where: { id: issue.originId }, select: { number: true, title: true } }) : Promise.resolve(null),
+    ]);
+    const linkedById = new Map(linkedRows.map((t) => [t.id, t]));
+    const checklistTickets = Object.fromEntries(checklist.flatMap((c) => (c.ticket && linkedById.has(c.ticket) ? [[c.id, { key: formatIssueKey(project?.key ?? null, linkedById.get(c.ticket)!.number), title: linkedById.get(c.ticket)!.title, status: linkedById.get(c.ticket)!.status }]] : [])));
+    const origin = originRow ? { key: formatIssueKey(project?.key ?? null, originRow.number), title: originRow.title } : null;
+
     return NextResponse.json({
+      checklistTickets,
+      origin,
       children,
-      issue: { ...issue, labels: parseLabels(issue.labels), readyDone: parseStringList(issue.readyDone), readyExtra: parseStringList(issue.readyExtra), readyOff: parseStringList(issue.readyOff), checklist: parseChecklist(issue.checklist) },
+      issue: { ...issue, labels: parseLabels(issue.labels), readyDone: parseStringList(issue.readyDone), readyExtra: parseStringList(issue.readyExtra), readyOff: parseStringList(issue.readyOff), checklist: checklist.map((c) => (c.ticket && !linkedById.has(c.ticket) ? { ...c, ticket: undefined } : c)) },
       project,
       involved: involvedRows.map((r) => r.user),
       comments,

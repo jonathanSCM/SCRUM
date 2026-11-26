@@ -134,3 +134,9 @@ Para limpiarlos (una sola vez, desde la terminal del contenedor):
 - **Respaldo antes de desplegar:** tabla nueva `MeetingSeries` y tres columnas en `Meeting` (`seriesId`, `occurrenceDate`, `seriesException`). Todo aditivo.
 - **Reuniones recurrentes:** en el formulario de reunión, «Repetir» (todos los días, de lunes a viernes, cada semana con sus días, cada mes; cada N; termina nunca / el día / tras N veces). Cada fecha es una reunión normal (grabaciones, archivos, notas y recordatorio de 15 min por fecha). Se crean ~13 semanas por adelantado y el temporizador del servidor (cada hora) y `POST /api/cron/notifications` agregan las siguientes. Cambiar, cancelar o borrar pregunta «solo esta / esta y las siguientes / toda la serie». La hora se guarda como hora local de la zona de quien la creó (no se corre con el horario de verano). Se anuncia una sola vez en el chat y se avisa una sola vez a los invitados.
 - **Enlace de Meet:** botones «Crear en Meet» (abre `meet.new` en otra pestaña) y «Pegar» en el formulario de reunión y en Avisar → Reunión. Crear el enlace automáticamente sin pasos manuales necesita conectar una cuenta de Google (pendiente).
+
+## Orden manual de proyectos y subtareas convertidas en tickets
+
+- **Respaldo antes de desplegar:** `Project.rank` (número, 0 por defecto) y `Task.originId` (nullable). Todo aditivo.
+- **Orden manual de proyectos:** en el tablero de Proyectos se ordenan arrastrando el cuadrito, o con ▲ ▼. El orden es el mismo para todo el equipo y se mantiene dentro de cada fase; los proyectos que nunca se ordenaron salen por nombre y uno nuevo va al final de su fase.
+- **Subtarea → ticket:** en un ticket, cada subtarea tiene «→ ticket». El ticket nuevo hereda texto, responsable, fecha límite, sprint, prioridad y épica/historia del origen, queda relacionado con él (la ficha dice «Viene de una subtarea de X») y la subtarea se marca sola cuando el ticket está Hecho.

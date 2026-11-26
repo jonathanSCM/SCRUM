@@ -11,7 +11,7 @@ export default async function ProjectsPage() {
   const [projects, statuses, taskCounts] = await Promise.all([
     prisma.project.findMany({
       where: { workspaceId, kind: "PROJECT" },
-      orderBy: { name: "asc" },
+      orderBy: [{ rank: "asc" }, { name: "asc" }], // el orden que puso el equipo; los que nunca se ordenaron, por nombre
       include: { lead: { select: { name: true } }, sprints: { where: { state: "ACTIVE" }, select: { name: true, endDate: true }, take: 1 } },
     }),
     prisma.statusOption.findMany({ where: { workspaceId }, orderBy: { order: "asc" } }),
@@ -33,6 +33,7 @@ export default async function ProjectsPage() {
     statusId: p.statusId,
     color: p.color,
     lead: p.lead?.name ?? null,
+    createdAt: p.createdAt.toISOString(),
     activeSprint: p.sprints[0] ? { name: p.sprints[0].name, endDate: p.sprints[0].endDate?.toISOString() ?? null } : null,
     labels: parseLabels(p.labels),
     done: counts.get(p.id)?.done ?? 0,
