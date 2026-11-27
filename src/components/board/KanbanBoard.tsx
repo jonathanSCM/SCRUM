@@ -8,7 +8,10 @@ import {
   KeyboardSensor,
   MouseSensor,
   TouchSensor,
-  closestCorners,
+  closestCenter,
+  pointerWithin,
+  rectIntersection,
+  type CollisionDetection,
   useDroppable,
   useSensor,
   useSensors,
@@ -90,6 +93,26 @@ export default function KanbanBoard({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  // ¿Sobre qué suelta el puntero? Dentro de una columna, aunque sea en el hueco vacío de abajo, cuenta esa columna
+  // (y su tarjeta más cercana); no la esquina más próxima de cualquier otra tarjeta del tablero.
+  const collide: CollisionDetection = (args) => {
+    const hit = pointerWithin(args);
+    const cards = hit.filter((h) => !(String(h.id) in lists));
+    if (cards.length) return cards;
+    const col = hit.find((h) => String(h.id) in lists);
+    if (col) {
+      const ids = lists[String(col.id)];
+      const near = ids.length ? closestCenter({ ...args, droppableContainers: args.droppableContainers.filter((c) => ids.includes(String(c.id))) }) : [];
+      // Por debajo de la última tarjeta: la columna misma (= al final); si no, la tarjeta más cercana.
+      const last = ids[ids.length - 1];
+      const rect = args.pointerCoordinates;
+      const lastRect = last ? args.droppableRects.get(last) : undefined;
+      if (rect && lastRect && rect.y > lastRect.top + lastRect.height) return [col];
+      return near.length ? near : [col];
+    }
+    return rectIntersection(args);
+  };
+
   function findContainer(id: string): string | null {
     if (id in lists) return id;
     for (const [c, ids] of Object.entries(lists)) if (ids.includes(id)) return c;
@@ -115,7 +138,9 @@ export default function KanbanBoard({
       const target = [...prev[to]];
       const overIndex = target.indexOf(String(over.id));
       // Soltar en el hueco de "Hecho" lo deja arriba (es lo más reciente); si no, se vería recogido al final.
-      target.splice(overIndex >= 0 ? overIndex : to.endsWith(`${SEP}DONE`) ? 0 : target.length, 0, String(active.id));
+      const rect = active.rect.current.translated;
+      const below = !!rect && rect.top + rect.height / 2 > over.rect.top + over.rect.height / 2;
+      target.splice(overIndex >= 0 ? overIndex + (below ? 1 : 0) : to.endsWith(`${SEP}DONE`) ? 0 : target.length, 0, String(active.id));
       return { ...prev, [from]: prev[from].filter((id) => id !== active.id), [to]: target };
     });
   }
@@ -144,6 +169,12 @@ export default function KanbanBoard({
       }
     }
 
+    // Soltada en el hueco vacío de su propia columna: pasa al final.
+    if (String(over.id) in lists && String(over.id) === container && status !== "DONE") {
+      list = [...list.filter((x) => x !== id), id];
+      setLists((prev) => ({ ...prev, [container]: list }));
+    }
+
     const index = list.indexOf(id);
     const prevId = status !== "DONE" && index > 0 ? list[index - 1] : null;
     const nextId = status !== "DONE" && index < list.length - 1 ? list[index + 1] : null;
@@ -165,7 +196,7 @@ export default function KanbanBoard({
       </div>
 
       <div className="hidden md:block">
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setActiveId(null); router.refresh(); }}>
+        <DndContext sensors={sensors} collisionDetection={collide} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setActiveId(null); router.refresh(); }}>
           <div className="space-y-6 overflow-x-auto pb-2">
             {lanes.map((lane) => (
               <div key={lane.key} className="min-w-[1120px]">
