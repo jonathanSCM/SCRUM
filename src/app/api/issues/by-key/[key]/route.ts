@@ -26,7 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
       prisma.project.findUnique({ where: { id: issue.projectId }, select: { id: true, key: true, name: true, readyItems: true } }),
       prisma.comment.findMany({
         where: { taskId: issue.id },
-        orderBy: { createdAt: "asc" },
+        orderBy: { createdAt: "desc" },
         include: { author: { select: { id: true, name: true } } },
       }),
       prisma.attachment.findMany({
